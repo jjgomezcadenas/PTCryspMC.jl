@@ -1,0 +1,25 @@
+# Julia
+*.jl.cov
+*.jl.*.cov
+*.jl.mem
+/Manifest.toml
+deps/deps.jl
+deps/build.log
+
+# LaTeX build artifacts
+*.aux
+*.log
+*.out
+*.bbl
+*.blg
+*.synctex.gz
+*.fdb_latexmk
+*.fls
+docs/*.pdf
+
+# Data (scenarios are read from a separate clone)
+data/
+
+# macOS / editors
+.DS_Store
+*~

@@ -1,0 +1,211 @@
+\documentclass[11pt]{article}
+
+\usepackage[a4paper,margin=2.4cm]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{siunitx}
+\usepackage{xcolor}
+\usepackage[hidelinks]{hyperref}
+\usepackage{enumitem}
+
+\title{Simulating the PET measurement\\
+\large A user guide to the \texttt{PTCryspMC.jl} detector simulation}
+\author{}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\section{Introduction}
+\label{sec:intro}
+
+\paragraph{Purpose.}
+The simulation produces, for a given PET scanner, the list of coincidences it would
+record from the positron activity left by a proton field. This list is the input to a
+separate analysis that measures how precisely the proton range can be recovered. That
+analysis is independent of the simulation and is not described here.
+
+\paragraph{Inputs.}
+\begin{itemize}[nosep]
+\item A \textbf{scenario}, produced upstream by \texttt{ptcryspg4} and read from
+\texttt{ptcrysp-scenarios}: the set of annihilation points and, per isotope, the number
+of decays measured (the budget) for a given dose and acquisition timing.
+\item A \textbf{detector description}: the ring geometry (radius, axial length, crystal
+thickness), the crystal material, and the energy, position and time resolutions.
+\end{itemize}
+
+\paragraph{Approach.}
+A photon-only Monte Carlo. Each annihilation emits two \SI{511}{keV} photons
+back-to-back; the simulation transports them through the phantom and the detector ring,
+records where they interact, and pairs them into coincidences. Only the photons are
+tracked: the electrons they free deposit their energy where they are made (sub-millimetre
+range at \SI{511}{keV}), and scintillation light is not modelled. This reproduces the
+detector response while staying fast enough to run the order of $10^{8}$ annihilations a
+measurement contains, for each candidate scanner.
+
+\section{Structure of the simulation}
+\label{sec:structure}
+
+\subsection{Input photons}
+\label{sec:input}
+
+A scenario gives the annihilation points and, per isotope, the measured count $N_j$. The
+photon set is built by drawing $N_j$ annihilation points per isotope from the scenario,
+with replacement: the points supply the spatial distribution of the activity, $N_j$
+supplies the count. For a \SI{1}{Gy} in-room field $\sum_j N_j$ is of order $10^{8}$.
+
+Each drawn point emits two \SI{511}{keV} photons in a random direction, back-to-back, with
+an acollinearity of about $0.5^\circ$ FWHM. The positron range is already contained in the
+annihilation point (set upstream), so the emission point needs no further treatment.
+
+\subsection{Detector simulation}
+\label{sec:detsim}
+
+A photon is transported until it is absorbed or leaves the setup.
+
+\paragraph{Interactions.}
+The distance to the next interaction is sampled from the material's total cross section
+(NIST XCOM data, tabulated per material). At the interaction point the process is chosen
+in proportion to the partial cross sections. Two are relevant at \SI{511}{keV}:
+\begin{itemize}[nosep]
+\item Compton scattering: the photon transfers energy to an electron and continues with
+reduced energy in a new direction, both sampled from the Klein--Nishina distribution; the
+electron energy is deposited at the interaction point.
+\item Photoelectric absorption: the photon is absorbed and its energy deposited at the
+interaction point.
+\end{itemize}
+Pair production is below threshold at \SI{511}{keV}.
+
+\paragraph{Geometry.}
+The phantom is a cylinder. The detector is a ring of crystal, segmented into blocks around
+the ring (in $\varphi$) and stacked into wheels along the axis ($z$) --- the units a real
+scanner reads out. We model this as a structured grid on a cylindrical shell, not as a
+thousand separate volumes: the block a point belongs to is fixed by simple arithmetic on
+its $\varphi$ and $z$, and the distance to the next boundary is the nearest of the inner
+and outer radius, the next $\varphi$ plane and the next $z$ plane --- all closed-form.
+Stepping a photon through the segmented ring therefore costs the same as through a single
+shell, whatever the number of blocks. The small dead gaps between blocks are skipped for
+now (the crystal is treated as continuous and each deposit is tagged with its block); they
+can be added later as thin non-interacting layers. Transport advances a photon by the
+smaller of the distance to the next boundary and the distance to the next interaction.
+
+Through the setup a photon crosses the phantom (where it may Compton-scatter --- the
+patient-scatter background --- or pass through), an air gap, and the crystal, where it
+interacts at some depth. The depth of the first crystal interaction is the depth of
+interaction (DOI).
+
+\paragraph{In the crystal: overspill and containment.}
+Three things can happen in the crystal, and all of them come out of following the photon.
+It can deposit its full energy in one block. It can Compton-scatter and have the scattered
+photon cross into a neighbouring block before being absorbed --- an overspill, leaving
+energy in two blocks. Or the scattered photon can leave the crystal altogether (out the
+back, the axial end, or back toward the patient) before depositing the rest, so only part
+of the \SI{511}{keV} is recorded. A photon may also Compton-scatter more than once within
+the same block. The transport produces all of these by construction; the bookkeeping below
+turns the deposits into hits and selects events.
+
+\paragraph{Hits and detector response.}
+The deposits are grouped by block, and those in one block are reduced to a hit: the energy
+is their sum, the position is the \emph{first} interaction point, and the time is the
+earliest. The first interaction --- not the energy-weighted centroid --- is the point a
+line of response should pass through, and the quantity a reconstruction aims to recover
+(in a monolithic crystal a CNN can separate one- from two-Compton events to find it). The
+hit is then blurred by the detector resolution: position, including DOI, by $\sigma_{xyz}$;
+time by $\sigma_t$; and energy by an energy-dependent width
+$\mathrm{FWHM}(E)=a\sqrt{\SI{511}{keV}/E}$, with $a$ the FWHM at \SI{511}{keV} ---
+\SI{5}{\percent} for pure CsI, \SI{7}{\percent} for CsI(Tl), \SI{10}{\percent} for
+cryogenic BGO, the monolithic crystals considered here. (Pixelated detectors --- LYSO,
+standard BGO --- report a fixed crystal rather than a continuous position, and are left for
+later.) A photon that overspilled leaves a hit in more than one block; the full list of
+interactions in a block is kept in the singles record, so the one- versus two-Compton
+separation can be studied later. A hit is kept if its energy falls in a symmetric window
+about \SI{511}{keV}, of half-width $\sim$2 FWHM and tunable; because the width scales with
+the resolution, a sharper detector rejects more patient scatter. These resolutions and the
+window are the detector parameters; changing them is how candidate scanners differ.
+
+\paragraph{One annihilation at a time.}
+The measured rate is modest and spread thin. For a \SI{1}{Gy} field the total is of order
+$10^{8}$ decays, an average of $\sim$$10^{5}$/s over the acquisition; the rate is
+front-loaded, peaking near $7\times10^{5}$/s at the start of the window and falling with
+$^{15}$O's \SI{122}{s} half-life. Spread over the $\sim$$10^{3}$ crystal modules of the
+ring, each module sees $\sim$$10^{2}$/s, so even with a slow ($\sim$\SI{1}{\micro s})
+crystal the chance of two signals overlapping in one module is $\sim$$10^{-4}$. Events
+therefore do not pile up, and the simulation processes annihilations independently, one
+pair of photons at a time.
+
+\paragraph{Same-annihilation coincidences.}
+For each annihilation we look at the blocks it lit up. The clean case is exactly two
+touched blocks, roughly opposite, one hit per photon, each passing the energy window: the
+pair is recorded as a coincidence --- true if neither photon scattered in the phantom,
+scatter if one did. Anything else fails the condition and the event yields nothing
+(efficiency loss): a photon that missed the ring, one that escaped the crystal with too
+little energy, or one that overspilled so a third block was touched. (Recovering overspill
+by clustering adjacent blocks is a possible refinement.) Every detected hit is also written
+to a singles list, with its position, energy, parent isotope and scatter flag.
+
+\paragraph{Randoms.}
+A random --- two photons from different annihilations that happen to coincide --- cannot
+occur within a single-annihilation event, so randoms are added in a separate pass over
+the singles list, with no further transport. Each single is given a time drawn from the
+activity curve of its parent isotope (which reproduces the front-loading); the singles
+are sorted in time, and any two from different annihilations that fall within the
+coincidence window $\tau$, pass the energy window and form a valid line of response are
+recorded as randoms. Their rate follows $2\tau S(t)^2$ with $S$ the total singles rate,
+so it is largest at the start of the scan and falls as the square of the activity; for
+$\tau\sim\SI{10}{ns}$ it is at most a few to ten percent of the trues.
+
+\paragraph{Running once.}
+The transport is the costly part and is run once, producing the same-annihilation
+coincidences and the singles list. The randoms pass --- and any re-realisation of the
+measurement the downstream analysis may need --- are cheap operations on the singles
+list and require no further transport.
+
+\subsection{Output}
+\label{sec:output}
+
+The output is the coincidence list, written as \texttt{coincidences\_<config>.csv}: per
+accepted coincidence, the two three-dimensional hit positions, the two energies, the two
+times, and the truth label (true, scatter or random). The singles list is an
+intermediate, kept to build the randoms. The coincidence list is what the downstream
+analysis reads, and the only thing it reads.
+
+\section{Implementation}
+\label{sec:impl}
+
+The photon transport and the geometry already exist in LXeMC, a liquid-xenon detector
+simulation that does the same kind of \SI{}{keV}-scale photon transport, and are the
+starting point. The pieces to reuse:
+\begin{itemize}[nosep]
+\item \textbf{Geometry} (\texttt{geometry\_core.jl}): the solids \texttt{Cyl} and
+\texttt{CylShell}, with \texttt{is\_inside} and the ray entry/exit distances
+(\texttt{distance\_to\_entry}, \texttt{distance\_to\_exit}). The phantom is one
+\texttt{Cyl}; the ring is one \texttt{CylShell} with a $(\varphi, z)$ block index and the
+corresponding plane-crossing distances added on top --- the one piece of new geometry.
+\item \textbf{Cross sections} (\texttt{nist\_data.jl}, \texttt{materials.jl}): the XCOM
+loader and \texttt{sigma\_three(material, E)}, which returns the Compton, photoelectric and
+pair cross sections at an energy. New material tables are required: water or soft tissue
+for the phantom, and the crystal materials (CsI, LYSO, BGO).
+\item \textbf{Transport} (\texttt{sampling.jl}, \texttt{tracking.jl}): the Compton and
+photoelectric samplers and the photon step loop (\texttt{transport\_photon!},
+\texttt{propagate\_gamma}). The electron transport and bremsstrahlung in
+\texttt{tracking.jl} are not needed here --- only the photon path with local energy
+deposition.
+\end{itemize}
+
+What must be written on top:
+\begin{itemize}[nosep]
+\item \textbf{Source injection}: read a scenario, draw annihilation points per isotope to
+the budget, and emit the back-to-back \SI{511}{keV} pairs with acollinearity
+(Sec.~\ref{sec:input}).
+\item \textbf{Hit formation} --- group deposits by block, take the first-interaction point,
+sum the energy, smear, apply the energy window --- and the same-annihilation selection of
+two opposite blocks (Sec.~\ref{sec:detsim}).
+\item \textbf{The randoms pass}: time-tag the singles from the per-isotope activity, then
+pair cross-annihilation singles within $\tau$ (Sec.~\ref{sec:detsim}). It reads the
+singles list and writes randoms into the coincidence list, with no transport.
+\end{itemize}
+
+The transport runs in Julia. The source injection, the hit formation and smearing, the
+coincidence sorting and the randoms pass --- reading a scenario and writing the
+coincidence list --- run in Python.
+
+\end{document}
