@@ -1,0 +1,19 @@
+name = "PTCryspMC"
+uuid = "86d9c5d8-637d-49d7-a5f8-a1e1341710d5"
+version = "0.1.0"
+authors = ["jjgomezcadenas <jjgomezcadenas@gmail.com>"]
+
+[deps]
+ArgParse = "c7e460c6-2fb9-53a9-8c5b-16f535851c63"
+CSV = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
+JSON = "682c06a0-de6a-54ab-a142-c8b1cf79cde6"
+Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[compat]
+ArgParse = "1.2.0"
+CSV = "0.10.16"
+JSON = "1.6.1"
+Random = "1.11.0"
+Test = "1.11.0"
+julia = "1.10"

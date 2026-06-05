@@ -2,7 +2,6 @@
 *.jl.cov
 *.jl.*.cov
 *.jl.mem
-/Manifest.toml
 deps/deps.jl
 deps/build.log
 
