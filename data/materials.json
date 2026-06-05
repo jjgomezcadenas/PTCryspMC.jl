@@ -1,0 +1,14 @@
+{
+    "_doc": "Materials for PTCryspMC. density [g/cm^3]; components = element mass fractions (informational); xcom = NIST XCOM mass-attenuation table [cm^2/g], path relative to data/. Transport uses incoherent + photoelectric + pair channels: Sigma = (mu/rho) * density.",
+
+    "Vacuum": {
+        "density": 0.0,
+        "components": {}
+    },
+
+    "Water": {
+        "density": 1.0,
+        "components": {"H": 0.111894, "O": 0.888106},
+        "xcom": "xcom_water.csv"
+    }
+}

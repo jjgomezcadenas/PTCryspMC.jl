@@ -1,0 +1,7 @@
+{
+    "_doc": "Phantom geometry for PTCryspMC. A cylinder, axis along z, centred at the origin. Dimensions in cm; material keys into data/materials.json.",
+    "shape": "cylinder",
+    "radius_cm": 8.0,
+    "half_length_cm": 8.0,
+    "material": "Water"
+}

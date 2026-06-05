@@ -16,8 +16,8 @@ deps/build.log
 *.fls
 docs/*.pdf
 
-# Data (scenarios are read from a separate clone)
-data/
+# Generated run outputs (reference physics data in data/ is tracked)
+/output/
 
 # macOS / editors
 .DS_Store
