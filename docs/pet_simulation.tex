@@ -174,12 +174,13 @@ analysis reads, and the only thing it reads.
 The simulation is a fast, photon-only Monte Carlo. Its building blocks:
 \begin{itemize}[nosep]
 \item \textbf{Geometry} (\texttt{geometry.jl}): a Geant4-style hierarchy of solids
-(\texttt{Solid}: \texttt{Cylinder}, \texttt{Box}, and the coming \texttt{CylShell}), logical volumes
+(\texttt{Solid}: \texttt{Cylinder}, \texttt{Box}, \texttt{CylShell}), logical volumes
 (solid $+$ material) and physical volumes (a logical volume placed in the world), with
 \texttt{is\_inside} and the ray entry/exit distances (\texttt{distance\_to\_entry},
-\texttt{distance\_to\_exit}). The phantom is a placed \texttt{Cylinder}; the ring is one
-\texttt{CylShell} with a $(\varphi, z)$ block index and the corresponding plane-crossing
-distances added on top --- the one piece of new geometry.
+\texttt{distance\_to\_exit}; the ray--solid math is in \texttt{docs/navigation.tex}). The
+world is a non-interacting cylinder of air that encloses the phantom (a placed
+\texttt{Cylinder}) and the ring (one \texttt{CylShell} with a $(\varphi, z)$ block/wheel
+index; the plane-crossing distances are added once dead gaps return).
 \item \textbf{Cross sections} (\texttt{nist\_data.jl}, \texttt{materials.jl}): the XCOM
 loader and \texttt{sigma\_macro(material, E)}, which returns the macroscopic Compton,
 photoelectric and pair cross sections at an energy. Tables (\SI{10}{keV}--\SI{10}{MeV}) are
@@ -190,12 +191,17 @@ photoelectric samplers and the photon step loop (\texttt{propagate\_photon}). On
 photon path is followed, with local energy deposition; electrons are not transported.
 \end{itemize}
 
-\paragraph{Built and checked so far.} The geometry, cross sections and transport are in
-place and tested. Two studies exercise them: \SI{511}{keV} photons through the water phantom
-reproduce Beer--Lambert attenuation, and 511\,keV photons fired into a single crystal (a
-\texttt{Box} of CsI or BGO) give its energy containment, photoelectric/Compton split and
-interaction-depth distributions --- characterising the crystal response before the full
-ring. Source injection, the block grid, hit formation, selection and the randoms pass remain.
+\paragraph{Built and checked so far.} The geometry (air world, phantom, the
+\texttt{CylShell} ring and its $(\varphi,z)$ grid), the cross sections and the transport are
+in place and tested. Three studies exercise them: \SI{511}{keV} photons through the water
+phantom reproduce Beer--Lambert attenuation; photons fired into a single crystal (a
+\texttt{Box} of CsI or BGO) give its containment, photoelectric/Compton split and
+interaction-depth distributions; and a point source firing back-to-back \SI{511}{keV} pairs
+isotropically into the ring gives the geometric acceptance ($\sim$\SI{79.5}{\percent}, the
+ring's axial subtense) and the per-crystal containment --- the clean-coincidence fraction
+(both photons fully absorbed in one crystal) is $\sim$0.29 for CsI and $\sim$0.77 for the
+denser BGO. What remains: the multi-volume navigator that carries a phantom-born photon
+through to the ring, then hit formation, selection and the randoms pass.
 
 What must be written on top:
 \begin{itemize}[nosep]

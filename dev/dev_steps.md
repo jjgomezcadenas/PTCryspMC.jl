@@ -147,22 +147,60 @@ single crystal modelled as a box, before the full ring.
   BGO's short attenuation length and high-Z Bi give far higher containment and a
   larger photoelectric share (photo ≈ 48% of contained vs ≈ 33% for CsI).
 
-**Test status:** `Pkg.test` — **86 tests** pass (the foundations and phantom tests
-above, plus the `Box` solid and the CsI/BGO materials — attenuation length and the
-K-edge surviving the duplicate-energy rows). All scripts run.
+### Detector geometry — air world + the scanner ring
+
+The world model and the detector ring (Step 2 geometry).
+
+- **Air world (mother volume)** — an `Air` material (no XCOM → zero cross section →
+  straight-line propagation) and a `world` cylinder of Air (radius 60, half-length
+  60 cm) in `geometry.json` that encloses every daughter. `Geometry` is now
+  `world` + `phantom` + optional `scanner`; the radial layering is water [0,8] →
+  air → crystal [38.7,42.4] cm.
+- **`CylShell` solid + `Scanner`** (`src/geometry.jl`) — the hollow-cylinder ring,
+  with the non-convex ray intersection by the interval method
+  (S = (outer ∩ z-slab) ∖ bore, up to two pieces). The `(φ, z)` block/wheel grid:
+  `block_index` / `block_id` (= iz·n_phi + iφ) / `nblocks`. The `scanner` daughter
+  is `CRYSP_CSI_1M` (CsI: Ri=38.7, wall=3.7, H=51.2 cm, 48 φ × 20 z = 960 crystals).
+- **`docs/navigation.tex`** documents the ray–cylinder / ray–shell distances and the
+  (φ, z) partition (φ-pitch ≈ 50.6 mm, z-pitch 51.2 mm ≈ the 50 mm crystal).
+
+### Unit test — back-to-back 511 keV pairs into the ring
+
+A point source emitting back-to-back pairs isotropically into the ring — the first
+source→ring path. The interior is air (no phantom scatter), so the navigation is
+trivial: straight through air to the crystal (`distance_to_entry`), then transport.
+
+- **`scripts/shoot_back_to_back_511_keV_gammas.jl`** — script-local `emit_pair`
+  (no phantom/scenario), settable low-energy cutoff (default 10 keV = XCOM min).
+  One CSV records both photon stacks tagged with the crystal `(iz, iphi)`:
+  `event_number, gamma, step, x,y,z, e_in, e_dep, process, iz, iphi`.
+- **`py/plot_back_to_back.py`** — a 3×3 panel (Edep, 3-D impacts, DOI of the 1st/2nd
+  interaction, per-coincidence containment, contained-Edep, impact within a crystal
+  face, overspill, φ–z hit map). **`scripts/bench_back_to_back.jl`** — ~0.5 µs/event.
+- **Results** (point source, CRYSP1M ring):
+  - ring acceptance **79.5%** of photons — geometric, material-independent
+    (|cosθ| ≤ 38.7/√(38.7²+51.2²) = 0.798).
+  - per-gamma containment / clean coincidence (both γ contained), CsI **0.54 / 0.29**,
+    BGO **0.88 / 0.77** (= containment²); ≈ 85 % of interacting gammas stay in one
+    crystal (CsI), 14 % overspill to a neighbour.
+
+**Test status:** `Pkg.test` — **141 tests** pass (foundations, phantom, single
+crystal, the `CylShell` shell intersections, the block/wheel grid, scanner loading,
+the air world, and the source→ring transport composition). All scripts run.
 
 ---
 
 ## 3. Next steps
 
-- **Step 2 — detector ring.** `CylShell` solid + the structured (φ, z) block/wheel
-  grid (block index by arithmetic, plane-crossing distances closed-form); propagate
-  the back-to-back 511 keV pair from an annihilation point to the ring. (The `Box`
-  solid and the CsI/BGO crystal tables are already in place — see above. CRYSP1M
-  ring: Ø77.4 cm, AFOV 102.4 cm, 48 φ-blocks × 20 z-wheels, 37 mm crystal.)
-- **Step 3 — coincidences.** Transport → singles list + same-annihilation
-  coincidences (true / scatter), via the multi-volume navigator (phantom → air →
-  ring, switching material at boundaries).
+- **Step 2 — detector ring.** *Done* (see above): air world, `CylShell` + the
+  (φ, z) block/wheel grid, the `CRYSP_CSI_1M` scanner, and a back-to-back unit test
+  reaching the ring through air. Deferred within it: the φ/z plane-crossing
+  distances (only needed once dead gaps return).
+- **Step 3 — the navigator + coincidences.** The general multi-volume walk so a
+  photon born in the water phantom scatters, exits, crosses the air, and reaches the
+  ring — switching material at each boundary (the unit test already does the
+  air→ring leg with no phantom). → singles list + same-annihilation coincidences
+  (true / scatter).
 - **Step 4 — hits & selection.** Hit formation (first interaction, smear, energy
   window) and the two-opposite-block selection.
 - **Step 5 — randoms.** The time-tag-and-pair pass over the singles.
