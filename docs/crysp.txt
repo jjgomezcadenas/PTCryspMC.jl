@@ -1,0 +1,1462 @@
+                                                  IOP Publishing   Phys. Med. Biol. vv (yyyy) aaaaaa                                                                  S.R. Soleti et al
+
+
+                                                                   Physics in Medicine & Biology
+
+                                                                   PAPER
+                                                  Crossmark
+                                                  RECEIVED
+                                                  dd Month yyyy
+                                                                   CRYSP: a Total-Body PET based on cryogenic cesium iodide
+                                                  REVISED
+                                                  dd Month yyyy
+                                                                   crystals
+                                                                   S.R. Soleti1,2,∗ , P. Dietz1 , R. Esteve3 , J. Garcı́a-Barrena3 , V. Herrero3 , F. Lopez1 , F. Monrabal1,2 ,
+                                                                   L. Navarro-Cozcolluela1,4 , E. Oblak1 , J. Pelegrı́n1 , J. Renner5 , J. Toledo3 , S. Torelli1 , and
+                                                                   J.J. Gómez-Cadenas1,2
+                                                                   1 Donostia International Physics Center, San Sebastián / Donostia, E-20018, Spain
+                                                                   2 Ikerbasque (Basque Foundation for Science), Bilbao, E-48009, Spain
+
+
+
+
+arXiv:2507.09765v2 [physics.ins-det] 2 Jan 2026
+                                                                   3 Instituto de Instrumentación para Imagen Molecular (I3M), Centro Mixto CSIC - Universitat Politècnica de València,
+
+                                                                   Valencia, E-46022, Spain
+                                                                   4 Universidad del Paı́s Vasco (UPV/EHU), San Sebastián / Donostia, E-20018, Spain
+                                                                   5 Instituto de Fı́sica Corpuscular (IFIC), CSIC & Universitat de València, Paterna, E-46980, Spain
+                                                                   ∗ Author to whom any correspondence should be addressed.
+
+
+
+                                                                   E-mail: roberto.soleti@dipc.org
+
+                                                                   Keywords: Biomedical imaging, Total Body PET, Positron emission tomography, Crystals, Cryogenics
+
+
+                                                                   Abstract
+                                                                   Objective. Total Body PET (TBPET) scanners have the potential to substantially reduce
+                                                                   both acquisition time and administered radiation dose, owing to their high sensitivity. How-
+                                                                   ever, their widespread clinical adoption is hindered by the high cost of currently available
+                                                                   systems. This work explores the use of pure cesium iodide (CsI) monolithic crystals op-
+                                                                   erated at cryogenic temperatures as a cost-effective alternative to rare-earth scintillators
+                                                                   for TBPET. Approach. We investigate the performance of pure CsI crystals operated at
+                                                                   cryogenic temperatures (∼100 K), where they achieve a light yield of approximately 105
+                                                                   photons/MeV. The implications for energy resolution, spatial resolution (including depth-
+                                                                   of-interaction capability), and timing performance are assessed, with a view toward their
+                                                                   integration into a TBPET system. Main results. Cryogenic CsI crystals demonstrated en-
+                                                                   ergy resolution below 7% and coincidence time resolution at the nanosecond level, despite
+                                                                   their relatively slow scintillation decay time. A Monte Carlo simulation of monolithic CsI
+                                                                   crystals shows that a millimeter-scale spatial resolution in all three dimensions can be ob-
+                                                                   tained. These characteristics indicate that high-performance PET imaging is achievable with
+                                                                   this technology. Significance. A TBPET scanner based on cryogenic CsI monolithic crys-
+                                                                   tals could combine excellent imaging performance with significantly reduced detector costs,
+                                                                   enabling broader accessibility and accelerating the adoption of TBPET in both clinical and
+                                                                   research settings.
+
+                                                                   1 Introduction
+                                                                   Positron emission tomography (PET) is a powerful imaging technique central to medical diagnostic
+                                                                   applications, employing positron-emitting radionuclides to track biologically active molecules. The
+                                                                   annihilation of the positrons produced by the radiotracer with the electrons of the surrounding
+                                                                   environment generates back-to-back gamma rays of 511 keV, which are detected to create detailed
+                                                                   images of functional processes within the body.
+                                                                       The last decade has witnessed the development of Total Body PET (TBPET) scanners with axial
+                                                                   fields-of-view (AFOV) between 3 and 7 times that of conventional PET (CPET) apparatus. Such
+                                                                   devices detect a large fraction of the emitted photons, thus dramatically increasing sensitivity, and
+                                                                   allowing for simultaneous dynamic acquisition from all tissues of interest [1, 2]. TBPETs also offer
+                                                                   the flexibility of optimizing signal-to-noise ratio, reducing the acquisition time, or decreasing the
+                                                                   amount of administered radiation dose.
+                                                                       Prime examples of such TBPETs are the United Imaging uEXPLORER [3], and Siemens Bio-
+                                                                   graph Vision Quadra [4]. The AFOV of uEXPLORER is 194 cm, while the AFOV of the smaller
+                                                                   Quadra is 106 cm, to be compared with an AFOV of 20-30 cm typical of a CPET (e.g., the new
+                                                                   generation General Electric Omni Legend 32 [5] has an AFOV of 32 cm). Both TBPET systems
+
+
+                                                                                                                   1
+IOP Publishing   Phys. Med. Biol. vv (yyyy) aaaaaa                                                                                 S.R. Soleti et al
+
+
+
+                                                            Computed Tomography
+                                                            Electronics                                                x7.7
+                                                            Scintillator
+                                                            SiPM
+                                                                                                         x5.5
+
+
+
+
+                                   PET cost [a.u.]
+                                                                                              x4
+
+
+                                                                         x2.8
+
+
+
+
+                                                           20            70              100             140           200
+                                                                                  Axial Length [cm]
+
+                 Figure 1: Increase in component costs for a 70-cm, 100-cm, 140-cm and 200-cm system versus a
+                 system with 20 cm axial length; the y-axis is the system cost in relative units. Data taken from
+                 ref. [1].
+
+
+                 use arrays of pixelated lutetium-yttrium oxyorthosilicate (LYSO) crystals, read out by SiPMs and
+                 custom electronics, with very high sensitivity and excellent time-of-flight (TOF) resolution. The ap-
+                 proximate increase in cost of the uEXPLORER (Quadra) compared with a typical CPET is roughly
+                 8 (4) times (see fig. 1), well above what can be afforded by most hospitals.
+
+                                                     1.0
+                                                                Point at the axial center
+                                                                Point at 10 cm from one end
+                                                                10 cm line
+                                                     0.8        100 cm line
+                                                                200 cm line
+
+
+
+
+                                   Acceptance
+                                                     0.6
+
+
+
+                                                     0.4
+
+
+
+                                                     0.2
+
+
+
+                                                     0.0
+                                                                25      50        75     100       125     150   175         200
+                                                                                   Axial Length [cm]
+
+                 Figure 2: The geometrical acceptance for a point-like source placed at the axial center, a point-like
+                 source placed 10 cm from one end of the scanner, and line sources of 10 cm, 100 cm and 200 cm
+                 length, as a function of the axial length. It is calculated in the transverse center of a PET scanner
+                 with a diameter of 80 cm.
+
+                     The bulk of the cost in both systems comes from the scintillator, followed by the cost of the SiPMs
+                 and electronics. Of the three items, the cost of SiPMs, in large quantities, is roughly proportional
+                 to the total surface of chips deployed (not to the size of the chip), and thus proportional to the
+                 size and coverage of the scanner. However, the cost of SiPMs decreases about 5-10 % annually,
+                 with current prices about one third of those ten years ago. Thus their relative contribution to the
+                 total cost of future TBPETs will steadily decrease with time. Instead, the cost of crystals and that
+                 of the readout electronics has remained stable, and in the case of LYSO, significantly expensive.
+                 Thus, the first priority of any putative low-cost TBPET is to find significantly cheaper alternatives
+                 to LYSO. Notice that, in addition to the high cost, LYSO is a rare earth whose production and
+
+
+                                                                              2
+       IOP Publishing       Phys. Med. Biol. vv (yyyy) aaaaaa                                                                                                                   S.R. Soleti et al
+
+
+
+                        manufacturing is heavily concentrated. Last but not least, the cost of the readout electronics can
+                        be decreased for large scale production developing specific ASICs, and, importantly, reducing the
+                        number of electronics channels.
+                             Naturally, one also desires performance comparable to that of current PET scanners. This, in
+                        turn, requires quantifying the contribution of the extended axial length of a TBPET scanner to the
+                        quality of image reconstruction.
+                             Figure 2 shows the geometrical acceptance for two point-like sources (serving as rough approxi-
+                        mations of small organs), one positioned at the center of a scanner with an 80 cm diameter and the
+                                                  Requirements,
+                        other located 10 cm from one                Interferences,
+                                                            end, as a function       and
+                                                                                of the   Verifications
+                                                                                       axial               33 centrally placed source,
+                                                                                             length. For the
+                        approximately 80% of the solid angle is already covered at a scanner length of 100 cm. In contrast,
+                        for the source near the edge (e.g., the brain in a TBPET), the acceptance quickly plateaus: photons
+patient motions and the      visualization
+                        emitted    toward theonopen
+                                                  a end
+                                                     monitor   or a
+                                                           of the     film. On
+                                                                  scanner       a technical
+                                                                            escape             level, the
+                                                                                   detection, and   increasing the AFOV beyond this
+performance of a PET        detector
+                        point   offers is
+                                        no mainly    defined
+                                            additional benefit.by its    energy-,
+                                                                  Overall,  most oftime-, andinspatial-
+                                                                                     the gain     geometrical acceptance is achieved
+resolutions, as well as its sensitivity.
+                        within the    first 100 cm of axial coverage, with only marginal improvements beyond that length.
+                             The choice for a PET scanner of 100 cm length is also motivated by the approximate axial
+                        distribution of whole-body organs of interest (e.g., brain to pelvis) for typical human height. The
+3.1.1.1 Energy Resolution
+                        figure shows that, with an extended source of 100 cm, one gains in geometrical acceptance from 50%
+When the gamma photons        travel
+                        (100 cm       throughtomatter,
+                                    scanner),            they can
+                                                  about 80%          undergo
+                                                               (200 cm         Compton
+                                                                          scanner),      scatter,
+                                                                                     a modest      which compared with cost. Thus,
+                                                                                                increased
+entails that the photon loses some energy to an outer electron of the matter and the direction
+                        an  AFOV      of about  100  cm  as  implemented    by the  Quadra   appears  as a good compromise between
+of the photon is changed (see section 2.1.2). These scattered events have different LOR than
+                        cost  and   performance    and a  reasonable   target for any  TBPET     proposal.
+the true events and, thus, result in increased image background noise (Figure 23).
+
+                                                                                                                             500
+
+
+
+
+                                                                                        Scattered photon energy Eγ 0 [keV]
+                                                                                                                                                                               E
+                                                                                                                             450                               Eγ 0 = 1+(Eγ /meγ)(1−cos θ)
+                                                         Body
+                                             wrong               Scatter                                                     400
+                                             LOR
+                                                                                                                             350
+                                                                   PET
+                                                                  tracer                                                     300
+
+
+                                                                                                                             250
+                                                                                                                                   0   15       30        45           60          75        90
+                                                                                                                                            Compton scattering angle θ [◦]
+   Figure 23: Scattered gamma photons result in(a)
+                                                wrongly assumed LORs that increase the image (b)
+                                       background noise.
+                          Figure 3: (a) Compton scatter detection in PET. In Compton scattering a photon (in yellow) un-
+By measuring the energy        of the
+                          dergoes   an gamma,
+                                         interaction it within
+                                                        is possible     to determine
+                                                                  the patient’s     body whether         the detected
+                                                                                           where it changes        direction and loses energy. Thus,
+gamma was scattered. the  Figure
+                              PET24scanner
+                                         shows a    typically a
+                                                 reconstructs     measured
+                                                                     wrong LOR  energy    spectrum
+                                                                                      (in red),          of a the
+                                                                                                   affecting   positron
+                                                                                                                    signal-to-background ratio of the
+emission source: The photopeak
+                          reconstructedis found
+                                             image.at (b)
+                                                       around Theanresidual
+                                                                       energy of     511 Eγ
+                                                                                energy    keV.    Scattered
+                                                                                              ′ of a   511-keV  gamma
+                                                                                                                   incoming photon after Compton
+photons (with lower residual
+                          scatteringenergy)
+                                       with aare     mostly
+                                                 given          found around the Compton plateau. The
+                                                         angle θ.
+plateau reaches from the Compton edge (maximum energy loss by the incident photon
+through Compton scattering)   But tois the
+                                       thatbackscatter
+                                              extra lengthpeak  worth (caused    by gamma
+                                                                         the added               photons scattered
+                                                                                       cost? Addressing         this question requires consideration
+back from surrounding material before detection). The histogram, furthermore, showsaccompanying
+                          not  only   of  the  improved      geometrical     acceptance     but    also  of  the   some             increase in gamma-
+                          ray  absorption      and   Compton       scattering     (CS)
+counts with higher energy than the photopeak , which are caused by detecting energy from
+                                                           6                             within     the   patient’s    body,  as  well as the effects of
+                          parallax
+more than one gamma photon.          error   (PE).  These     effects  become     more   pronounced       as  gammas     travel  at increasingly oblique
+                          angles. Increased gamma absorption results in loss of events and is an unavoidable effect. CS and
+The energy resolution PE describes    how an
+                               introduce     wellerror
+                                                   the in
+                                                        energy
+                                                             the can be     measured,
+                                                                  reconstruction           and it thus
+                                                                                       of the               represents
+                                                                                                line-of-response      (LOR), and thus contribute to
+the sharpness of the image
+                         measured     photopeak.
+                                  blurring.     Both An     energy
+                                                       effects   can bewindow
+                                                                          minimizedcan bebyset and
+                                                                                             instrumentala part of    the
+                                                                                                                choices.
+scattered gammas can thus     Thebe impact
+                                    rejectedof(then
+                                                  CS, counting
+                                                        exemplified  to in
+                                                                        thefig. 3,
+                                                                              attenuated
+                                                                                     can be gammas).
+                                                                                               minimizedThe   by mean
+                                                                                                                  choosing a narrow window around
+path for a 511 keV photon 511 in   water
+                                keV,   whichis about
+                                                selects70events
+                                                             mm, so    in deposit
+                                                                    that   clinical all
+                                                                                      PET,   most of
+                                                                                          their    energythein the
+                                                                                                               gammas  crystal. The efficiency of this
+are scattered. In preclinical applications, this depends on the size of the scanned animal: Conversely, if one selects
+                          selection,   in   turn,  improves      with   the   energy    resolution     of  the   crystal.
+while for rabbits (with events    in a around
+                          diameters      fixed energy
+                                                  160 mm)window,many thegammas
+                                                                           numberare  of events
+                                                                                          scatters,which
+                                                                                                       thishave   suffered
+                                                                                                              is not  the scattering in the patient’s
+                          body   decreases    as  energy     resolution   improves.
+case for mice (with a diameter around 30 mm). Nevertheless, the mouse-sized phantom
+studies (presented in chapter Conventional
+                                      6.2.4.1) PET
+                                                 have scanners
+                                                          shown that are made       of pixelated
+                                                                            a narrower      energy   detectors,
+                                                                                                         window with still crystals of small transverse
+                          dimensions and a thickness of typically 2 radiation lengths (e.g., 3.2 × 3.2 × 20 mm3 for the Quadra).
+                          For a gamma impinging at angles normal to the crystal surface (small transaxial angles), the resolu-
+6 Additionally, the energytion  in the transaxial coordinates depends only on the transverse size of the pixel, and the resolution
+                           spectrum of 22Na actually has a second small photopeak around
+                          on the
+   1.274 MeV. It is a single gammadepth-of-interaction        (d.o.i.),when
+                                       photon, which is emitted          which thedepends
+                                                                                    nucleuson     the pixel
+                                                                                              decays    from thickness,
+                                                                                                               an           does not significantly affect
+   excited state.         the reconstruction. While d.o.i. information can be incorporated into pixelated detectors through
+
+
+
+                                                                               3
+ PET and the Influence from MRI
+IOP Publishing   Phys. Med. Biol. vv (yyyy) aaaaaa                                                      S.R. Soleti et al
+
+
+
+                 dedicated schemes (such as dual-ended readout, phoswich configurations, or depth-segmented crys-
+                 tals), the standard pixelated blocks used in current TBPET systems do not provide this information,
+                 increasing the PE at large angles [6, 7].
+                     Although techniques exist to compensate for CS and PE [8], their overall effect is to degrade the
+                 contribution to image reconstruction of gammas emitted at high angles and therefore to partially
+                 negate the increase in sensitivity afforded by the longer axial coverage of a TBPET.
+                     In this paper, we propose a new type of TBPET scanner called CRYSP1 . CRYSP is based on large
+                 monolithic crystals made of pure cesium iodide (CsI) operating at cryogenic temperatures. The light
+                 output of these crystals is very high (about 105 photons/MeV [9, 10]), which translates into excellent
+                 energy resolution, below 7% at 511 keV [11]. This performance, combined with the monolithic form
+                 factor, allows to achieve a millimeter-scale spatial resolution in all three dimensions, minimizing the
+                 PE. As we will show in the next sections, these features allow to achieve performances that are
+                 comparable to the ones of current state-of-the-art TBPET scanners, at a significantly reduced cost.
+                     This paper is organized as follows. Section 2.1 discusses the potential of pure, cryogenic CsI
+                 as scintillator material for PET, and how the choice of this material leads naturally to monolithic
+                 crystals. Section 2.2 describes the CRYSP baseline design and section 2.3 focuses on the dedicated
+                 electronics. The modelization of the apparatus using the Geant4 simulation framework [12] is detailed
+                 in section 2.4. Section 2.5 discusses our strategy to reconstruct the gamma impact coordinates using
+                 convolutional neural networks (CNNs). The main parameters illustrating CRYSP performance fol-
+                 lowing the NEMA guidelines (e.g., sensitivity, NECR, spatial resolution), compared with a reference
+                 detector based on pixelated LYSO crystals, are discussed throughout sections 3.1 to 3.4. Section 3.5
+                 offers an evaluation of the two apparatus imaging performances using a modified Jaszczak phantom.
+                 A discussion of the implications of our findings on the development of TBPET scanners is included
+                 in section 4. Conclusions are presented in section 5.
+
+                 Table 1: Properties of scintillating materials commonly used for PET, compared with scintillators
+                 based on cesium iodide. Data for LYSO, BGO and CsI(Tl) have been obtained from vendor [13] and
+                 are intended at room temperature. Values for CsI were measured in ref. [11]. Cost is normalized
+                 by one radiation length X0 . The range in prices depends on the quality of the material and the
+                 manufacturing process, with pixelated blocks being more expensive that monolithic crystals for a
+                 fixed volume.
+
+                   Material     Zef f   X0 (cm)    ρ (g/cm3 )   LY (ph./MeV)     τ (ns)   Peak (nm)    Cost (e/cm3 · X0 )
+                    LYSO         66      1.14          7.4         33,000          53        420             50-80
+                     BGO         74      1.12          7.1          9,000         300        480             25-35
+                    CsI:Tl       54      1.86          4.5         54,000         1000       560              7-10
+                  CsI (300 K)    54      1.86          4.5          5,000          15        310              7-10
+                  CsI (100 K)    54      1.86          4.5         100,000        800        350              7-10
+
+
+
+
+                 2 Methods and materials
+                 2.1 CsI as a scintillator material for PET
+                 Table 1 shows the properties of cesium iodide compared with other crystals commonly used for
+                 PET. Pure CsI at ambient temperature has been adopted in particle physics for experiments set in
+                 high-rate and high-radiation environments, given its fast decay time and radiation hardness [14, 15].
+                 However, at a first glance, its low light yield (5 photons/keV), UV emission, average radiation length
+                 and density make it a sub-optimal candidate for PET.
+                     Cooling pure CsI to cryogenic temperatures, approximately 100 K, causes its light emission
+                 spectrum to shift towards the near ultraviolet range, moving from around 310 nm to 350 nm [16].
+                 This process also increases its light yield by a factor of 20, to about 100 photons/keV [9, 10, 17].
+                 Unfortunately, its decay time also increases, approximately by a factor of 50, from 15 ns to 800 ns.
+                 In a PET scanner, the coincidence time resolution (CTR) between pairs of crystals is determined by
+                 the material’s emission time profile and amount of light detected. An approximate figure of merit is
+                 given by [18]:
+
+                                                                          τ
+                                                                      r
+                                                              CTR ∝            ,                                    (1)
+                                                                         Np.e.
+                 where τ is the decay time constant and Np.e. is the number of detected photoelectrons.
+                   1 The acronym stands simultaneously for CRYStal PET and for CRYogenic ceSium PET.
+
+
+
+
+                                                           4
+IOP Publishing   Phys. Med. Biol. vv (yyyy) aaaaaa                                                      S.R. Soleti et al
+
+
+
+                    Using eq. (1) to compare the CTR for CsI operating at ambient temperature and at 100 K we
+                 obtain:
+
+                                                         s
+                                                             800 ns 5 p.e./keV
+                                           CTR100 K ≈              ·             · CTR300 K                           (2)
+                                                              15 ns 100 p.e./keV
+                                                      ≈ 1.6 · CTR300 K .
+                 Thus, since the time resolution at room temperature is at the nanosecond level [19], effective coin-
+                 cidence timing should be possible also at 100 K, in spite of the long decay time, as we will discuss
+                 further in section 3.
+                     In a previous paper [11] we measured the energy resolution and coincident time resolution (CTR)
+                 for a pair of pure CsI crystals at cryogenic temperatures read out by solid state photosensors (Hama-
+                 matsu MPPCs). At T = 104 K, an energy resolution better than 7% FWHM and a coincidence
+                 time resolution lower than 2 ns FWHM have been achieved. While these are already very promising
+                 results, we believe there is still room for improvement, in particular when using large monolithic
+                 crystals, SiPMs with higher PDE at 350 nm and optimized electronics. In fact, the intrinsic res-
+                 olution of cryogenic CsI at 511 keV is approximately 5% [20], and one of the crystals showed a
+                 resolution of 6.3%, which we will take as default for the studies presented here. For the CTR, we use
+                 a conservative estimate of 1.5 ns, based on the 1.84 ns obtained with the tabletop setup of ref. [11].
+
+                 2.2 CRYSP
+                 The basic building block of CRYSP is a monolithic crystal, of dimensions 48 × 48 × 37 mm3 , where
+                 the crystal thickness corresponds to 2 radiation lengths. All crystal surfaces are polished, and five of
+                 the six faces are wrapped in PTFE to ensure a reflectivity > 95%. The wrapping adds about 2 mm to
+                 the crystal transverse dimensions. Full wrapping with a good reflector is a must for energy resolution,
+                 and in the case of CsI, the relatively hard emission wavelength limits the potential reflectors, with
+                 PTFE being the best option [21]. Each crystal is read out by an array of 8 × 8 Hamamatsu S14160-
+                 6050HS MPPCs [22]. These photosensors have an active area of 6 × 6 mm2 and a photon detection
+                 efficiency of approximately 38% at the emission wavelength of cryogenic CsI [22]. Low-temperature
+                 SiPM operation is already well established in large-scale particle physics experiments [23, 24, 25]. At
+                 77 K, the dark count rate is reduced by several orders of magnitude, afterpulsing and optical cross-
+                 talk are suppressed, and the gain remains stable after compensating for the decrease of breakdown
+                 voltage with temperature (≈ 50 mV/K) [26, 22]. The photon detection efficiency in the blue–UV
+                 region is mostly unaffected at cryogenic temperatures, making SiPMs well suited for the scintillation
+                 spectrum of CsI [27, 28].
+                      Thus, an interaction in the crystal results in an image of 8 × 8 pixels, where the intensity in each
+                 pixel is determined by the photoelectrons recorded by each SiPM (fig. 4).
+
+                                              Table 2: CRYSP1M scanner specifications.
+
+                                      Parameter                             Specification
+                                      Crystal size                       48 × 48 × 37 mm3
+                                      SiPM area                              6 × 6 mm2
+                                      SiPM model                      Hamamatsu S14160-6050HS
+                                      SiPMs per crystal                           64
+                                      Detector ring diameter                   77.4 cm
+                                      PET AFOV                                102.4 cm
+                                      Detector rings                               20
+                                      Crystals per ring                           48
+                                      Total number of crystals                    960
+                                      Total number of channels                  61,440
+                                      Energy resolution                          6.3%
+                                      Energy window                         465–555 keV
+                                      Coincidence time resolution               1.5 ns
+                                      Coincidence time window                   4.5 ns
+                                      Operating temperature                      77 K
+
+
+                    For definiteness, we consider a CRYSP scanner with dimensions similar to those of the Quadra
+                 (CRYSP1M). This corresponds to an effective diameter of ∼ 774 mm and an effective length of ∼
+
+
+                                                           5
+n reconstruction with deep learning
+          IOP Publishing   Phys. Med. Biol. vv (yyyy) aaaaaa                                                                                         S.R. Soleti et al
+
+
+                                                                  Monolithic crystal                                    Monolithic crystal
+
+rning algorithm
+
+                                                 SiPMs matrix                                          SiPMs matrix
+ct the
+ the gamma in a
+out by a matrix of
+
+                                                                  z = °12.20 mm                                             z = 17.30 mm
+of a Convolutional                              24
+
+d on 8x8                                                                                        1000                                                   300
+
+corresponding to                                12
+
+each SiPM.                                                                                      800
+                                                                                                                                                       250
+
+                                      y [mm]     0
+                                                                                                600                                                          # p.e.
+n is assumed, with                                                                                                                                     200
+eing fully                                     °12                                              400
+
+                                                                                                                                                       150
+                                                                                                200
+
+explored, giving                               °24
+                                                 °24            °12      0       12        24          °24            °12        0         12   24
+                                                                      x [mm]                                                   x [mm]
+
+
+on in the three            Figure 4: Charge collected by the SiPM matrix coupled to a monolithic crystal for two different
+                           interactions, one close to the SiPMs plane (z = −12.20 mm) and one near the crystal entrance
+                           (z = 17.30 mm). The red dot corresponds to the simulated interaction point. The difference between
+                           the two patterns is exploited by a neural network to reconstruct the d.o.i. (here the z coordinate).
+
+LY 2024                                                                                                                12
+                           1024 mm, which translates to 20 rings, where each ring is comprised of 48 crystals of 50×50×38 mm3 ,
+                           including wrapping. Thus, CRYSP1M deploys a total of 960 crystals and 61,440 channels (compared
+                           with the 243,200 of the Quadra). System specifications are detailed in table 2.
+                               The CRYSP scanner is enclosed within a double-walled cryostat filled with liquid nitrogen (LN2 )
+                           that maintains the crystals and SiPMs at approximately 78 K, as shown in figure 5. The estimated
+                           thermal load of 365 W corresponds to an LN2 evaporation rate of 7.6 L/h, resulting in an annual
+                           consumption below 70,000 L (≈ 30, 000 €/year). The inner and outer vessels are separated by
+                           vacuum layers with multilayer insulation, and all SiPM signals are extracted via compact PCB
+                           feedthroughs validated in similar cryogenic environments [29, 30]. These mechanical and thermal
+                           parameters define the stable operating temperature assumed in simulation and demonstrate the
+                           feasibility of continuous cryogenic operation.
+                               When a gamma interacts in a crystal, the readout ASIC digitizes the charge in each of the 64
+                           channels and sends 64 × 2 numbers to an FPGA, corresponding to the integrated charge and the
+                           timestamp value, as described in section 2.3. The FPGA computes the time of interaction assigned
+                           to the crystal (e.g., by taking an OR of the individual timestamps), as well as the total energy
+                           and the interaction vertex. The latter is achieved by passing the digitized signals (the 8 × 8 pixels
+                           comprising the “image” provided by the crystal) in real-time through a pre-trained CNN running on
+                           the FPGA itself (see section 2.5). Thus, the information provided by each crystal is reduced to five
+                           numbers: time, energy and the three coordinates of the interaction vertex.
+                               Given the relatively long decay time of CsI (τ ≈ 1 µs), integration of the full charge requires
+                           roughly 3τ ≈ 3 µs. On the other hand, the very high luminosity of the crystal results in a fast
+                           rise time, allowing for a CTR in the range of 1-2 ns, as detailed in section 2.1. Consequently, the
+                           system can accommodate high event rates. While this CTR value is too large to support TOF
+                           measurements, this limitation has an upside: the requirements on the electronics, which are usually
+                           demanding in TOF-PET systems [31, 32], can be relaxed, further reducing costs.
+                               Although the CTR is good enough to resolve coincidences, a fraction of events will still be lost or
+                           misreconstructed because of pile-up (e.g., events in which a second gamma interacts in the crystal
+                           before the integration of the energy of the first event is over). A dedicated pile-up processor is
+                           described in section 2.3.2 and its effect is quantified in section 3.4.
+
+                           2.3 Electronics for CRYSP
+                           The baseline design of CRYSP1M employs front-end integration into an application-specific inte-
+                           grated circuit (ASIC) to bring the information processing closer to the sensors. Therefore, the
+
+
+                                                                                       6
+IOP Publishing   Phys. Med. Biol. vv (yyyy) aaaaaa                                                      S.R. Soleti et al
+
+
+
+
+                 Figure 5: CAD drawings of two sections of the CRYSP conceptual design, showing the different
+                 parts of the scanner. The crystals, in purple, are placed in a volume filled with liquid nitrogen and
+                 read out by a matrix of SiPMs, in green. This volume is separated from the environment by a thin
+                 volume at vacuum on the inner side, facing the patient, and a larger volume at vacuum on the outer
+                 side, which houses the PCB feedthroughs (in blue). These two vacuum chambers provide thermal
+                 insulation to the liquid nitrogen volume.
+
+
+                 functionality of the system can be enhanced introducing new features which otherwise could not be
+                 implemented offline due to the high amount of data needed to be sent to the data acquisition (DAQ)
+                 system. The proposed detector architecture enables a customization of the front-end design that
+                 exploits detected signal characteristics allowing for unique features such as event pile-up processing
+                 and optimized timestamp generation.
+
+                 2.3.1 Timestamp Any PET-oriented front-end requires a timestamp generation system with a
+                 suitable resolution in order to enable event coincidence filtering. Although CRYSP relies on energy
+                 resolution to reject Compton-scattered gammas, an enhanced coincidence filter will help to minimize
+                 accidental LORs. High-precision timestamp generating systems depend on accurate clock distribu-
+                 tion and synchronization schemes. Moreover, this dedicated hardware must be integrated all along
+                 the DAQ data flow, even at the front-end level. This requirement implies a significant increase in
+                 costs related to electronic systems. As a consequence, a trade-off between system synchronization
+                 complexity and CTR must be observed. In order to improve the latter, a customized time-walk
+                 correction mechanism has been proposed for our integrated front-end.
+                     The usual strategy is to approximate timestamp values by T0 crossing time, whose precision is
+                 limited by timing resolution. A simple Time-to-Digital Converter (TDC) scheme can easily achieve
+                 resolutions below 100 ps with relatively slow clocks (20 ns period) [33] using affordable ADC con-
+                 verters (less than 9 bits). However, there is a significant effect related to signal slope behavior (time
+                 walk ) that blurs effective timestamp resolution [34]. In order to reduce this effect a very low thresh-
+                 old can be employed. Therefore, false pulse detection probability would increase due to noise in the
+                 input stages of the front-end. Introducing control mechanisms to reject false pulse detection would
+                 increase hardware complexity. However, a different approach will be introduced in the development
+                 of this integrated front-end: different time values of the pulse waveform will be used to predict an
+                 enhanced timestamp value.
+                     The proposed time-walk correction algorithm relies on several threshold crossing times of the
+                 rising slope of the pulse signal (see fig. 6). The time intervals between these points along with the
+                 first (and lowest) threshold crossing point T0 , can be used to predict the true origin of the pulse
+                 signal:
+
+                                         TS = C0 · T0 + C1 · ∆T1 + C2 · ∆T2 + · · · + Cn · ∆Tn ,                      (3)
+                 where ∆T1 , ∆T2 , . . . , ∆Tn correspond to the difference between consecutive threshold crossing times
+                 and TS to the timestamp. The required weights C0 , C1 , . . . , Cn can be estimated through simulation
+                 using a simple multiple linear regression learning algorithm.
+                    Furthermore, the final timestamp value can be computed in an analogue fashion, reducing the
+                 amount of digital data to a coarse clock period counter and the corrected TDC output value.
+
+
+
+                                                           7
+IOP Publishing   Phys. Med. Biol. vv (yyyy) aaaaaa                                                            S.R. Soleti et al
+
+
+
+                    This mechanism is implemented on a per-channel basis, meaning the precise timestamp of the
+                 event recorded at the detector level is computed off-chip. Typically, the first timestamp among a
+                 group of channels is selected as the most accurate event timestamp.
+
+
+                                                                     Channel signal (rising edge)
+                                                         0.5
+                                                               TH3
+
+                                                         0.4
+                                                               TH2
+
+
+
+
+                                        Voltage [a.u.]
+                                                         0.3
+                                                               TH1
+
+                                                         0.2
+                                                               TH0                T0
+
+
+                                                         0.1
+                                                               Timestamp
+
+                                                         0.0
+                                                                           ∆Ts         ∆T1   ∆T2   ∆T3
+
+                                                               0       2         4           6      8    10
+                                                                                 Time [ns]
+
+                 Figure 6: The time-walk correction principle for the rising edge of a signal example. The time
+                 intervals between several threshold crossing times and the first (and lowest) threshold crossing point
+                 T0 can be used to predict the true origin of the pulse signal.
+
+
+                 2.3.2 Pile-up processor Due to the long decay time of cryogenic CsI (approximately 1 µs) and the
+                 use of monolithic crystals, pile-up is a significant concern in CRYSP. Thus, a novel pile-up processor
+                 based on a peak detection mechanism [35] has been developed for the integrated front-end. For
+                 clarity, the method is illustrated using the common scenario of two overlapping pulses in a pile-up
+                 event, although it can be extended to handle multiple overlapping pulses.
+                     The peak detection system has been enhanced to extract information from several key signal
+                 points, identified by changes in the slope sign of the input signal. To achieve this, an analog derivative
+                 computation circuit has been proposed to generate the necessary control signals. The frequency
+                 response of this circuit is critical, as it directly impacts the accuracy and limitations of the pile-up
+                 processor.
+                     In a two-event pile-up scenario, only three key points are required to determine the energy of both
+                 events (see fig. 7a). Two of these points, A and C, represent the peak positions of the first and second
+                 events, respectively. The third point, B, corresponds to the start of the second event, which overlaps
+                 with the tail of the first event. In an event without pile-up, the peak magnitude is directly related
+                 to the event’s energy, as the signal shape consistently follows the same time distribution function.
+                 Consequently, the energy of the first event can be accurately determined from the amplitude at point
+                 A.
+                     However, the energy of the second event cannot be directly inferred from the amplitude at point
+                 C, as the second peak is affected by the downward slope of the first event. To address this, a
+                 correction factor must be introduced to accurately determine the true peak amplitude of the second
+                 event.
+                     This correction is based on B point time position related to first event starting point, and rise
+                 time value of the pulses which is a known constant value. A correction method has been proposed
+                 to obtain the right amplitude for the second pulse peak at different pile-up delays using statistical
+                 data.
+                     This operation is an approximation to a deconvolution of the down slope effect of the first pulse,
+                 and can be computed offline after data acquisition. Only three data must be converted to digital and
+                 sent to the DAQ system: A peak value, B time position and C − B difference (second event peak
+                 amplitude to be corrected offline). However, these data must be accurately sampled and latched
+
+
+                                                                       8
+                                                                                                                     You
+IOP Publishing   Phys. Med. Biol. vv (yyyy) aaaaaa                                                                     S.R.
+                                                                                                             November 27,   Soleti et al
+                                                                                                                          2024
+
+
+
+                                                                                                                D1
+                                   1.0                              Signal
+                                             A             C
+                                                                                                                            J1
+
+
+                  Voltage [a.u.]
+                                   0.5
+                                                                                                                            CA        CC
+                                                                                                        IN
+                                                      B
+
+                                   0.0
+                                   1.0
+
+
+
+                  Voltage [a.u.]
+                                                               Signal derivative
+                                   0.5           J1                                                             D2          J2   J1
+                                   0.0
+                                                          J2
+                                                                                                                            CB
+                                         0   1000     2000      3000     4000      5000   6000   7000
+                                                                  Time [ns]
+
+                                                                 (a)                                                  (b)
+                                                                 Figure 1: Modified multiple peak detector for pile-up process
+                 Figure 7: (a) Example of signal with pile-up (top) and its derivative (bottom), showing the latching
+                 times for J1 and J2 . (b) Modified multiple peak detector for pile-up processing. The CA capacitor
+                 stores the first peak, latched by J1 upon the derivative signal’s positive-to-negative transition. J1
+                 disables CB charging path, turning it into a falling peak detector. J2 , triggered by a negative-to-
+                 positive transition, latches CB to point B, while CC detects the second peak with D1 , storing its
+                 maximum value.
+
+
+                 timely enough to accomplish the ADC operations. The proposed algorithm can be implemented as
+                 a modified multiple peak detector (fig. 7b) whose control signals rely on the aforementioned analog
+                 derivative computation. First of all, the capacitor CA stores the first peak and the J1 control signal
+                 latches its value, which prevents it from losing peak information when the signal rises above it again.
+                 J1 will be generated with the first change of the derivative signal from positive-to-negative values.
+                 At the same time, J1 breaks CB charge path through D1 , so it turns into a falling peak detector
+                 along with D2 . When J2 is activated by a negative-to-positive change in the derivative signal, CB
+                 gets latched with B point value. In the second event, CC acts now as a peak detector along with
+                 D1 , then the second peak value gets stored in this capacitor until the maximum value is reached.
+                     Given the timing characteristics of the detector signals and the method used to generate the
+                 peak detector control signals, there is a limit to the allowable time overlap between pile-up pulses. A
+                 conservative estimate on this limit gives a value of approximately 500 ns. The effect of the unresolved
+                 pile-up is quantified in detail in section 3.4.
+
+                 2.4 Modeling CRYSP
+                 A detailed microphysical simulation of CRYSP has been performed using the Geant4 simulation
+                 framework [12]. Two different applications have been implemented: one detailing a single monolithic
+                 crystal read out by a matrix of 8 × 8 SiPMs of size 6 × 6 mm2 and one with the baseline design of a
+                 full CRYSP1M scanner.
+                     The first application was used to study in detail the performances of monolithic crystals. The
+                 emission spectrum of CsI at cryogenic temperatures and the photon detection 1   efficiency of the pho-
+                 tosensor were set according to specifications [22]. Several possible wrapping materials (e.g., PTFE,
+                 ESR [36]) and coverage combinations were tested. The data obtained with the experimental appa-
+                 ratus of ref. [11] were used to validate the simulation. Optical photon generation was included in
+                 the application and the best agreement between data and Monte Carlo was obtained with the LUT
+                 optical model [37]. The results of the simulation were then used to develop the vertex reconstruction
+                 algorithm described in section 2.5.
+                     The second application includes the full geometry of CRYSP1M and was used for the performance
+                 evaluation detailed in section 3. Positrons inside the phantoms were generated with a kinetic energy
+                 corresponding to the 18 F decay spectrum. However, simulation of optical photons is too computa-
+                 tionally intense for a full detector. Thus, the energy deposition in the crystals is smeared with a
+                 Gaussian FWHM of 6.3%, corresponding to the experimental energy resolution obtained in ref. [11].
+                 The light-time emission profile and coincidence time resolution (CTR) were applied separately at the
+
+
+                                                                                    9
+IOP Publishing   Phys. Med. Biol. vv (yyyy) aaaaaa                                                       S.R. Soleti et al
+
+
+
+                 analysis stage. A scintillation decay constant of 800 ns and a CTR of 1.5 ns FWHM were adopted,
+                 consistent with the experimental results reported in ref. [11]. The decay time was implemented by
+                 time-distributing the detected photoelectrons according to an exponential emission profile with the
+                 corresponding decay constant, thereby reproducing the temporal response of the photosensor to the
+                 scintillation pulse. Dead-time effects were modeled through the integration and pile-up processing
+                 described in section 2.3.2. Interactions occurring within 500 ns were classified as unresolved pile-
+                 up and treated as a single event, while pulses separated by more than 500 ns were assumed to be
+                 resolvable by the electronics and to preserve the nominal energy resolution.
+                     The acquisition parameters used in all performance studies are consistent with those expected
+                 for the final detector operation and are summarized in Table 2. In particular, events were selected
+                 within an energy window of 465–555 keV (corresponding to 3σ around 511 keV) and a coincidence
+                 time window of 4.5 ns. These settings were adopted for both sensitivity and imaging simulations to
+                 allow a fair comparison across all performance metrics.
+                     In order to provide a consistent benchmark, we also simulated a reference LYSO-based PET scan-
+                 ner under the same Monte Carlo framework and acquisition settings used for CRYSP. The geometry
+                 and axial coverage were matched to the CRYSP configuration, with detector modules composed of
+                 pixelated LYSO crystals (3 × 3 × 22 mm3 ) read out by SiPMs. The intrinsic parameters were set to
+                 10% energy resolution, 40 ns decay time, an energy window of 435–585 keV (also here corresponding
+                 to 3σ around 511 keV), and a 350 ps CTR, which lies midway between the performances reported
+                 for the Biograph Vision Quadra (230 ps) [4] and the uEXPLORER (505 ps) [38], which enables TOF
+                 reconstruction and is consistent with reported performances of state-of-the-art TBPET systems such
+                 as the Biograph Vision Quadra [4] and uEXPLORER [38]. This virtual LYSO scanner serves as
+                 a physically consistent reference for comparing sensitivity, NECR, and spatial resolution results,
+                 complementing the image-reconstruction comparison, as shown in section 3.
+
+                 2.5 Reconstruction of interaction vertex in CRYSP
+                 In a pixelated detector, the reconstruction of the interaction vertex (iV) usually requires a single pixel
+                 fired in the detector unit, typically built as an array of several pixels (e.g., in the Quadra scanner, a
+                 mini block is made of 5 × 5 pixels, and each pixel has transverse dimensions of 3.2 × 3.2 mm2 , thus
+                 a detector unit is a matrix of 25 pixels with dimensions 16 × 16 mm2 ). Imposing that the energy
+                 deposited in the pixel is near 511 keV selects events at or very near the photoelectric peak.
+                     The intrinsic spatial resolution in such a configuration is mainly determined by the crystal pitch
+                 and thickness. The transverse
+                                            √      position
+                                                         √ of the interaction vertex (iV) can be approximated, in first
+                 order, by FWHMt = 2 2 ln 2 × t/ 12, where t denotes the transverse dimension of the pixel.
+                 For instance, in the Biograph Vision Quadra scanner, t = 3.2 mm      √ resulting √ in FWHMt = 2.1 mm.
+                 Similarly, the d.o.i. resolution can be estimated as FWHMdoi = 2 2 ln 2×l/ 12, where l is the length
+                 of the crystal. Considering again the example of the Quadra, l = 20 mm yields FWHMdoi = 13.3 mm.
+                 These expressions represent simple geometrical estimates assuming a uniform interaction distribution
+                 and are used as analytical proxies for the intrinsic sampling limits of pixelated PET detectors.
+                     Thus, while the small size of the pixels guarantees excellent transverse resolution (at the cost of
+                 a large number of channels), the d.o.i resolution is typically poor, even for dense crystals, such as
+                 LYSO or BGO, since one requires typically a minimum of 2 radiation lengths (X0 ) for acceptable
+                 sensitivity. An additional problem, whose impact becomes increasingly important as the AFOV of
+                 the scanner increases, is that of parallax. Gammas entering the detectors at very large angle often
+                 do not deposit their energy in the first pixel they encounter on their trajectory, but one or two pixels
+                 further. Parallax results in large errors in the reconstruction of the iV. Additionally, gammas can
+                 scatter in one pixel, depositing a fraction of their energy, before being fully absorbed in a neighboring
+                 pixel. Such events are typically rejected, negatively impacting the sensitivity.
+                     CsI has a longer radiation length (X0 ∼ 18.5 mm) and smaller photoelectric fraction than the
+                 dense, high Zef f scintillators (BGO, LYSO), usually deployed in modern PET scanners. In a pixe-
+                 lated detector this would translate to a larger error in the d.o.i, as well as in a smaller fraction of
+                 selected events.
+                     CRYSP, instead, proposes the use of monolithic crystals, of relatively larger dimensions, read out
+                 by an array of large-area SiPMs (see section 2.2). The simple algorithm used for pixelated systems
+                 cannot be applied in this case, since all the 64 SiPMs reading out the crystal have signal when a
+                 gamma interacts in the crystal.
+                     The adoption of monolithic crystals for PET and their potential regarding iV reconstruction is not
+                 a novel topic [39, 40]. However, obtaining a resolution comparable with the transverse dimensions has
+                 been historically challenging and classical algorithms fare relatively poorly [41]. Algorithms based on
+                 multilayer perceptrons have also been implemented, providing similar results [42, 43]. Here, instead,
+
+
+                                                           10
+IOP Publishing   Phys. Med. Biol. vv (yyyy) aaaaaa                                                                          S.R. Soleti et al
+
+
+
+                 we show how excellent resolution in all three coordinates of the iV can be achieved using CNNs,
+                 which have been widely adopted for image recognition tasks with extraordinary success [44, 45].
+                     Furthermore, the use of CNNs allows to include in the sample events with a first Compton scatter
+                 followed by photoelectric absorption, which deposit the full 511 keV in the same crystal. This is
+                 a much larger fraction than pure photoelectric events, up to 60% of the total events, and is also
+                 more significant in CsI than in higher Zef f materials such as LYSO and BGO. Most of these events
+                 deposit their energy in two or more clusters in the crystal, but the two most energetic clusters add
+                 up to a very large fraction of the total energy deposited, and thus determine the shape of the image.
+                 Notably, the first true interaction vertex (e.g., the point at which the gamma truly interacts in the
+                 crystal) coincides most of the time with the first apparent interaction vertex (e.g., the vertex closer
+                 to the entry point of the gamma), thus resulting in unbiased, gaussian-distributed residuals between
+                 the true interaction vertex of the gamma and the first apparent vertex predicted by our CNN-based
+                 reconstruction algorithm, as shown in fig. 8.
+                     Our CNN is, therefore, trained to search for two iVs (x1 , y1 , z1 , x2 , y2 , z2 ) where the index 1 is
+                 assigned to the first apparent interaction vertex. Training the CNN to find two vertices rather than
+                 one results in better determination of the position (since, in practice, an algorithm trained to find a
+                 single vertex determines the barycenter of the interaction which may be several mm away from the
+                 true vertex), and assigning the iV to the first apparent vertex is a good approximation to the true
+                 vertex. The full network is made of three consecutive convolutional blocks (Conv2D + BatchNorm
+                 + LeakyReLU + MaxPooling2D) followed by a Flatten, a Dropout, and a Dense layer yielding 6
+                 outputs (x1 , y1 , z1 , x2 , y2 , z2 ).
+                     The network has been trained for 10 epochs on 107 simulated events, with gammas uniformly
+                 distributed in the transverse plane. The result is shown in fig. 8, where the difference between the
+                 true interaction vertex and the CNN apparent vertex is plotted.√The data can be well described by
+                 two Gaussians, with an effective resolution of approximately 2 2 ln 2 × 1.5 ≈ 3.5 mm in all three
+                 coordinates.
+                     The slightly larger error in the determination of the transverse coordinates, compared with pix-
+                 elated PET scanners, is compensated by a much smaller error on the d.o.i. Notice, also, that the
+                 resolution in the case of a monolithic crystal stays roughly constant with the transaxial angle, since
+                 the determination of the iV is not affected by parallax (see section 3.2).
+                     For the spatial resolution and image reconstruction studies of CRYSP described in the following
+                 sections, the positions of the first interaction of the two gammas within the crystals are smeared
+                 with the two Gaussian distributions of fig. 8 and are then used directly to define the listmode LORs.
+                 Although a mild depth dependence of the spatial resolution exists (0.2–0.5 mm), in a monolithic
+                 detector the d.o.i. is not known a priori and must be estimated from the light distribution. Thus,
+                 as the reconstruction algorithm does not have access to the true depth, a depth-dependent intrinsic
+                 smearing cannot be applied in a realistic system-level simulation. In the pixelated LYSO-based PET
+                 system, where no dedicated d.o.i. encoding is assumed, the interaction position is assigned to the
+                 geometric position of the crystal.
+
+                                     1.2          σ1 = 1.08 mm (64%)               σ1 = 1.07 mm (63%)               σ1 = 1.24 mm (51%)
+                                                  σ2 = 3.78 mm (36%)               σ2 = 3.76 mm (37%)               σ2 = 3.41 mm (49%)
+                                     1.0
+
+
+
+
+                 Normalized counts
+                                     0.8
+
+                                     0.6
+
+                                     0.4
+
+                                     0.2
+
+                                     0.0
+                                           −10            0            10   −10            0            10   −10            0            10
+                                                 xtrue − xCNN [mm]                ytrue − yCNN [mm]                ztrue − zCNN [mm]
+
+                 Figure 8: Residuals between the true interaction vertex of the gamma and the first apparent vertex
+                 predicted by the CNN, in the three axes. The distributions have been fitted with the sum of two
+                 Gaussians (dashed line).
+
+
+
+
+                                                                            11
+IOP Publishing   Phys. Med. Biol. vv (yyyy) aaaaaa                                                                                S.R. Soleti et al
+
+
+
+                 3 Results
+                 3.1 Sensitivity
+                 The performance of CRYSP was benchmarked according to the NEMA NU 2-2018 standard [46]
+                 using a Monte Carlo simulation of the setup, produced with a dedicated Geant4 [12] application,
+                 as detailed in section 2.4. The sensitivity of CRYSP was measured by simulating a polyethylene
+                 phantom with a length of 700 mm, an inner diameter of 2 mm, and an outer diameter of 3 mm.
+                 The positron emission was generated uniformly within the inner part of the tubing, which was filled
+                 with water. The events were selected in an energy window of 465–555 keV, which corresponds to
+                 approximately 3.σ around the 511 keV peak, and a coincidence time window of 4.5 ns. These two
+                 selection criteria were used also for the rest of the studies of this document, as specified in table 2.
+
+                                                                                                                  Radial offset
+                                                                                                                        0 cm
+                                                                     10                                                 10 cm
+
+
+
+
+                                      Axial sensitivity [kcps/MBq]
+                                                                      8
+
+
+                                                                      6
+
+
+                                                                      4
+
+
+                                                                      2
+
+
+                                                                      0
+                                                                          −400   −200          0            200       400
+                                                                                      Axial position [mm]
+
+                 Figure 9: Sensitivity as a function of the axial position for the CRYSP scanner with the phantom
+                 placed at the center of the FOV (solid line) and with a radial offset of 10 cm (dashed line).
+
+                     According to the NEMA NU 2-2018 protocol, five different simulations were carried out, adding
+                 an aluminum sleeve with a thickness of 2.5 mm at each iteration. Finally, a sensitivity curve was
+                 plotted versus the total aluminum thickness to extract the attenuation-corrected sensitivity.
+                     The procedure was repeated in two different configurations, one with the phantom placed at the
+                 center of the FOV and one with a radial offset of 10 cm, obtaining R0 cm = 120 ± 5 kcps/MBq and
+                 R10 cm = 128 ± 5 kcps/MBq, respectively. Although these values are lower than those reported for
+                 LYSO-based TBPETs (174 kcps/MBq for the uEXPLORER [47] and 176 kcps/MBq for the Quadra
+                 [4]), the selected events exhibit less Compton contamination due to superior energy resolution, as
+                 detailed in section 3.3. The attenuation-corrected sensitivity as a function of the axial position for
+                 both radial offsets is reported in fig. 9. This results in reconstructed images of comparable quality
+                 at parity of number of events (see section 3.5). For reference, our simulated LYSO-based PET
+                 scanner yields a sensitivity of (177 ± 6) kcps/MBq, in excellent agreement with the reported Quadra
+                 performance of 175.3 kcps/MBq [4], further supporting the validity of our Monte Carlo model.
+
+                 3.2 Spatial resolution
+                 Spatial resolution of the scanner has been quantified according to the NEMA standard by simulating
+                 a point-like positron source placed at six different positions: in the axial direction at the center of
+                 the AFOV and three-eights of the AFOV from the center and in the transverse direction at 1 cm,
+                 10 cm, and 20 cm from the center. The resolution is measured for both the CRYSP and the reference
+                 LYSO-based PET system in all three directions: radially, axially, and tangentially. Table 3 shows the
+                 full width at half-maximum (FWHM) and full width at tenth-maximum (FWTM) amplitudes for the
+                 six positions obtained with the filtered backprojection algorithm. Notably, the CRYSP performance
+                 becomes significantly superior to that of the LYSO-based PET at large radial offsets and off-center
+                 axial positions, where parallax effects in pixelated detectors degrade spatial resolution.
+
+                 3.3 Count rates and NECR
+                 The count-rate performance was evaluated for both the CRYSP and the reference LYSO-based PET
+                 scanner using the NEMA NU 2–2018 protocol. A solid circular cylinder made of polyethylene with
+                 an outer diameter of 203 mm, an overall length of 700 mm, and an internal volume of 22,000 mL was
+
+
+                                                                                 12
+IOP Publishing   Phys. Med. Biol. vv (yyyy) aaaaaa                                                                                                       S.R. Soleti et al
+
+
+
+                 Table 3: FWHM and FWTM in all three directions for point-like sources at six different locations in
+                 CRYSP and in the LYSO-based reference PET, obtained with the filtered backprojection algorithm.
+
+                                                 Axial               Radial                      FWHM (mm)                                       FWTM (mm)
+                    System                  position (mm)         offset (mm)          Radial     Axial Tangential                      Radial    Axial Tangential
+                    CRYSP                   512 (1/2 of FOV)            10              3.35       3.42   3.42                           6.13      6.26    6.26
+                                            128 (1/8 of FOV)            10              3.36       3.41    3.41                          6.15      6.24    6.25
+                    LYSO                    512 (1/2 of FOV)            10              3.52       3.61    3.61                          6.44      6.60    6.60
+                                            128 (1/8 of FOV)            10              3.51       3.62    3.61                          6.39      6.60    6.58
+                    CRYSP                   512 (1/2 of FOV)           100              3.39       3.43   3.52                           6.21      6.28    6.44
+                                            128 (1/8 of FOV)           100              3.43       3.42    3.52                          6.28      6.26    6.44
+                    LYSO                    512 (1/2 of FOV)           100              4.21       3.72    3.71                          7.68      6.78    6.76
+                                            128 (1/8 of FOV)           100              4.26       3.99    3.78                          7.77      7.27    6.89
+                    CRYSP                   512 (1/2 of FOV)           200              3.53       3.47   3.79                           6.46      6.17    6.94
+                                            128 (1/8 of FOV)           200              3.69       3.60    3.97                          6.76      6.59    7.27
+                    LYSO                    512 (1/2 of FOV)           200              4.89       4.61    3.94                          8.91      8.40    7.18
+                                            128 (1/8 of FOV)           200              5.01       4.54    3.91                          9.13      8.27    7.13
+
+
+
+                 simulated. The phantom was placed at the center of the FOV and axially aligned with the scanner.
+                 A 6.4 mm hole, positioned 4 mm off the central axis, contained a 700 mm-long tubing (inner/outer
+                 diameters of 3.2/4.8 mm) filled with a uniform positron source. In each configuration, 4.5 × 106
+                 positrons were generated uniformly within the tubing volume, and the acquisition time window was
+                 varied to reproduce different activity concentrations between 0 and 40 kBq/mL.
+                     Rates of total, true, scattered, and noise-equivalent counts were calculated according to Section 4
+                 of the NEMA NU 2–2018 standard and are shown in Fig. 10. A peak NECR of (1.79±0.04) Mcps was
+                 obtained for CRYSP at an equivalent activity concentration of 14.0 kBq/mL, while the LYSO-based
+                 PET reached (2.97 ± 0.05) Mcps at 25.6 kBq/mL, in good agreement with the reported measurement
+                 from Quadra [4] (2.96 Mcps for MRD at 27.5 kBq/mL). The corresponding scatter fraction (SF) was
+                 found to be approximately 20% for CRYSP and 40% for the LYSO-based PET, as shown in Fig. 10
+                 (right), indicating that the improved energy resolution of cryogenic CsI effectively reduces scattered
+                 coincidences by about a factor of two. Also in this case, the SF for the LYSO-based simulated PET
+                 is in good agreement with the Quadra reported measurement [4].
+
+                                                                                                                6                                                          0.6
+                               14                                              NECR CRYSP                                   NECR CRYSP                SF CRYSP
+                                                                               True                                         NECR LYSO PET             SF LYSO PET
+                                                                               Scatter
+                               12                                                                               5           NECR Quadra               SF Quadra            0.5
+                                                                               Total
+                                                                               Random
+                               10
+
+
+
+
+                                                                                                                                                                                 Scatter Fraction
+                                                                                                                4                                                          0.4
+
+
+
+                 Rate [Mcps]                                                                      Rate [Mcps]
+                                8
+                                                                                                                3                                                          0.3
+                                6
+                                                                                                                2                                                          0.2
+                                4
+
+                                                                                                                1                                                          0.1
+                                2
+
+                                0                                                                               0                                                          0.0
+                                    0   5      10    15     20     25     30      35        40                      0   5   10     15    20      25       30        35   40
+                                                    Activity [kBq / mL]                                                          Activity [kBq / mL]
+
+                 Figure 10: Left: true (solid line), scatter (dashed line), random (dash-dotted line), and total (dotted
+                 line), and NECR curve (red line) for the CRYSP system. Right: NECR curves (red, left axis) and
+                 scatter fractions (black, right axis) for CRYSP (solid), the Biograph Vision Quadra [4] (dashed),
+                 and a LYSO-based simulated PET scanner (dotted). Both plots are as a function of the activity
+                 concentration in the phantom tubing.
+
+
+                 3.4 Pile-up
+                 In order to quantify the effect of pile-up more realistically, we simulated a simplified MIRD human
+                 phantom [48] inside CRYSP1M, using approximate relative activities in each organ as detailed in
+                 ref. [49]. Two scenarios are being considered: one where the patient’s entire upper body is inside
+                 the scanner and another where the head is outside the FOV. In our simulation, signals pass through
+                 the pile-up processor described in section 2.3.2. An event is classified as pile-up if the processor fails
+
+
+                                                                                 13
+IOP Publishing   Phys. Med. Biol. vv (yyyy) aaaaaa                                                                                      S.R. Soleti et al
+
+
+
+                 to resolve a second signal arriving within the integration window of the first. Fig. 11 illustrates the
+                 fraction of events with unresolved pile-up as a function of the activity administered to the patient.
+                 For a typical PET administered activity of 300 MBq, approximately 20% of events fall into this
+                 category. This fraction can be halved by positioning the patient’s head, where a significant portion
+                 of the activity is concentrated, outside the FOV.
+                     A key advantage of TBPETs, however, is their ability to maintain image quality with up to an
+                 order of magnitude lower administered dose, as demonstrated by uEXPLORER [38]. At an activity
+                 level of 30 MBq, this results in an almost negligible fraction of unresolved pile-up, approximately
+                 2%. For comparison, in the reference LYSO-based PET scanner, the much shorter scintillation decay
+                 time and smaller detector block area result in a negligible pile-up fraction under the same activity
+                 conditions.
+                                                        0.5
+                                                                                           Full body                    500
+                                                                                           No head
+                                                                                                                        300
+                                                        0.4
+                                                                                                                        100
+
+
+
+
+                                     Pile-up fraction
+                                                        0.3                                                             −100
+
+                                                                                                                        −300
+                                                                                                                               z [mm]
+                                                        0.2
+                                                                                                                        −500
+
+                                                        0.1                                                             −700
+
+                                                                                                                        −900
+                                                        0.0
+                                                              0   100     200        300   400    500 −250     0      250
+                                                                        Activity [MBq]                       x [mm]
+
+                 Figure 11: Fraction of events with pile-up as a function of administered activity in two situations:
+                 one with full upper body inside the scanner (solid lines) and one with the head outside the AFOV
+                 (dashed lines). Simulation has been performed with a simplified MIRD model, shown on the right,
+                 where the color corresponds to the number of electron-positron annihilations.
+
+
+
+                 3.5 Image reconstruction in CRYSP
+                 The quality of the images reconstructed by CRYSP represents the chief parameter to be compared
+                 with existing solutions, since it encodes sensitivity, spatial resolution, time resolution, energy res-
+                 olution and NECR performances. To do so, we compare the contrast recovery coefficient (CRC)
+                 and signal-to-noise ratio (SNR) of CRYSP with the one of the simulated pixelated LYSO PET, as
+                 described in section 2.4, with and without TOF capabilities.
+                     In order to better assess the impact of Compton scattering with the patient’s body, we simulated
+                 a modified Jaszczak phantom with an inner diameter of 266 mm (instead of the typical 216 mm)
+                 and an axial length of 686 mm (instead of 186 mm), placed at the center of the AFOV. Adopting a
+                 phantom with larger length and diameter allows for a more accurate estimation of Compton scattering
+                 effects in human patients. This is particularly important in a TBPET, where a significant fraction
+                 of detected gammas is emitted at low angles and passes through substantial portions of the body,
+                 increasing the likelihood of Compton scattering. The simulation was performed with 3×109 electron-
+                 positron annihilation events distributed in 10 s of time, corresponding to an activity concentration
+                 of 7.9 kBq/mL. This value, although smaller than the peak NECR, has been chosen because it gives
+                 a manageable pile-up fraction of less than 20%.
+                     The CRC and SNR were calculated for all rod radii, both for rods placed near the center of the
+                 phantom (inner rods) and for rods placed closer to the surface (outer rods), as shown in fig. 12.
+                 Reconstruction has been performed with the parallelproj Python package [50], which allows to
+                 run a highly-parallelized implementation of the MLEM algorithm on GPUs. The reconstruction
+                 voxel size was set to 1 mm in all three axes, a value close to the spatial resolution obtained by
+                 the CNN, and the algorithm was run for 10 iterations, where the CRC and SNR values plateau.
+                 Normalization and attenuation corrections were applied in both cases and no point-spread function
+                 modeling was used. A listmode MLEM algorithm was employed for both the CRYSP and the LYSO-
+                 based PET reconstructions. All oblique LORs arising from the 100 cm axial coverage were included
+
+
+                                                                                14
+IOP Publishing   Phys. Med. Biol. vv (yyyy) aaaaaa                                                    S.R. Soleti et al
+
+
+
+
+                      100 mm                          100 mm
+
+
+
+
+                 Figure 12: Top: reconstructed images with a modified Jaszczak phantom for a PET scanner with
+                 monolithic cryogenic CsI crystals (left) and pixelated LYSO crystals with TOF (center) and without
+                 TOF (right). Normalization and attenuation corrections are applied and the color scale is the
+                 same. Bottom: contrast recovery coefficients and signal-to-noise ratios as a function of the radius
+                 of the inner (solid) and outer (dashed) rods. The regions being considered correspond to the red
+                 circumferences shown above.
+
+
+                 without any axial compression or sinogram rebinning. No time-of-flight (TOF) information was
+                 used in the CRYSP case, given its CTR of 1.5 ns, which is insufficient to provide a meaningful
+                 TOF constraint. For the LYSO-based PET system, reconstructions were performed both with TOF
+                 information (assuming a 350 ps CTR) and without TOF, in order to assess the impact of TOF on
+                 image quality. Voxel size and projector settings were kept identical across the two cases.
+                     The plots show that a PET scanner based on monolithic CsI crystals has performances that can
+                 be compared with ones employing LYSO pixels. Most interestingly, the CRC for rods placed near
+                 the center of the phantom is significantly better with CsI: in this case, in fact, the probability for
+                 a gamma to undergo Compton scattering in the phantom material is larger, and the significantly
+                 better energy resolution of cryogenic CsI and its improved d.o.i. resolution more than compensates
+                 for the lower sensitivity and lack of TOF. For the inner rods, the CRC goes from 21% for the smallest
+                 radius (1.60 mm) to 96% for the largest one (5.55 mm). In the case of the outer rods, the variation
+                 is smaller, from 39% to 68%. As expected, the pixelated LYSO-based PET reconstruction without
+                 TOF performs worse than its TOF-enabled counterpart. Moreover, due to the combination of poorer
+                 energy resolution and the absence of d.o.i. information, its performance is also inferior to that of
+                 CRYSP.
+
+                 4 Discussion
+                 The development of Total-Body PET (TBPET) apparatus represents a major leap forward in medical
+                 imaging. On one hand, it enables true multi-modal and multi-organ imaging; on the other, it allows
+                 for significant reductions in radiation dose and/or acquisition time. These improvements open new
+                 possibilities, such as routine PET imaging for children, and enable faster patient throughput.
+                     While early demonstrators, such as the uEXPLORER scanner [3], achieve axial lengths of up to
+                 200 cm, excellent performance can also be obtained with smaller coverage, with 100 cm representing
+
+
+                                                          15
+IOP Publishing   Phys. Med. Biol. vv (yyyy) aaaaaa                                                     S.R. Soleti et al
+
+
+
+                 a good compromise for many applications, as demonstrated by the Biograph Vision Quadra [4].
+                     However, the high costs associated with TBPETs may limit their widespread adoption. These
+                 costs are dominated by the high price of LYSO, the material of choice for virtually all modern PET
+                 scanners. LYSO is a rare earth material, and both its production and supply are highly concentrated
+                 geographically, raising concerns about future availability and cost.
+                     Another challenge is that increasing the axial length of a PET scanner faces a problem of dimin-
+                 ishing returns, linked to two main issues: (i) increased multiple scattering as photons travel longer
+                 distances through the patient’s body, and (ii) the parallax effect, which becomes a major source of
+                 reconstruction error for photons traveling at small angles with respect to the z-axis.
+                     The impact of multiple scattering can be mitigated by excellent energy resolution, allowing the
+                 selection of photons with energies close to 511 keV, thereby reducing scattering. The parallax
+                 effect, in turn, can be significantly suppressed by using monolithic crystals combined with modern
+                 reconstruction techniques, such as those based on convolutional neural networks (CNNs). Monolithic
+                 crystals also offer a substantial cost reduction compared with their pixelated counterparts.
+                     The balance between d.o.i., TOF, and scatter fraction can be analyzed in terms of their re-
+                 spective contributions to the SNR. p  The SNR gain provided by TOF information increases with the
+                 patient diameter approximately as D/∆xTOF [51, 52], where ∆xTOF = c ∆t/2. For a 350 ps CTR
+                 (∆xTOF ≈ 5.25 cm) and a 20 cm NEMA NECR phantom, this corresponds to an SNR improvement
+                 of approximately ×1.95 relative to a non-TOF system.
+                     Information on the d.o.i. in CRYSP reduces parallax broadening, resulting in a narrower and
+                 more spatially uniform point spread function. While this does not necessarily translate into a global
+                 increase in the image SNR, the better spatial resolution can reduce the partial volume effect [53], thus
+                 improving the local SNR around small structures by limiting the spread of counts into neighboring
+                 voxels. In addition, CRYSP exhibits a substantially lower scatter fraction (approximately 20% versus
+                 40%
+                 p for the LYSO-based configurations), corresponding to an expected SNR benefit of approximately
+                    (1 − 0.2)/(1 − 0.4) ≈ 1.15. Consistent with these considerations, Fig. 12 shows that CRYSP
+                 achieves SNR values comparable to those of the pixelated LYSO-based PET across the examined
+                 rods, effectively compensating for the absence of TOF and clearly outperforming the non-TOF LYSO
+                 configuration.
+                     These considerations point to the possibility of developing a low-cost TBPET system based on
+                 an abundant and inexpensive scintillator: CsI. The key realizations are that: (a) CsI must operate
+                 at cryogenic temperatures, where it offers a light yield three times higher than LYSO and an energy
+                 resolution roughly twice as good; and (b) the system should use monolithic crystals, which combine
+                 lower cost with superior performance at large incidence angles.
+                     The cost of monolithic CsI can be up to an order of magnitude lower than that of pixelated
+                 LYSO, while cryogenic operation (in the well-understood regime of liquid nitrogen) adds no more
+                 than about 5% to the cost of a conventional PET scanner. Importantly, 3D position reconstruction
+                 via neural networks in monolithic crystals provides a complete solution to the parallax problem.
+                     On the other hand, CsI exhibits a relatively slow decay time of about 1 µs. Despite this, its
+                 high light yield allows coincidence timing resolutions on the order of the nanosecond, adequate for
+                 many PET applications, although still worse than the TOF performance achievable with LYSO. In
+                 addition, pile-up can become significant in high-rate environments, but specially designed electronics
+                 can largely mitigate this effect, rendering it negligible in medium-rate applications, which are among
+                 the strongest use cases for TBPET (e.g., dose reduction).
+                     The results presented here demonstrate that the overall performance of a PET scanner based on
+                 monolithic CsI crystals can be competitive with that of much more expensive and complex LYSO-
+                 based systems. This offers a viable path to implementing TBPET technology at a cost affordable to
+                 most hospitals.
+
+                 5 Conclusion
+                 This work introduces CRYSP, a novel PET system based on cryogenic pure CsI monolithic crystals,
+                 with the potential to achieve high performance at significantly reduced cost. Operating at cryogenic
+                 temperatures, CsI provides a light yield of approximately 105 photons/MeV, resulting in an energy
+                 resolution better than 7% FWHM [11]. Despite its relatively slow scintillation decay time, it can
+                 achieve a coincidence timing resolution of about 1.5 ns, sufficient for PET applications.
+                     Simulation studies indicate millimeter-scale spatial resolution for interaction vertex reconstruc-
+                 tion within a monolithic cryogenic CsI crystal. Overall, the simulated CRYSP1M scanner achieves
+                 sensitivity, NECR, and CRCs comparable to existing systems of similar size, despite the absence
+                 of TOF capabilities. Notably, CRYSP1M has the potential to outperform a pixelated LYSO PET
+
+
+
+
+                                                          16
+IOP Publishing   Phys. Med. Biol. vv (yyyy) aaaaaa                                                    S.R. Soleti et al
+
+
+
+                 scanner in situations where energy resolution is critical, such as imaging samples with a high fraction
+                 of Compton-scattered gamma rays.
+                     While cryogenics is standard in other medical imaging modalities (e.g., MRI), its application in
+                 PET devices is new. In contrast to MRI, CRYSP cryogenics requires only a liquid nitrogen bath,
+                 enabling the use of conventional, low-cost cooling and signal-extraction techniques (e.g., inexpensive
+                 feedthroughs). As a result, cryogenics adds less than 5% to the overall device cost and can be
+                 implemented transparently for the end user.
+                     In summary, CRYSP offers a promising, cost-effective, high-performance alternative for TBPET
+                 scanners, with the potential to significantly expand access to advanced PET imaging in both clinical
+                 and research contexts.
+
+                 Acknowledgments
+                 The authors are thankful to Georg Schramm for the precious help with parallelproj.
+
+                 Funding
+                 SRS acknowledges the support of a fellowship from “la Caixa Foundation” (ID 100010434) with code
+                 LCF/BQ/PI22/11910019 and of a grant from the Basque Country Government with code PUE24-10.
+                 JR acknowledges support from the Generalitat Valenciana of Spain under grant CIDEXG/2023/16.
+
+                 Data availability
+                 The data that support the findings of this study are available upon reasonable request from the
+                 authors.
+
+                 References
+                  [1] S. Vandenberghe, P. Moskal, and J. S. Karp, “State of the art in total body PET,” EJNMMI
+                      physics, vol. 7, pp. 1–33, 2020.
+
+                  [2] V. Nadig, K. Herrmann, F. M. Mottaghy, and V. Schulz, “Hybrid total-body pet scan-
+                      ners—current status and future perspectives,” European journal of nuclear medicine and molec-
+                      ular imaging, vol. 49, no. 2, pp. 445–459, 2022.
+                  [3] S. R. Cherry et al., “Total-body PET: maximizing sensitivity to create new opportunities for
+                      clinical research and patient care,” Journal of Nuclear Medicine, vol. 59, no. 1, pp. 3–12, 2018.
+                  [4] G. A. Prenosil, H. Sari, M. Fürstner, A. Afshar-Oromieh, K. Shi, A. Rominger, and
+                      M. Hentschel, “Performance characteristics of the Biograph Vision Quadra PET/CT system
+                      with a long axial field of view using the NEMA NU 2-2018 standard,” Journal of nuclear
+                      medicine, vol. 63, no. 3, pp. 476–484, 2022.
+
+                  [5] S. Yamagishi, K. Miwa, S. Kamitaki, K. Anraku, S. Sato, T. Yamao, H. Kubo, N. Miyaji,
+                      and K. Oguchi, “Performance Characteristics of a New-Generation Digital Bismuth Germanium
+                      Oxide PET/CT System, Omni Legend 32, According to NEMA NU 2-2018 Standards,” Journal
+                      of Nuclear Medicine, vol. 64, no. 12, pp. 1990–1997, 2023.
+                  [6] J. P. Schmall, J. S. Karp, M. Werner, and S. Surti, “Parallax error in long-axial field-of-view
+                      PET scanners—a simulation study,” Physics in Medicine & Biology, vol. 61, no. 14, p. 5443,
+                      2016.
+                  [7] S. Surti, A. R. Pantel, and J. S. Karp, “Total body PET: why, how, what for?” IEEE transac-
+                      tions on radiation and plasma medical sciences, vol. 4, no. 3, pp. 283–292, 2020.
+                  [8] H. Zaidi and M.-L. Montandon, “Scatter compensation techniques in PET,” PET clinics, vol. 2,
+                      no. 2, pp. 219–234, 2007.
+                  [9] V. Mikhailik et al., “Luminescence and scintillation properties of CsI – a potential cryogenic
+                      scintillator,” physica status solidi (b), vol. 252, no. 4, pp. 804–810, 2015.
+                 [10] C. M. Lewis and J. I. Collar, “Response of undoped cryogenic CsI to low-energy nuclear recoils,”
+                      Phys. Rev. C, vol. 104, no. 1, p. 014612, 2021.
+                 [11] S. R. Soleti, A. Castillo, J. I. Collar, M. del Barrio-Torregrosa, C. Echeverria, M. Seemann,
+                      D. Zerzion, and J. J. G. Cadenas, “Cryogenic cesium iodide as a potential PET material,”
+                      JINST, vol. 20, p. P06038, 2025.
+
+
+                                                          17
+IOP Publishing   Phys. Med. Biol. vv (yyyy) aaaaaa                                                    S.R. Soleti et al
+
+
+
+                 [12] S. Agostinelli et al., “GEANT4–a simulation toolkit,” Nucl. Instrum. Meth. A, vol. 506, pp.
+                      250–303, 2003.
+                 [13] Luxium, “Scintillation crystals,” https://luxiumsolutions.com/radiation-detection-scintillators/
+                      crystal-scintillators/lyso-scintillation-crystals, 2024.
+                 [14] N. Atanov et al., “Design and status of the Mu2e electromagnetic calorimeter,” Nucl. Instrum.
+                      Meth. A, vol. 824, pp. 695–698, 2016.
+                 [15] M. Doroshenko et al., “Undoped-CsI calorimeter for the K(L)0 —> pi0 nu anti-nu experiment
+                      at KEK-PS,” Nucl. Instrum. Meth. A, vol. 545, pp. 278–295, 2005.
+                 [16] C. Amsler, D. Grögler, W. Joffrain, D. Lindelöf, M. Marchesotti, P. Niederberger, H. Pruys,
+                      C. Regenfus, P. Riedler, and A. Rotondi, “Temperature dependence of pure CsI: scintillation
+                      light yield and decay time,” Nuclear Instruments and Methods in Physics Research Section A:
+                      Accelerators, Spectrometers, Detectors and Associated Equipment, vol. 480, no. 2-3, pp. 494–500,
+                      2002.
+                 [17] K. Ding, J. Liu, Y. Yang, K. Scholberg, and D. M. Markoff, “Performance of a liquid nitrogen
+                      cryostat setup for the study of nuclear recoils in undoped CsI crystals,” Nucl. Instrum. Meth.
+                      A, vol. 1063, p. 169283, 2024.
+                 [18] M. Conti, L. Eriksson, H. Rothfuss, and C. L. Melcher, “Comparison of fast scintillators with
+                      TOF PET potential,” IEEE Transactions on Nuclear Science, vol. 56, no. 3, pp. 926–933, 2009.
+                 [19] S. Kubota, S. Sakuragi, S. Hashimoto, and J.-z. Ruan, “A new scintillation material: Pure
+                      CsI with 10 ns decay time,” Nuclear Instruments and Methods in Physics Research Section A:
+                      Accelerators, Spectrometers, Detectors and Associated Equipment, vol. 268, no. 1, pp. 275–277,
+                      1988.
+                 [20] M. Moszyński, M. Balcerzyk, W. Czarnacki, M. Kapusta, W. Klamra, P. Schotanus, A. Syntfeld,
+                      M. Szawlowski, and V. Kozlov, “Energy resolution and non-proportionality of the light yield
+                      of pure CsI at liquid nitrogen temperatures,” Nuclear Instruments and Methods in Physics
+                      Research Section A: Accelerators, Spectrometers, Detectors and Associated Equipment, vol. 537,
+                      no. 1-2, pp. 357–362, 2005.
+                 [21] M. Janecek, “Reflectivity spectra for commonly used reflectors,” IEEE Transactions on Nuclear
+                      Science, vol. 59, no. 3, pp. 490–497, 2012.
+                 [22] Hamamatsu,      “MPPC S14160-6050HS,” https://www.hamamatsu.com/eu/en/product/
+                      optical-sensors/mppc/mppc mppc-array/S14160-6050HS.html, 2024.
+                 [23] G. Matteucci, “Cryogenic SiPMs for the optical readout of DarkSide-20k,” JINST, vol. 20,
+                      no. 06, p. C06010, 2025.
+                 [24] A. A. Abud et al., “Design, construction and operation of the ProtoDUNE-SP Liquid Argon
+                      TPC,” JINST, vol. 17, no. 01, p. P01005, 2022.
+                 [25] K. Ieki et al., “Large-Area MPPC with Enhanced VUV Sensitivity for Liquid Xenon Scintillation
+                      Detector,” Nucl. Instrum. Meth. A, vol. 925, pp. 148–155, 2019.
+                 [26] A. Nepomuk Otte, D. Garcia, T. Nguyen, and D. Purushotham, “Characterization of Three
+                      High Efficiency and Blue Sensitive Silicon Photomultipliers,” Nucl. Instrum. Meth. A, vol. 846,
+                      pp. 106–125, 2017.
+                 [27] R. Iwai, M. Sakurai, A. Antognini, I. Belosevic, M. Hildebrandt, K. Kirch, A. Knecht, A. Papa,
+                      and A. Stoykov, “Characterization of Cryogenic SiPM Down to 6.5 K,” JPS Conf. Proc., vol. 27,
+                      p. 012005, 2019.
+                 [28] E. Currás-Rivera, F. Blanc, G. Haefeli, R. Marchevski, F. Ronchetti, O. Schneider, L. Shchutska,
+                      and G. Zunica, “Cryogenic operation of silicon photomultiplier arrays,” 2 2025.
+                 [29] P. Ferrario, “Status and perspectives of the PETALO project,” Journal of Instrumentation,
+                      vol. 17, no. 01, p. C01057, 2022.
+                 [30] N. Salor-Iguiñiz et al., “Evaluation of coincidence time resolution in a liquid xenon detector
+                      with silicon photomultipliers,” Phys. Rev. Res., vol. 7, no. 3, p. 033089, 2025.
+
+
+                                                         18
+IOP Publishing   Phys. Med. Biol. vv (yyyy) aaaaaa                                                  S.R. Soleti et al
+
+
+
+                 [31] D. R. Schaart, “Physics and technology of time-of-flight PET detectors,” Physics in Medicine
+                      & Biology, vol. 66, no. 9, p. 09TR01, 2021.
+                 [32] S. Pourashraf, A. Gonzalez-Montoro, M. S. Lee, J. W. Cates, J. Y. Won, J. S. Lee, and C. S.
+                      Levin, “Investigation of electronic signal processing chains for a prototype TOF-PET system
+                      With 100-ps coincidence time resolution,” IEEE transactions on radiation and plasma medical
+                      sciences, vol. 6, no. 6, pp. 690–696, 2021.
+                 [33] J. Kalisz, “Review of methods for time interval measurements with picosecond resolution,”
+                      Metrologia, vol. 41, no. 1, p. 17, 2003.
+
+                 [34] S. Xie, X. Zhang, Q. Huang, Z. Gong, J. Xu, and Q. Peng, “Methods to Compensate the Time
+                      Walk Errors in Timing Measurements for PET Detectors,” IEEE Transactions on Radiation
+                      and Plasma Medical Sciences, vol. 4, no. 5, pp. 555–562, 2020.
+                 [35] M.-R. Mohammadian-Behbahani and S. Saramad, “A comparison study of the pile-up
+                      correction algorithms,” Nuclear Instruments and Methods in Physics Research Section A:
+                      Accelerators, Spectrometers, Detectors and Associated Equipment, vol. 951, p. 163013, 2020.
+                      [Online]. Available: https://www.sciencedirect.com/science/article/pii/S0168900219313804
+                 [36] F. Loignon-Houle, C. M. Pepin, S. A. Charlebois, and R. Lecomte, “Reflectivity quenching of
+                      ESR multilayer polymer film reflector in optically bonded scintillator arrays,” Nuclear Instru-
+                      ments and Methods in Physics Research Section A: Accelerators, Spectrometers, Detectors and
+                      Associated Equipment, vol. 851, pp. 62–67, 2017.
+                 [37] M. Janecek and W. W. Moses, “Simulating Scintillator Light Collection Using Measured Optical
+                      Reflectance,” IEEE Transactions on Nuclear Science, vol. 57, no. 3, pp. 964–970, 2010.
+                 [38] R. D. Badawi et al., “First human imaging studies with the EXPLORER total-body PET
+                      scanner,” Journal of Nuclear Medicine, vol. 60, no. 3, pp. 299–303, 2019.
+
+                 [39] A. González-Montoro, F. Sanchez, P. Bruyndonckx, G. Cañizares, J. M. Benlloch, and A. J.
+                      González, “Novel method to measure the intrinsic spatial resolution in PET detectors based on
+                      monolithic crystals,” Nuclear Instruments and Methods in Physics Research Section A: Accel-
+                      erators, Spectrometers, Detectors and Associated Equipment, vol. 920, pp. 58–67, 2019.
+
+                 [40] A. Gonzalez-Montoro, A. J. Gonzalez, S. Pourashraf, R. S. Miyaoka, P. Bruyndonckx, G. Chinn,
+                      L. A. Pierce, and C. S. Levin, “Evolution of PET detectors and event positioning algorithms
+                      using monolithic scintillation crystals,” IEEE Transactions on Radiation and Plasma Medical
+                      Sciences, vol. 5, no. 3, pp. 282–305, 2021.
+                 [41] X. Li, C. Lockhart, T. K. Lewellen, and R. S. Miyaoka, “A high resolution, monolithic crystal,
+                      PET/MRI detector with DOI positioning capability,” in 2008 30th Annual International Con-
+                      ference of the IEEE Engineering in Medicine and Biology Society. IEEE, 2008, pp. 2287–2290.
+                 [42] M. Freire, J. Barrio, N. Cucarella, C. Valladares, A. Gonzalez-Montoro, C. de Alfonso, J. Ben-
+                      lloch, and A. Gonzalez, “Position estimation using neural networks in semi-monolithic PET
+                      detectors,” Physics in Medicine & Biology, vol. 67, no. 24, p. 245011, 2022.
+
+                 [43] A. Iborra, A. González, A. Gonzalez-Montoro, A. Bousse, and D. Visvikis, “Ensemble of neural
+                      networks for 3D position estimation in monolithic PET detectors,” Physics in Medicine &
+                      Biology, vol. 64, no. 19, p. 195010, 2019.
+                 [44] Z. Li, F. Liu, W. Yang, S. Peng, and J. Zhou, “A survey of convolutional neural networks: anal-
+                      ysis, applications, and prospects,” IEEE transactions on neural networks and learning systems,
+                      vol. 33, no. 12, pp. 6999–7019, 2021.
+                 [45] R. Yamashita, M. Nishio, R. K. G. Do, and K. Togashi, “Convolutional neural networks: an
+                      overview and application in radiology,” Insights into imaging, vol. 9, pp. 611–629, 2018.
+                 [46] N. E. M. Association, “NEMA standards publication NU 2–2018: performance measurements
+                      of Positron Emission Tomographs,” National Electrical Manufacturers Association, 2018.
+
+
+
+
+                                                         19
+IOP Publishing   Phys. Med. Biol. vv (yyyy) aaaaaa                                                   S.R. Soleti et al
+
+
+
+                 [47] B. A. Spencer, E. Berg, J. P. Schmall, N. Omidvari, E. K. Leung, Y. G. Abdelhafez, S. Tang,
+                      Z. Deng, Y. Dong, Y. Lv et al., “Performance evaluation of the uEXPLORER total-body
+                      PET/CT scanner based on NEMA NU 2-2018 with additional tests to characterize PET scan-
+                      ners with a long axial field of view,” Journal of Nuclear Medicine, vol. 62, no. 6, pp. 861–870,
+                      2021.
+                 [48] A. A. Parach, H. Rajabi, and M. A. Askari, “Assessment of MIRD data for internal dosimetry
+                      using the GATE Monte Carlo code,” Radiation and environmental biophysics, vol. 50, pp. 441–
+                      450, 2011.
+                 [49] A. H. Dias, A. K. Hansen, O. L. Munk, and L. C. Gormsen, “Normal values for
+                      18F-FDG uptake in organs and tissues measured by dynamic whole body multiparametric
+                      FDG PET in 126 patients,” EJNMMI Research, vol. 12, 2022. [Online]. Available:
+                      https://api.semanticscholar.org/CorpusID:247246383
+                 [50] G. Schramm and K. Thielemans, “PARALLELPROJ—an open-source framework for fast cal-
+                      culation of projections in tomography,” Frontiers in Nuclear Medicine, vol. 3, p. 1324562, 2024.
+
+                 [51] T. F. Budinger, “Time-of-flight positron emission tomography: status relative to conventional
+                      PET,” pp. 73–78, 1983.
+                 [52] S. Vandenberghe, E. Mikhaylova, E. D’Hoe, P. Mollet, and J. S. Karp, “Recent developments
+                      in time-of-flight PET,” EJNMMI physics, vol. 3, no. 1, p. 3, 2016.
+
+                 [53] J. G. Mannheim, I. Rausch, M. Conti, C. la Fougère, and F. P. Schmidt, “Characterization of
+                      the partial volume effect along the axial field-of-view of the Biograph Vision Quadra total-body
+                      PET/CT system for multiple isotopes,” EJNMMI physics, vol. 10, no. 1, p. 33, 2023.
+
+
+
+
+                                                         20
+

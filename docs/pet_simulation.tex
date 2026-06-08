@@ -174,7 +174,7 @@ analysis reads, and the only thing it reads.
 The simulation is a fast, photon-only Monte Carlo. Its building blocks:
 \begin{itemize}[nosep]
 \item \textbf{Geometry} (\texttt{geometry.jl}): a Geant4-style hierarchy of solids
-(\texttt{Solid}: \texttt{Cylinder}, and the coming \texttt{CylShell}), logical volumes
+(\texttt{Solid}: \texttt{Cylinder}, \texttt{Box}, and the coming \texttt{CylShell}), logical volumes
 (solid $+$ material) and physical volumes (a logical volume placed in the world), with
 \texttt{is\_inside} and the ray entry/exit distances (\texttt{distance\_to\_entry},
 \texttt{distance\_to\_exit}). The phantom is a placed \texttt{Cylinder}; the ring is one
@@ -182,12 +182,20 @@ The simulation is a fast, photon-only Monte Carlo. Its building blocks:
 distances added on top --- the one piece of new geometry.
 \item \textbf{Cross sections} (\texttt{nist\_data.jl}, \texttt{materials.jl}): the XCOM
 loader and \texttt{sigma\_macro(material, E)}, which returns the macroscopic Compton,
-photoelectric and pair cross sections at an energy. Material tables are needed for water
-or soft tissue (the phantom) and the crystal materials (CsI, LYSO, BGO).
+photoelectric and pair cross sections at an energy. Tables (\SI{10}{keV}--\SI{10}{MeV}) are
+in place for water (the phantom) and the CsI and BGO crystals; tissue and LYSO can be added
+the same way.
 \item \textbf{Transport} (\texttt{sampling.jl}, \texttt{transport.jl}): the Compton and
 photoelectric samplers and the photon step loop (\texttt{propagate\_photon}). Only the
 photon path is followed, with local energy deposition; electrons are not transported.
 \end{itemize}
+
+\paragraph{Built and checked so far.} The geometry, cross sections and transport are in
+place and tested. Two studies exercise them: \SI{511}{keV} photons through the water phantom
+reproduce Beer--Lambert attenuation, and 511\,keV photons fired into a single crystal (a
+\texttt{Box} of CsI or BGO) give its energy containment, photoelectric/Compton split and
+interaction-depth distributions --- characterising the crystal response before the full
+ring. Source injection, the block grid, hit formation, selection and the randoms pass remain.
 
 What must be written on top:
 \begin{itemize}[nosep]
