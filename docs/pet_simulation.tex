@@ -171,24 +171,22 @@ analysis reads, and the only thing it reads.
 \section{Implementation}
 \label{sec:impl}
 
-The photon transport and the geometry already exist in LXeMC, a liquid-xenon detector
-simulation that does the same kind of \SI{}{keV}-scale photon transport, and are the
-starting point. The pieces to reuse:
+The simulation is a fast, photon-only Monte Carlo. Its building blocks:
 \begin{itemize}[nosep]
-\item \textbf{Geometry} (\texttt{geometry\_core.jl}): the solids \texttt{Cyl} and
-\texttt{CylShell}, with \texttt{is\_inside} and the ray entry/exit distances
-(\texttt{distance\_to\_entry}, \texttt{distance\_to\_exit}). The phantom is one
-\texttt{Cyl}; the ring is one \texttt{CylShell} with a $(\varphi, z)$ block index and the
-corresponding plane-crossing distances added on top --- the one piece of new geometry.
+\item \textbf{Geometry} (\texttt{geometry.jl}): a Geant4-style hierarchy of solids
+(\texttt{Solid}: \texttt{Cylinder}, and the coming \texttt{CylShell}), logical volumes
+(solid $+$ material) and physical volumes (a logical volume placed in the world), with
+\texttt{is\_inside} and the ray entry/exit distances (\texttt{distance\_to\_entry},
+\texttt{distance\_to\_exit}). The phantom is a placed \texttt{Cylinder}; the ring is one
+\texttt{CylShell} with a $(\varphi, z)$ block index and the corresponding plane-crossing
+distances added on top --- the one piece of new geometry.
 \item \textbf{Cross sections} (\texttt{nist\_data.jl}, \texttt{materials.jl}): the XCOM
-loader and \texttt{sigma\_three(material, E)}, which returns the Compton, photoelectric and
-pair cross sections at an energy. New material tables are required: water or soft tissue
-for the phantom, and the crystal materials (CsI, LYSO, BGO).
-\item \textbf{Transport} (\texttt{sampling.jl}, \texttt{tracking.jl}): the Compton and
-photoelectric samplers and the photon step loop (\texttt{transport\_photon!},
-\texttt{propagate\_gamma}). The electron transport and bremsstrahlung in
-\texttt{tracking.jl} are not needed here --- only the photon path with local energy
-deposition.
+loader and \texttt{sigma\_macro(material, E)}, which returns the macroscopic Compton,
+photoelectric and pair cross sections at an energy. Material tables are needed for water
+or soft tissue (the phantom) and the crystal materials (CsI, LYSO, BGO).
+\item \textbf{Transport} (\texttt{sampling.jl}, \texttt{transport.jl}): the Compton and
+photoelectric samplers and the photon step loop (\texttt{propagate\_photon}). Only the
+photon path is followed, with local energy deposition; electrons are not transported.
 \end{itemize}
 
 What must be written on top:

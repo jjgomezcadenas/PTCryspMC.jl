@@ -12,7 +12,7 @@ using Random
 function parse_cli()
     s = ArgParseSettings(description="Propagate pencil 511 keV photons through the phantom; write the photon stack per event.")
     @add_arg_table! s begin
-        "--phantom"; help = "phantom JSON";  default = joinpath(@__DIR__, "..", "geometry", "phantom.json")
+        "--geometry"; help = "geometry JSON"; default = joinpath(@__DIR__, "..", "geometry", "geometry.json")
         "--data";    help = "data dir";      default = joinpath(@__DIR__, "..", "data")
         "--out";     help = "output CSV";    default = joinpath(@__DIR__, "..", "output", "phantom_stack.csv")
         "--nevents"; help = "n photons";     arg_type = Int;     default = 10000
@@ -25,27 +25,27 @@ end
 function main()
     a = parse_cli()
     mats = load_materials(a["data"])
-    ph = load_phantom(a["phantom"])
-    haskey(mats, ph.material) || error("material '$(ph.material)' not in materials.json")
-    mat = mats[ph.material]
+    geom = load_geometry(a["geometry"], mats)
+    pv = geom.phantom
+    cyl = solid(pv)
 
     E0 = a["energy"] / 1000.0           # MeV
     rng = MersenneTwister(a["seed"])
 
-    # Pencil: enter at the centre of the -z face, travel along +z.
-    start = (0.0, 0.0, -ph.cyl.half_height_cm)
+    # Pencil: enter at the centre of the phantom's -z face, travel along +z.
+    start = (pv.position[1], pv.position[2], pv.position[3] - cyl.half_length_cm)
     dir   = (0.0, 0.0, 1.0)
 
-    println("phantom: $(ph.material), cylinder R=$(ph.cyl.radius_cm) cm, " *
-            "half-length=$(ph.cyl.half_height_cm) cm; mfp@$(a["energy"]) keV = " *
-            "$(round(mfp(mat, E0), digits=3)) cm")
+    println("phantom '$(name(pv))': $(material(pv).name), cylinder R=$(cyl.radius_cm) cm, " *
+            "half-length=$(cyl.half_length_cm) cm; mfp@$(a["energy"]) keV = " *
+            "$(round(mfp(material(pv), E0), digits=3)) cm")
 
     mkpath(dirname(a["out"]))
     nrows = 0
     open(a["out"], "w") do io
         println(io, "event_number,step,x_mm,y_mm,z_mm,e_in_keV,e_dep_keV,process")
         for ev in 1:a["nevents"]
-            recs = propagate_photon(E0, start, dir, mat, ph.cyl, rng)
+            recs = propagate_photon(E0, start, dir, pv, rng)
             for (k, r) in enumerate(recs)
                 println(io, join((ev, k,
                     round(r.x * 10, digits=4), round(r.y * 10, digits=4), round(r.z * 10, digits=4),

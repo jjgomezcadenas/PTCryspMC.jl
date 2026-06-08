@@ -1,0 +1,11 @@
+{
+    "_doc": "Full geometry (the world) for PTCryspMC. Each named section is one component; so far only the phantom, with the detector ring added later. Dimensions in cm; material keys into data/materials.json. A volume's position_cm places it in the world frame (default = scanner centre).",
+    "phantom": {
+        "name": "phantom",
+        "shape": "cylinder",
+        "radius_cm": 8.0,
+        "half_length_cm": 8.0,
+        "position_cm": [0.0, 0.0, 0.0],
+        "material": "Water"
+    }
+}

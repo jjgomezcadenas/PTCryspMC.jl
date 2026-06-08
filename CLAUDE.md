@@ -82,20 +82,27 @@ Per accepted coincidence: two 3-D hit positions (mm), two energies (keV), two ti
 and a truth flag (true / scatter / random). Companion `_meta`: detector config, geometry,
 energy and time windows, scenario name, seed.
 
-## Reuse from LXeMC
+## Code layout (`src/`)
 
-The photon transport and the geometry are reused from LXeMC
-(`~/Projects/XeMC/lxe_mc/LXeMC/`):
+The photon transport and geometry are photon-only:
 
-- `geometry_core.jl` — the solids `Cyl`, `CylShell`, with `is_inside`,
-  `distance_to_entry`, `distance_to_exit`.
-- `nist_data.jl`, `materials.jl` — the XCOM loader and `sigma_three(material, E)`. Add
-  tables for water/tissue and the crystals (CsI, BGO).
-- `sampling.jl`, `tracking.jl` — the Compton/photoelectric samplers and the photon step
-  loop (`transport_photon!`, `propagate_gamma`); the electron transport and bremsstrahlung
-  are not used.
+- `geometry.jl` — a Geant4-style hierarchy: `Solid` (`Cylinder`; `CylShell` to come),
+  `LogicalVolume` (solid + material), `PhysicalVolume` (a placed logical volume), with
+  `is_inside`, `distance_to_entry`, `distance_to_exit`. `load_geometry` reads the world
+  from `geometry/geometry.json` (named section per component, `phantom` so far) into a
+  `Geometry` container; `load_solid` is the shape factory.
+- `nist_data.jl`, `materials.jl` — the XCOM loader and `sigma_macro(material, E)` (the
+  macroscopic Compton/photoelectric/pair cross sections); `load_material` /
+  `load_materials`. The water table (`data/xcom_water.csv`, 10 keV–10 MeV) is in place;
+  tissue and the crystals (CsI, BGO, LYSO) still to add.
+- `sampling.jl`, `transport.jl` — the Compton/photoelectric samplers and the photon step
+  loop `propagate_photon` (through a `PhysicalVolume`); only the photon path is followed,
+  with local energy deposition.
 
-New code: source injection, the block-grid index and plane-crossing distances, hit
+Other dirs: `geometry/` (JSON world), `data/` (materials + XCOM), `scripts/` (Julia
+drivers), `py/` (Python plotters), `output/` (CSVs + `control_plots/`), `test/`.
+
+Still to write: source injection, the block-grid index and plane-crossing distances, hit
 formation + selection, the randoms pass.
 
 ## Tech stack
@@ -107,18 +114,24 @@ formation + selection, the randoms pass.
 
 ## Reference material
 
-- LXeMC design docs (`~/Projects/XeMC/lxe_mc/LXeMC/design/`): `lxemc.tex`,
-  `tracking_and_transport.md`, `geometry_v3.md` — the transport/geometry being reused.
 - CRYSP detector numbers: Soleti et al. 2024.
 - Upstream source method: `ptcryspg4/docs/simulate_pt_pet.tex`, `handoff.tex`.
 
 ## Status / next
 
-`docs/pet_simulation.tex` is written; the code is not yet built. Build order:
+`dev/dev_steps.md` is the running build log (target, progress, next steps); consult it for
+the current state. In brief:
+
+**Built and validated:** the foundations — the Geant4-style geometry, the materials / XCOM
+cross sections, and the photon physics core (`propagate_photon`) — plus the first result:
+511 keV photons transported through the water phantom to a photon stack, reproducing
+Beer–Lambert (unscattered fraction 0.215 vs 0.216). `Pkg.test` passes.
+
+**Remaining build order:**
 
 1. Read a scenario; inject the back-to-back 511 keV pairs.
-2. Phantom + block/wheel ring geometry; reuse the LXeMC photon transport.
-3. Transport → singles + same-annihilation coincidences.
+2. Phantom + block/wheel ring geometry (`CylShell` + the structured grid).
+3. Transport → singles + same-annihilation coincidences (multi-volume navigator).
 4. Hit formation (first interaction, smear, energy window) and the two-block selection.
 5. The randoms pass.
 6. The monolithic detector configs.

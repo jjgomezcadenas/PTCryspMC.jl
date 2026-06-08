@@ -14,28 +14,30 @@ struct Interaction
 end
 
 """
-    propagate_photon(E0_MeV, pos0, dir0, mat, cyl, rng; egamma_cut=0.010)
+    propagate_photon(E0_MeV, pos0, dir0, pv, rng; egamma_cut=0.010)
         -> Vector{Interaction}
 
-Transport one photon of energy `E0_MeV` from `pos0` along `dir0` through cylinder
-`cyl` filled with material `mat`. Returns the stack of interactions: Compton scatters
-(recoil deposited, photon continues), a terminating photoelectric absorption, an
-`:escape` record at the exit point when the photon leaves the cylinder, or a
-`:below_cut` record when a scattered photon falls below `egamma_cut` [MeV].
+Transport one photon of energy `E0_MeV` from `pos0` along `dir0` through the
+physical volume `pv` (its solid filled with its material). Returns the stack of
+interactions: Compton scatters (recoil deposited, photon continues), a
+terminating photoelectric absorption, an `:escape` record at the exit point when
+the photon leaves the volume, or a `:below_cut` record when a scattered photon
+falls below `egamma_cut` [MeV].
 """
-function propagate_photon(E0_MeV::Real, pos0, dir0, mat::Material, cyl::Cylinder,
+function propagate_photon(E0_MeV::Real, pos0, dir0, pv::PhysicalVolume,
                           rng::AbstractRNG; egamma_cut::Float64=0.010)::Vector{Interaction}
     E = Float64(E0_MeV)
     pos = collect(Float64, pos0)
     dir = collect(Float64, dir0)
     dir ./= sqrt(sum(abs2, dir))
+    mat = material(pv)
 
     recs = Interaction[]
     while true
-        ΣC, ΣP, ΣPh = sigma_macro(mat, E)
-        Σ = ΣC + ΣP + ΣPh
+        ΣC, ΣPh, ΣP = sigma_macro(mat, E)
+        Σ = ΣC + ΣPh + ΣP
         s = Σ > 0.0 ? sample_distance(Σ, rng) : Inf
-        d_exit = distance_to_exit(pos, dir, cyl)
+        d_exit = distance_to_exit(pos, dir, pv)
 
         if s >= d_exit
             ep = pos .+ d_exit .* dir
@@ -44,7 +46,7 @@ function propagate_photon(E0_MeV::Real, pos0, dir0, mat::Material, cyl::Cylinder
         end
 
         pos = pos .+ s .* dir
-        proc = sample_process(ΣC / Σ, ΣP / Σ, ΣPh / Σ, rng)
+        proc = sample_process(ΣC / Σ, ΣPh / Σ, ΣP / Σ, rng)
 
         if proc === :compton
             Eprime, cosθ = sample_compton(E, rng)

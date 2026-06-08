@@ -1,59 +1,149 @@
-# Development steps
+# Development log
 
-A running log of the simulation build. One entry per step: goal, what was done,
-how to run it, status.
+The running record of the build: what the simulation is meant to do, what works
+so far, and what comes next. The *method* lives in `docs/pet_simulation.tex`; this
+file tracks the *implementation*.
 
 ---
 
-## Step 1 — phantom + 511 keV photon transport → photon stack
+## 1. The simulation
 
-**Goal.** Define the phantom (a cylinder) from JSON, propagate 511 keV photons
-through it, and write a CSV with the photon stack (interactions) per event.
+A fast, photon-only Monte Carlo that turns an upstream scenario (positron
+annihilation points left by a proton field) into the coincidence list a given PET
+scanner would record. It reads a scenario and a detector description and writes
+`coincidences_<config>.csv`; it never runs proton transport.
 
-**What was done.**
-- `geometry/phantom.json` — the phantom: a water cylinder, radius 8 cm, half-length
-  8 cm (the standard brain Ø16 × 16 cm), axis along z, centred at the origin.
-- `data/materials.json` + `data/xcom_water.csv` — Water (density 1.0 g/cm³) with the
-  NIST XCOM table (mass attenuation, cm²/g). `xcom_water.csv` is a NIST XCOM dump for
-  H₂O including an exact 511 keV row.
-- `src/` modules, adapted from LXeMC, trimmed to photon-only:
-  - `nist_data.jl` — XCOM loader + log-log interpolation.
-  - `materials.jl` — `Material`; `sigma_macro(mat, E)` returns the macroscopic cross
-    sections Σ = (μ/ρ)·density [cm⁻¹] for incoherent/pair/photoelectric.
-  - `geometry.jl` — `Cylinder`, `is_inside`, `distance_to_exit`, `load_phantom`.
-  - `sampling.jl` — `sample_distance`, `sample_process`, `sample_compton`
+The end-to-end pipeline:
+
+1. **Source injection** — draw annihilation points per isotope to the measured
+   budget; emit two back-to-back 511 keV photons each, with ~0.5° FWHM
+   acollinearity.
+2. **Transport** — follow only the photons through phantom (water) → air → crystal
+   ring: free path from XCOM cross sections, Compton + photoelectric, electrons
+   deposited locally. → a singles list + same-annihilation coincidences.
+3. **Hit formation** — group deposits per detector block; position = first
+   interaction point, energy = sum, time = earliest; smear by σ_xyz (incl. DOI),
+   σ_t and FWHM(E) = a·√(511 keV / E); apply the energy window.
+4. **Selection** — exactly two roughly-opposite blocks → a coincidence (true if
+   neither photon scattered in the phantom, else scatter); anything else fails.
+5. **Randoms** — a separate pass over the singles (no re-transport): time-tag each
+   from its isotope's activity, pair cross-annihilation singles within the window τ.
+6. **Detector configs** — the monolithic crystals: CsI (a = 5%), CsI(Tl) (7%),
+   cryogenic BGO (10%), σ_xyz ~1.7 mm.
+
+Resting under all of it: a **photon physics core** (XCOM cross sections; Compton
+and photoelectric samplers; the step loop) and a **Geant4-style geometry**
+(solids → logical volumes → physical volumes, placed in a world).
+
+Downstream and deferred (separate, possibly its own repo): range precision,
+detector comparison, reconstruction.
+
+---
+
+## 2. Achieved so far
+
+Today the code loads a geometry and materials, transports 511 keV photons through
+the phantom, and writes the per-interaction photon stack — validated against
+Beer–Lambert. This sits on the foundations below; pipeline stages 1 and 3–6 are
+not yet built.
+
+### Foundations — geometry, materials & physics core, tooling
+
+The reusable substrate the rest of the pipeline plugs into. (Built out while
+reviewing the first transport pass; it is the base, not a detour.)
+
+- **Geometry hierarchy** (`src/geometry.jl`), Geant4 semantics:
+  - `Solid` (abstract) — pure shape in a local frame centred at the origin.
+    `Cylinder <: Solid` implements `is_inside`, `distance_to_entry`,
+    `distance_to_exit`, `volume`. The corner-case fix (inclusive `<=` boundary so a
+    ray through the exact rim is never dropped), named tolerances (`SURFACE_EPS`,
+    `PARALLEL_EPS`) and the shared allocation-free `_surface_crossings` scan live here.
+  - `LogicalVolume{S<:Solid}` — `name` + `solid` + resolved `material`, with
+    `volume` / `mass`. The reusable, placement-free level.
+  - `PhysicalVolume{S<:Solid}` — a logical volume placed at a `position` in the
+    world frame; the world→local transform (`_to_local`) is written once here and
+    delegates to the solid (rotation slots into the same place when needed).
+    Parametric `{S}` keeps every level concretely typed → the nesting is free at
+    runtime (the `bench_geometry_levels.jl` probe: ~0.45 ns/call, 0 B, ratio ≈ 1.0).
+  - **Full-geometry file.** `geometry/geometry.json` describes the world, one named
+    section per component (`phantom` now, the detector ring later).
+    `load_geometry(path, materials)` returns a `Geometry` container (so far the
+    phantom physical volume) — the seed of the volume list a multi-volume navigator
+    will walk. `load_solid` is the shape factory; unknown shapes and missing
+    materials are rejected, not silently mis-loaded.
+- **Materials & cross sections** (`src/nist_data.jl`, `src/materials.jl`):
+  - `Material` + `sigma_macro(mat, E)` → the macroscopic cross sections
+    Σ = (μ/ρ)·density [cm⁻¹], ordered `(Compton, photoelectric, pair)` (pair last,
+    being zero below threshold).
+  - `load_material(dir, name)` (single material — an unfinished entry can't break an
+    unrelated run) and the batch `load_materials`, sharing one `_build_material` path.
+  - `data/xcom_water.csv` — NIST XCOM for H₂O, 10 keV → 10 MeV, with an exact 511 keV
+    row; the pair channel is real above ~1.5 MeV.
+- **Physics core** (`src/sampling.jl`, `src/transport.jl`):
+  - `sample_distance`, `sample_process` (photoelectric is the catch-all so a
+    zero-width pair bucket can't absorb a rounding leftover), `sample_compton`
     (Klein–Nishina), `rotate_to_global`.
-  - `transport.jl` — `propagate_photon`: step through the cylinder; Compton (deposit
-    recoil, continue) or photoelectric (deposit all, stop); record an `:escape` row at
-    the exit point.
+  - `propagate_photon(E0, pos, dir, pv, rng)` — steps through a physical volume's
+    solid, reading its material; Compton (deposit recoil, continue), photoelectric
+    (deposit all, stop), `:below_cut` and `:escape` records. Single-volume for now.
+- **Tooling / control plots**:
+  - `scripts/water_xsections.jl` → `output/water_xsections.csv` — the macroscopic
+    cross sections at ~20 log-spaced energies (decoupled from the XCOM grid; refuses
+    to extrapolate).
+  - `py/plot_water_xsections.py` → `output/control_plots/water_xsections.png` — the
+    log–log channel + total plot.
+  - `scripts/bench_geometry_levels.jl` — the alloc-free / no-cost-per-level guard.
+
+### First result — phantom + 511 keV transport → photon stack
+
+The first running milestone: define the phantom from JSON, propagate 511 keV
+photons through it, write the photon stack per event.
+
 - `scripts/propagate_gammas_in_phantom.jl` — pencil source: 511 keV photons enter at
-  the centre of the −z face along +z; writes `output/phantom_stack.csv`.
+  the centre of the phantom's −z face along +z; writes `output/phantom_stack.csv`.
+- **Output schema** (one row per interaction):
+  `event_number, step, x_mm, y_mm, z_mm, e_in_keV, e_dep_keV, process`
+  (`process` ∈ compton / photoelectric / below_cut / escape; the `escape` row carries
+  the exit point with e_dep = 0).
+- **Run:**
+  ```
+  julia --project=. scripts/propagate_gammas_in_phantom.jl --nevents 10000
+  ```
+- **Validated.** 10⁴ pencil photons, water Ø16×16 cm:
+  - mfp@511 keV = 10.44 cm (μ ≈ 0.096 cm⁻¹) — correct for water.
+  - Unscattered fraction **0.215** vs analytic exp(−16/10.44) = **0.216** — the
+    transport reproduces Beer–Lambert through the geometry (and still holds after the
+    geometry-hierarchy refactor).
+  - Scattered photons exit through the far cap, the side, and the entrance cap
+    (backscatter), so the Compton opening angle is recoverable from the stack; mean
+    energy deposited ≈ 210 keV/event.
 
-**Physics notes.**
-- Only photons are followed; the recoil electron deposits locally (sub-mm range).
-- Pencil along the axis: unscattered photons exit straight; scattered ones fan out,
-  so the exit opening angle from Compton is recoverable from the stack.
-- `mfp` in water at 511 keV ≈ 10.4 cm (μ ≈ 0.096 cm⁻¹), so an 8 cm half-length
-  phantom is a fraction of a mean free path — most photons cross with 0–1 scatters.
+**Test status:** `Pkg.test` — **56 tests** pass (materials loading + cross-section
+range/pair; cylinder solid incl. the rim corner case; logical-volume mass;
+physical-volume placement transform; geometry loading incl. no-phantom-section,
+bad-shape and missing-material rejection). All scripts run.
 
-**Output schema** (`output/phantom_stack.csv`, one row per interaction):
-`event_number, step, x_mm, y_mm, z_mm, e_in_keV, e_dep_keV, process`
-(`event_number` repeats across an event's rows; `process` ∈ compton / photoelectric /
-below_cut / escape). The `escape` row carries the exit point (e_dep = 0).
+---
 
-**Run.**
-```
-julia --project=. scripts/propagate_gammas_in_phantom.jl --nevents 10000
-```
+## 3. Next steps
 
-**Status: done & validated.** 10⁴ pencil photons, water Ø16×16 cm.
-- `mfp@511 keV = 10.44 cm` (μ ≈ 0.096 cm⁻¹) — correct for water.
-- Unscattered fraction **0.215** vs analytic exp(−16/10.44) = **0.216** — the
-  transport reproduces Beer–Lambert attenuation through the geometry.
-- Each event terminates once (escape / photoelectric); scattered photons exit
-  through the far cap, the side, and the entrance cap (backscatter), so the Compton
-  opening angle is recoverable from the stack. Mean energy deposited ≈ 210 keV/event.
-- `Pkg.test` passes; the module precompiles.
+- **Step 2 — detector ring.** `CylShell` solid + the structured (φ, z) block/wheel
+  grid (block index by arithmetic, plane-crossing distances closed-form); propagate
+  the back-to-back 511 keV pair from an annihilation point to the ring.
+- **Step 3 — coincidences.** Transport → singles list + same-annihilation
+  coincidences (true / scatter), via the multi-volume navigator (phantom → air →
+  ring, switching material at boundaries).
+- **Step 4 — hits & selection.** Hit formation (first interaction, smear, energy
+  window) and the two-opposite-block selection.
+- **Step 5 — randoms.** The time-tag-and-pair pass over the singles.
+- **Step 6 — detectors.** The monolithic detector configs (CsI, CsI(Tl), BGO):
+  crystal material tables + resolutions.
 
-Next (step 2): the detector ring (block/wheel `CylShell`) and propagation of the
-photon pair from an annihilation point to the ring.
+Carried-over technical TODOs from the foundations:
+
+- the multi-volume **World/navigator** with material switching at boundaries (Step 3);
+- **rotation** in the placement transform, when a volume needs it;
+- crystal **XCOM tables** (CsI, BGO, LYSO) — and relaxing the loader's leading-digit
+  filter so absorption-edge-labelled rows aren't silently dropped;
+- **pair production** in transport, only if runs ever go multi-MeV (correct at 511 keV
+  as-is).

@@ -1,12 +1,17 @@
-# Monte Carlo samplers. Adapted from LXeMC (src/sampling.jl), photon-only.
+# Monte Carlo samplers, photon-only: free path, process choice, Compton scatter.
 
 const ME = 0.51099895  # electron rest mass [MeV]
 
 "Free-flight distance [cm] from an exponential with macroscopic cross section Σ [cm^-1]."
 sample_distance(Σ::Float64, rng::AbstractRNG)::Float64 = -log(rand(rng)) / Σ
 
-"Pick :compton / :pair / :photoelectric from the three branching probabilities."
-function sample_process(P_C::Float64, P_P::Float64, P_Ph::Float64, rng::AbstractRNG)::Symbol
+"""
+Pick :compton / :photoelectric / :pair from the branching probabilities, in the
+(C, Ph, P) order returned by `sigma_macro`. Photoelectric is the catch-all so
+that a zero-width pair bucket (P below threshold) can never absorb a rounding
+leftover in `r`.
+"""
+function sample_process(P_C::Float64, P_Ph::Float64, P_P::Float64, rng::AbstractRNG)::Symbol
     r = rand(rng)
     r < P_C && return :compton
     r < P_C + P_P && return :pair

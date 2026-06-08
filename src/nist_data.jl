@@ -1,5 +1,4 @@
-# NIST XCOM photon cross-section loader + log-log interpolation.
-# Adapted from LXeMC (src/nist_data.jl), trimmed to the photon channels.
+# NIST XCOM photon cross-section loader + log-log interpolation, photon channels only.
 
 "NIST XCOM photon cross sections; all columns mu/rho [cm^2/g]."
 struct XCOMData
