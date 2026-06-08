@@ -10,5 +10,17 @@
         "density": 1.0,
         "components": {"H": 0.111894, "O": 0.888106},
         "xcom": "xcom_water.csv"
+    },
+
+    "CsI": {
+        "density": 4.51,
+        "components": {"Cs": 0.511549, "I": 0.488451},
+        "xcom": "xcom_CSI.csv"
+    },
+
+    "BGO": {
+        "density": 7.13,
+        "components": {"Bi": 0.671004, "Ge": 0.174900, "O": 0.154096},
+        "xcom": "xcom_BGO.csv"
     }
 }

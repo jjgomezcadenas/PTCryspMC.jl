@@ -47,6 +47,46 @@ const DATA_DIR = joinpath(@__DIR__, "..", "data")
         @test_throws ErrorException load_material(DATA_DIR, "Nonexistent")
     end
 
+    @testset "CsI crystal material" begin
+        csi = load_material(DATA_DIR, "CsI")
+        @test csi.density == 4.51
+        @test isapprox(first(csi.E), 0.010)
+        @test isapprox(last(csi.E),  10.0)
+
+        # Attenuation length at 511 keV ≈ 2.44 cm (CsI is a dense scintillator);
+        # Compton dominates, photoelectric is well below it but non-negligible.
+        C, Ph, P = sigma_macro(csi, 0.511)
+        @test isapprox(1.0 / (C + Ph + P), 2.44, atol = 0.05)
+        @test C > Ph > 0.0
+        @test P == 0.0                                  # pair below threshold
+
+        # The iodine K-edge (33.17 keV) must survive the duplicate-energy rows:
+        # photoelectric jumps up sharply just above the edge vs. just below.
+        Ph_below = sigma_macro(csi, 0.0330)[2]          # below the I K-edge
+        Ph_above = sigma_macro(csi, 0.0340)[2]          # above it (below Cs edge)
+        @test Ph_above > 2.0 * Ph_below
+    end
+
+    @testset "BGO crystal material" begin
+        bgo = load_material(DATA_DIR, "BGO")             # Bi4Ge3O12
+        @test bgo.density == 7.13
+        @test isapprox(first(bgo.E), 0.010)
+        @test isapprox(last(bgo.E),  10.0)
+
+        # Attenuation length at 511 keV ≈ 1.10 cm — much denser than CsI (2.44 cm);
+        # high-Z Bi makes photoelectric large, though Compton still leads at 511 keV.
+        C, Ph, P = sigma_macro(bgo, 0.511)
+        @test isapprox(1.0 / (C + Ph + P), 1.10, atol = 0.05)
+        @test C > Ph > 0.0
+        @test P == 0.0                                  # pair below threshold
+
+        # The bismuth K-edge (90.53 keV) must survive the duplicate-energy rows:
+        # photoelectric jumps up sharply just above the edge vs. just below.
+        Ph_below = sigma_macro(bgo, 0.0900)[2]          # below the Bi K-edge
+        Ph_above = sigma_macro(bgo, 0.0910)[2]          # above it
+        @test Ph_above > 2.0 * Ph_below
+    end
+
     @testset "cylinder solid" begin
         c = Cylinder(8.0, 8.0)                    # R = H = 8 cm, centred at origin
 
@@ -75,6 +115,40 @@ const DATA_DIR = joinpath(@__DIR__, "..", "data")
         # Corner case: a ray aimed exactly at the rim (R, 0, H) must not slip
         # through the inclusive boundary and return Inf.
         @test isfinite(distance_to_exit((0.0, 0.0, 0.0), (8.0, 0.0, 8.0), c))
+    end
+
+    @testset "box solid" begin
+        b = Box(2.4, 2.4, 1.85)                   # the CsI crystal: 48 x 48 x 37 mm
+        @test b isa Solid
+        @test isapprox(volume(b), 8.0 * 2.4 * 2.4 * 1.85)
+
+        @test is_inside(b, (0.0, 0.0, 0.0))
+        @test is_inside(b, (2.4, -2.4, 1.85))     # corner: boundary is inside
+        @test !is_inside(b, (2.41, 0.0, 0.0))
+
+        # Interior ray along +z exits the far face at half_z = 1.85.
+        @test isapprox(distance_to_exit((0.0, 0.0, 0.0), (0.0, 0.0, 1.0), b), 1.85)
+        # Interior ray along +x exits the side at half_x = 2.4.
+        @test isapprox(distance_to_exit((0.0, 0.0, 0.0), (1.0, 0.0, 0.0), b), 2.4)
+        @test distance_to_entry((0.0, 0.0, 0.0), (0.0, 0.0, 1.0), b) == Inf  # inside
+
+        # Exterior ray entering the -z face and leaving the +z face.
+        @test isapprox(distance_to_entry((0.0, 0.0, -5.0), (0.0, 0.0, 1.0), b), 3.15)
+        @test isapprox(distance_to_exit((0.0, 0.0, -5.0), (0.0, 0.0, 1.0), b), 6.85)
+
+        # A ray parallel to the box but outside it: no hit.
+        @test distance_to_entry((10.0, 0.0, -5.0), (0.0, 0.0, 1.0), b) == Inf
+        @test distance_to_exit((10.0, 0.0, -5.0), (0.0, 0.0, 1.0), b) == Inf
+
+        # The shoot setup: box placed so its entry face is at world z = 0
+        # (crystal spans z in [0, 3.7] cm). A photon entering there along +z
+        # traverses the full 3.7 cm depth.
+        pv = PhysicalVolume(LogicalVolume("crystal", b, load_material(DATA_DIR, "CsI")),
+                            (0.0, 0.0, 1.85))
+        @test is_inside(pv, (0.0, 0.0, 0.0))      # entry face
+        @test is_inside(pv, (0.0, 0.0, 3.7))      # back face
+        @test !is_inside(pv, (0.0, 0.0, 3.8))
+        @test isapprox(distance_to_exit((0.0, 0.0, 0.0), (0.0, 0.0, 1.0), pv), 3.7)
     end
 
     @testset "logical volume" begin

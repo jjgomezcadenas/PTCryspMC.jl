@@ -22,3 +22,6 @@ docs/*.pdf
 # macOS / editors
 .DS_Store
 *~
+
+# Reference paper text (PDF already ignored; keep local only)
+docs/crysp.txt
