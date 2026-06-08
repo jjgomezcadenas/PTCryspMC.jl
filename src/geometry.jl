@@ -249,24 +249,28 @@ end
 """
     Geometry
 
-The full geometry — the world the photons traverse. For now it holds only the
-phantom; the detector ring is added as a second component later. This is the seed
-of the volume list a multi-volume navigator will walk.
+The full geometry the photons traverse. `world` is the absolute mother volume — a
+cylinder of (non-interacting) Air enclosing everything; `phantom` is a daughter
+embedded in it. The detector ring will be added as a further daughter. This is the
+volume set a multi-volume navigator will walk.
 """
 struct Geometry
-    phantom::PhysicalVolume
+    world::PhysicalVolume      # the Air mother volume enclosing all daughters
+    phantom::PhysicalVolume    # daughter
 end
 
 """
     load_geometry(path, materials) -> Geometry
 
 Load the full geometry from a JSON file whose named sections each describe one
-component. So far only the `phantom` section is read; the detector ring will be a
-second section.
+volume. Reads the `world` (mother) and `phantom` sections; the detector ring will
+be a further section.
 """
 function load_geometry(path::AbstractString,
                        materials::Dict{String,Material})::Geometry
     d = open(io -> JSON.parse(io), path, "r")
+    haskey(d, "world")   || error("geometry file $path has no 'world' section")
     haskey(d, "phantom") || error("geometry file $path has no 'phantom' section")
-    Geometry(_load_volume(d["phantom"], materials, "phantom"))
+    Geometry(_load_volume(d["world"],   materials, "world"),
+             _load_volume(d["phantom"], materials, "phantom"))
 end

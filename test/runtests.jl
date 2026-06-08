@@ -1,7 +1,9 @@
 using PTCryspMC
 using Test
+using Random
 
 const DATA_DIR = joinpath(@__DIR__, "..", "data")
+const GEOM_JSON = joinpath(@__DIR__, "..", "geometry", "geometry.json")
 
 @testset "PTCryspMC" begin
     @testset "materials loading" begin
@@ -185,40 +187,75 @@ const DATA_DIR = joinpath(@__DIR__, "..", "data")
 
     @testset "geometry loading" begin
         mats = load_materials(DATA_DIR)
-        geom = load_geometry(joinpath(@__DIR__, "..", "geometry", "geometry.json"), mats)
-
+        geom = load_geometry(GEOM_JSON, mats)
         @test geom isa Geometry
+
+        # world: the Air mother volume, non-interacting, enclosing the daughters.
+        @test name(geom.world) == "world"
+        @test material(geom.world).name == "Air"
+        @test sigma_macro(material(geom.world), 0.511) == (0.0, 0.0, 0.0)
+        @test isapprox(solid(geom.world).radius_cm, 60.0)
+        @test isapprox(solid(geom.world).half_length_cm, 60.0)
+
+        # phantom: a daughter at the origin.
         pv = geom.phantom
         @test pv isa PhysicalVolume
         @test name(pv) == "phantom"
         @test material(pv).name == "Water"
         @test isapprox(solid(pv).radius_cm, 8.0)
-        @test isapprox(solid(pv).half_length_cm, 8.0)
-        @test pv.position == (0.0, 0.0, 0.0)          # default = scanner centre
+        @test pv.position == (0.0, 0.0, 0.0)
+
+        # build a geometry file with a valid world + the given phantom JSON object
+        tmpgeo(phantom) = (p = tempname() * ".json";
+            write(p, """{"world":{"shape":"cylinder","radius_cm":60,"half_length_cm":60,"material":"Air"},
+                         "phantom":$phantom}"""); p)
 
         # A non-origin placement is read from the phantom section's position_cm.
-        tmp = tempname() * ".json"
-        write(tmp, """{"phantom":{"shape":"cylinder","radius_cm":8.0,"half_length_cm":8.0,
-                       "position_cm":[1.0,2.0,3.0],"material":"Water"}}""")
+        tmp = tmpgeo("""{"shape":"cylinder","radius_cm":8.0,"half_length_cm":8.0,"position_cm":[1.0,2.0,3.0],"material":"Water"}""")
         @test load_geometry(tmp, mats).phantom.position == (1.0, 2.0, 3.0)
         rm(tmp)
 
-        # A geometry file with no phantom section is an error.
-        empty = tempname() * ".json"
-        write(empty, """{"_doc":"nothing here"}""")
-        @test_throws ErrorException load_geometry(empty, mats)
-        rm(empty)
+        # Missing world section is an error.
+        nw = tempname() * ".json"
+        write(nw, """{"phantom":{"shape":"cylinder","radius_cm":8.0,"half_length_cm":8.0,"material":"Water"}}""")
+        @test_throws ErrorException load_geometry(nw, mats)
+        rm(nw)
+
+        # Missing phantom section is an error.
+        np = tempname() * ".json"
+        write(np, """{"world":{"shape":"cylinder","radius_cm":60,"half_length_cm":60,"material":"Air"}}""")
+        @test_throws ErrorException load_geometry(np, mats)
+        rm(np)
 
         # An unsupported shape is rejected, not silently loaded as a cylinder.
-        bad = tempname() * ".json"
-        write(bad, """{"phantom":{"shape":"sphere","radius_cm":5.0,"material":"Water"}}""")
+        bad = tmpgeo("""{"shape":"sphere","radius_cm":5.0,"material":"Water"}""")
         @test_throws ErrorException load_geometry(bad, mats)
         rm(bad)
 
         # A material the scene doesn't have is an error, not a silent miss.
-        nomat = tempname() * ".json"
-        write(nomat, """{"phantom":{"shape":"cylinder","radius_cm":8.0,"half_length_cm":8.0,"material":"Unobtainium"}}""")
+        nomat = tmpgeo("""{"shape":"cylinder","radius_cm":8.0,"half_length_cm":8.0,"material":"Unobtainium"}""")
         @test_throws ErrorException load_geometry(nomat, mats)
         rm(nomat)
+    end
+
+    @testset "air world transport" begin
+        mats = load_materials(DATA_DIR)
+        air  = load_geometry(GEOM_JSON, mats).world      # the non-interacting mother
+        rng  = MersenneTwister(1)
+
+        # A photon in pure Air takes one straight step to the world boundary,
+        # unchanged in energy, depositing nothing.
+        recs = propagate_photon(0.511, (0.0, 0.0, 0.0), (0.0, 0.0, 1.0), air, rng)
+        @test length(recs) == 1
+        @test recs[1].process == :escape
+        @test isapprox(recs[1].z, 60.0)        # exits the +z face at half_length
+        @test isapprox(recs[1].e_in, 0.511)    # no energy loss
+        @test recs[1].e_dep == 0.0
+
+        # Along +x it exits the lateral wall at the world radius.
+        recs2 = propagate_photon(0.511, (0.0, 0.0, 0.0), (1.0, 0.0, 0.0), air, rng)
+        @test length(recs2) == 1 && recs2[1].process == :escape
+        @test isapprox(recs2[1].x, 60.0)
+        @test isapprox(recs2[1].e_in, 0.511)
     end
 end

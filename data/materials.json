@@ -22,5 +22,11 @@
         "density": 7.13,
         "components": {"Bi": 0.671004, "Ge": 0.174900, "O": 0.154096},
         "xcom": "xcom_BGO.csv"
+    },
+
+    "Air": {
+        "density": 0.0012,
+        "components": {"N": 0.755, "O": 0.232, "Ar": 0.013},
+        "_note": "no xcom: treated as non-interacting (straight-line propagation)"
     }
 }

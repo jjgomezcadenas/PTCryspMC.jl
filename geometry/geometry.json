@@ -1,5 +1,13 @@
 {
-    "_doc": "Full geometry (the world) for PTCryspMC. Each named section is one component; so far only the phantom, with the detector ring added later. Dimensions in cm; material keys into data/materials.json. A volume's position_cm places it in the world frame (default = scanner centre).",
+    "_doc": "Full geometry for PTCryspMC. 'world' is the absolute mother volume (a cylinder of Air, non-interacting); every other section (phantom now, the detector ring later) is a daughter embedded in it. Dimensions in cm; material keys into data/materials.json. A volume's position_cm places it in the world frame (default = origin = scanner centre).",
+    "world": {
+        "name": "world",
+        "shape": "cylinder",
+        "radius_cm": 60.0,
+        "half_length_cm": 60.0,
+        "position_cm": [0.0, 0.0, 0.0],
+        "material": "Air"
+    },
     "phantom": {
         "name": "phantom",
         "shape": "cylinder",
