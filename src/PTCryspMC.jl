@@ -15,7 +15,8 @@ include("transport.jl")    # photon-only transport through a cylinder
 
 export XCOMData, load_xcom,
        Material, load_material, load_materials, sigma_macro, mfp,
-       Solid, Cylinder, Box, LogicalVolume, PhysicalVolume, Geometry,
+       Solid, Cylinder, Box, CylShell, LogicalVolume, PhysicalVolume, Geometry,
+       Scanner, r_outer, block_index, block_id, nblocks,
        solid, material, name, volume, mass,
        load_solid, load_geometry,
        is_inside, distance_to_exit, distance_to_entry,

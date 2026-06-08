@@ -153,6 +153,40 @@ const GEOM_JSON = joinpath(@__DIR__, "..", "geometry", "geometry.json")
         @test isapprox(distance_to_exit((0.0, 0.0, 0.0), (0.0, 0.0, 1.0), pv), 3.7)
     end
 
+    @testset "cylindrical shell solid" begin
+        cs = CylShell(38.7, 3.7, 51.2)            # CRYSP1M ring: Ri=38.7, Ro=42.4
+        @test cs isa Solid
+        @test isapprox(r_outer(cs), 42.4)
+        @test isapprox(volume(cs), π * (42.4^2 - 38.7^2) * 2 * 51.2)
+
+        @test !is_inside(cs, (0.0, 0.0, 0.0))     # the bore
+        @test is_inside(cs, (40.0, 0.0, 0.0))     # in the wall
+        @test is_inside(cs, (38.7, 0.0, 0.0))     # inner wall (inclusive)
+        @test is_inside(cs, (42.4, 0.0, 0.0))     # outer wall (inclusive)
+        @test !is_inside(cs, (50.0, 0.0, 0.0))    # beyond the outer wall
+        @test !is_inside(cs, (40.0, 0.0, 52.0))   # beyond the cap
+
+        # From the bore centre along +x: first wall entry at the inner radius.
+        @test isapprox(distance_to_entry((0.0, 0.0, 0.0), (1.0, 0.0, 0.0), cs), 38.7)
+        # From the inner wall (x=38.7) along +x: exit the outer wall 3.7 cm on.
+        @test isapprox(distance_to_exit((38.7, 0.0, 0.0), (1.0, 0.0, 0.0), cs), 3.7)
+        # In the bore, distance_to_exit is Inf (the point is not in the wall).
+        @test distance_to_exit((0.0, 0.0, 0.0), (1.0, 0.0, 0.0), cs) == Inf
+
+        # The diametral chord from x=-50 along +x crosses outer, bore, bore, outer:
+        # enters the near wall at x=-42.4 …
+        @test isapprox(distance_to_entry((-50.0, 0.0, 0.0), (1.0, 0.0, 0.0), cs), 7.6)
+        # … from inside that near wall (x=-40) it exits into the bore at x=-38.7 …
+        @test isapprox(distance_to_exit((-40.0, 0.0, 0.0), (1.0, 0.0, 0.0), cs), 1.3)
+        # … and from the bore (x=-20) the next wall entry is the far inner wall x=38.7.
+        @test isapprox(distance_to_entry((-20.0, 0.0, 0.0), (1.0, 0.0, 0.0), cs), 58.7)
+
+        # An axial ray inside the wall exits through a cap.
+        @test isapprox(distance_to_exit((40.0, 0.0, 0.0), (0.0, 0.0, 1.0), cs), 51.2)
+        # A ray straight down the bore axis never touches the wall.
+        @test distance_to_entry((0.0, 0.0, -100.0), (0.0, 0.0, 1.0), cs) == Inf
+    end
+
     @testset "logical volume" begin
         w  = load_material(DATA_DIR, "Water")
         lv = LogicalVolume("phantom", Cylinder(8.0, 8.0), w)
@@ -205,6 +239,9 @@ const GEOM_JSON = joinpath(@__DIR__, "..", "geometry", "geometry.json")
         @test isapprox(solid(pv).radius_cm, 8.0)
         @test pv.position == (0.0, 0.0, 0.0)
 
+        # scanner: the detector ring daughter.
+        @test geom.scanner isa Scanner
+
         # build a geometry file with a valid world + the given phantom JSON object
         tmpgeo(phantom) = (p = tempname() * ".json";
             write(p, """{"world":{"shape":"cylinder","radius_cm":60,"half_length_cm":60,"material":"Air"},
@@ -213,6 +250,8 @@ const GEOM_JSON = joinpath(@__DIR__, "..", "geometry", "geometry.json")
         # A non-origin placement is read from the phantom section's position_cm.
         tmp = tmpgeo("""{"shape":"cylinder","radius_cm":8.0,"half_length_cm":8.0,"position_cm":[1.0,2.0,3.0],"material":"Water"}""")
         @test load_geometry(tmp, mats).phantom.position == (1.0, 2.0, 3.0)
+        # the scanner section is optional: absent → nothing.
+        @test load_geometry(tmp, mats).scanner === nothing
         rm(tmp)
 
         # Missing world section is an error.
@@ -257,5 +296,62 @@ const GEOM_JSON = joinpath(@__DIR__, "..", "geometry", "geometry.json")
         @test length(recs2) == 1 && recs2[1].process == :escape
         @test isapprox(recs2[1].x, 60.0)
         @test isapprox(recs2[1].e_in, 0.511)
+    end
+
+    @testset "scanner block / wheel grid" begin
+        mats = load_materials(DATA_DIR)
+        sc   = load_geometry(GEOM_JSON, mats).scanner
+
+        @test sc isa Scanner
+        @test sc.n_phi == 48 && sc.n_z == 20
+        @test nblocks(sc) == 960
+        @test name(sc.volume) == "CRYSP_CSI_1M"
+        @test material(sc.volume).name == "CsI"
+        @test solid(sc.volume) isa CylShell
+        @test isapprox(solid(sc.volume).r_inner_cm, 38.7)
+
+        # +x axis at the axial centre (z=0) → sector 0, the middle wheel 10 of 20.
+        @test block_index(sc, (40.0, 0.0, 0.0)) == (0, 10)
+        @test block_id(sc, (40.0, 0.0, 0.0)) == 10 * 48 + 0
+        # +x axis near the −z end → block (0, 0), id 0.
+        @test block_index(sc, (40.0, 0.0, -51.0)) == (0, 0)
+        @test block_id(sc, (40.0, 0.0, -51.0)) == 0
+        # φ = π (the −x side) → azimuthal sector 24 of 48.
+        @test block_index(sc, (-40.0, 0.0, 0.0))[1] == 24
+        # z near +H → wheel 19; the top edge clamps to 19.
+        @test block_index(sc, (40.0, 0.0, 51.0))[2] == 19
+        @test block_index(sc, (40.0, 0.0, 51.2))[2] == 19
+        # linear id follows iz·n_phi + iφ.
+        iφ, iz = block_index(sc, (-40.0, 0.0, 51.0))
+        @test block_id(sc, (-40.0, 0.0, 51.0)) == iz * 48 + iφ
+    end
+
+    @testset "ring transport (navigation)" begin
+        mats = load_materials(DATA_DIR)
+        sc   = load_geometry(GEOM_JSON, mats).scanner
+        rng  = MersenneTwister(3)
+
+        # A transverse photon from the origin flies straight (through air) to the
+        # inner wall, then transports through the crystal — the unit-test path.
+        pos, dir = (0.0, 0.0, 0.0), (1.0, 0.0, 0.0)
+        de = distance_to_entry(pos, dir, sc.volume)
+        @test isapprox(de, 38.7)                       # the inner radius
+        entry = (pos[1] + de*dir[1], pos[2] + de*dir[2], pos[3] + de*dir[3])
+        @test is_inside(sc.volume, entry)              # on the inner wall (inclusive)
+
+        recs = propagate_photon(0.511, entry, dir, sc.volume, rng)
+        @test !isempty(recs)
+        # energy conservation: the photon entered at 511 keV.
+        @test sum(r.e_dep for r in recs) <= 0.511 + 1e-9
+        # every interaction lies inside the wall (r in [38.7, 42.4] cm).
+        for r in recs
+            @test 38.7 - 1e-6 <= hypot(r.x, r.y) <= 42.4 + 1e-6
+        end
+        # the impact (first interaction) maps to a valid crystal.
+        iφ, iz = block_index(sc, (recs[1].x, recs[1].y, recs[1].z))
+        @test 0 <= iφ < sc.n_phi && 0 <= iz < sc.n_z
+
+        # A photon straight down the axis misses the ring (no entry).
+        @test !isfinite(distance_to_entry((0.0, 0.0, 0.0), (0.0, 0.0, 1.0), sc.volume))
     end
 end

@@ -1,0 +1,184 @@
+\documentclass[11pt]{article}
+
+\usepackage[a4paper,margin=2.4cm]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{siunitx}
+\usepackage{xcolor}
+\usepackage[hidelinks]{hyperref}
+\usepackage{enumitem}
+
+\newcommand{\Ri}{R_{\mathrm{i}}}
+\newcommand{\Ro}{R_{\mathrm{o}}}
+\newcommand{\dvec}{\hat{\mathbf{d}}}
+
+\title{Navigation geometry\\
+\large Ray--solid distances and the detector block grid in \texttt{PTCryspMC.jl}}
+\author{}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\section{Setup and conventions}
+\label{sec:setup}
+
+Transport advances a photon by the smaller of the distance to the next interaction
+and the distance to the next geometric boundary. This note gives the closed-form
+boundary distances for the two solids the simulation uses --- a \emph{cylinder}
+(the phantom and the air world) and a \emph{cylindrical shell} (the detector ring)
+--- and the arithmetic that maps a point in the shell to a readout block.
+
+Each solid is defined in its own \emph{local frame}, centred at the origin with its
+axis along $z$; the physical-volume layer subtracts the placement (and, later, a
+rotation) before calling these routines, so here the solid is always origin-centred.
+A ray is
+\begin{equation}
+  \mathbf{r}(t) = \mathbf{p} + t\,\dvec, \qquad t \ge 0,\quad \|\dvec\| = 1 ,
+\end{equation}
+with $\mathbf{p}=(p_x,p_y,p_z)$ the current point and $\dvec=(d_x,d_y,d_z)$ the
+direction. Write the transverse (radial) part as
+\begin{equation}
+  \rho^2(t) = (p_x + t d_x)^2 + (p_y + t d_y)^2 = a\,t^2 + b\,t + (p_x^2 + p_y^2),
+  \qquad a = d_x^2 + d_y^2,\quad b = 2(p_x d_x + p_y d_y).
+\end{equation}
+A crossing counts only if it lies ahead of the start surface, $t > \varepsilon$
+(\texttt{SURFACE\_EPS}, \SI{1}{pm}); a direction component is treated as parallel to
+a surface when its magnitude is below \texttt{PARALLEL\_EPS}. Boundary tests are
+inclusive ($\le$), so a ray through an exact edge is always claimed by some surface.
+
+\section{Ray--cylinder (convex)}
+\label{sec:cyl}
+
+A cylinder of radius $R$ and half-length $H$ occupies $\rho^2 \le R^2$, $|z|\le H$.
+A ray meets its boundary on the lateral wall or on an end cap.
+
+\paragraph{Lateral wall.} $\rho^2(t)=R^2$ is the quadratic
+\begin{equation}
+  a\,t^2 + b\,t + c = 0, \qquad c = p_x^2 + p_y^2 - R^2 ,
+\end{equation}
+with (for $a>\texttt{PARALLEL\_EPS}$ and discriminant $\Delta=b^2-4ac\ge 0$) roots
+\begin{equation}
+  t_\pm = \frac{-b \pm \sqrt{\Delta}}{2a}.
+\end{equation}
+A root is a valid wall crossing if it falls within the axial extent,
+$|p_z + t\,d_z| \le H$.
+
+\paragraph{End caps.} The planes $z=\pm H$ are hit at
+\begin{equation}
+  t = \frac{\pm H - p_z}{d_z} \quad (d_z \neq 0),
+\end{equation}
+valid if the crossing lies within the disc, $(p_x+t d_x)^2+(p_y+t d_y)^2 \le R^2$.
+
+\paragraph{Entry and exit.} Gather the valid forward crossings and keep the nearest
+and farthest, $t_{\mathrm{near}} = \min$, $t_{\mathrm{far}} = \max$. A convex solid
+has at most two:
+\begin{itemize}[nosep]
+\item \textbf{Exit:} $\texttt{distance\_to\_exit} = t_{\mathrm{far}}$ (the surface the
+  ray leaves through), or $\infty$ if it never meets the cylinder. For a point
+  \emph{inside} the cylinder there is a single forward crossing,
+  $t_{\mathrm{near}}=t_{\mathrm{far}}$, which is that exit.
+\item \textbf{Entry:} $\texttt{distance\_to\_entry} = t_{\mathrm{near}}$ when
+  $t_{\mathrm{near}} < t_{\mathrm{far}}$ (two distinct crossings $\Rightarrow$ the
+  start is outside and the ray enters at the near surface), else $\infty$ (already
+  inside, or a miss).
+\end{itemize}
+
+\section{Ray--cylindrical shell (non-convex)}
+\label{sec:shell}
+
+The detector ring is a shell of inner radius $\Ri$, wall thickness $w$, outer radius
+$\Ro=\Ri+w$ and half-length $H$:
+\begin{equation}
+  \Ri^2 \le \rho^2 \le \Ro^2, \qquad |z| \le H .
+\end{equation}
+The bore ($\rho<\Ri$) makes the shell \emph{non-convex}: a chord can cross the wall,
+traverse the empty bore, and cross the wall again. Near/far crossings no longer
+suffice; we work with the parameter intervals along the ray instead.
+
+The shell is the outer solid cylinder, clipped to the axial slab, with the inner
+bore removed. Each piece is an interval in $t$:
+\begin{align}
+  \text{outer disc } \rho^2 \le \Ro^2: &\quad
+    \mathcal{O} = [\,t_{o-},\,t_{o+}\,]
+    \ \text{(roots of } a t^2 + b t + p_\perp^2 - \Ro^2 = 0),\\
+  \text{axial slab } |z|\le H: &\quad
+    \mathcal{Z} = [\,t_{z-},\,t_{z+}\,], \quad
+    t_{z\mp} = \frac{\mp H - p_z}{d_z},\\
+  \text{bore } \rho^2 < \Ri^2: &\quad
+    \mathcal{B} = (\,t_{i-},\,t_{i+}\,)
+    \ \text{(roots of } a t^2 + b t + p_\perp^2 - \Ri^2 = 0),
+\end{align}
+where $p_\perp^2 = p_x^2+p_y^2$ and the parallel cases are: if $a\le\texttt{PARALLEL\_EPS}$
+the radial conditions are constant, so $\mathcal{O}$ is all of $\mathbb{R}$ when
+$p_\perp \le \Ro$ (else empty) and $\mathcal{B}$ is empty unless $p_\perp<\Ri$; if
+$d_z\approx 0$ then $\mathcal{Z}=\mathbb{R}$ when $|p_z|\le H$ (else empty). The shell
+occupancy is
+\begin{equation}
+  \mathcal{S} = \bigl(\mathcal{O}\cap\mathcal{Z}\bigr)\setminus\mathcal{B}.
+\end{equation}
+Writing $\mathcal{O}\cap\mathcal{Z}=[t_a,t_b]$ with
+$t_a=\max(t_{o-},t_{z-})$, $t_b=\min(t_{o+},t_{z+})$ (empty if $t_a>t_b$), and
+removing the open bore $(t_{i-},t_{i+})$ leaves at most two closed intervals:
+\begin{equation}
+  \mathcal{S} =
+  \begin{cases}
+    \{[t_a,t_b]\} & \text{bore disjoint from } [t_a,t_b],\\[2pt]
+    \{[t_a,t_{i-}],\,[t_{i+},t_b]\} & \text{bore strictly inside } [t_a,t_b],\\[2pt]
+    \{[t_{i+},t_b]\}\ \text{or}\ \{[t_a,t_{i-}]\} & \text{bore overlaps one end.}
+  \end{cases}
+\end{equation}
+
+\paragraph{Entry and exit.} With the photon at $t=0$:
+\begin{itemize}[nosep]
+\item \textbf{Exit:} if $0$ lies in a shell interval $[s,e]\in\mathcal{S}$ (the photon
+  is in the wall), $\texttt{distance\_to\_exit}=e$ --- the end of the current piece,
+  whether that end is the outer wall, the inner wall (into the bore) or a cap.
+\item \textbf{Entry:} $\texttt{distance\_to\_entry}$ is the smallest interval start
+  $s>\varepsilon$ --- the near face of the next wall segment ahead.
+\end{itemize}
+The two-interval case is exactly the diametral chord: the photon enters the wall at
+$t_a$, leaves into the bore at $t_{i-}$, re-enters at $t_{i+}$ and finally exits at
+$t_b$.
+
+\section{The $(\varphi,z)$ block / wheel partition}
+\label{sec:grid}
+
+The ring is read out as $N_\varphi$ azimuthal \emph{blocks} $\times$ $N_z$ axial
+\emph{wheels}. We model this as a structured grid on the shell rather than as
+$N_\varphi N_z$ separate volumes: a block is one $(\varphi,z)$ cell spanning the full
+wall depth, so the cost of locating a point is independent of the block count and the
+dead gaps between crystals are skipped (the wall is treated as continuous).
+
+For a point $(x,y,z)$ in the shell's local frame, the cell indices are pure
+arithmetic. With $\Delta\varphi = 2\pi/N_\varphi$ and $\Delta z = 2H/N_z$,
+\begin{align}
+  \varphi &= \operatorname{atan2}(y,x) \bmod 2\pi \in [0,2\pi), &
+  i_\varphi &= \left\lfloor \varphi/\Delta\varphi \right\rfloor \in \{0,\dots,N_\varphi-1\},\\
+  \zeta &= z + H \in [0,2H], &
+  i_z &= \left\lfloor \zeta/\Delta z \right\rfloor \in \{0,\dots,N_z-1\},
+\end{align}
+($\varphi=0$ on the $+x$ axis, increasing counter-clockwise; the top edge $z=H$ is
+clamped to $i_z=N_z-1$). The linear block id is
+\begin{equation}
+  \mathrm{block} = i_z\,N_\varphi + i_\varphi \in \{0,\dots,N_\varphi N_z - 1\}.
+\end{equation}
+The radial depth $\rho-\Ri\in[0,w]$ is the depth of interaction; it characterises the
+hit within a block but does not enter the block id.
+
+\paragraph{Match to the physical crystals.} The grid is fixed so that one cell equals
+one physical crystal. For CRYSP1M ($\Ri=\SI{38.7}{cm}$, $H=\SI{51.2}{cm}$,
+$N_\varphi=48$, $N_z=20$):
+\begin{itemize}[nosep]
+\item azimuthal pitch at the inner face $\;s_\varphi = \Ri\,\Delta\varphi
+  = 2\pi\,(\SI{387}{mm})/48 \approx \SI{50.6}{mm}$;
+\item axial pitch $\;\Delta z = 2H/N_z = \SI{1024}{mm}/20 = \SI{51.2}{mm}$.
+\end{itemize}
+Both reproduce the wrapped \SI{50}{mm} crystal, and $N_\varphi N_z = 48\times20 = 960$
+matches the crystal count of the scanner. Overspill --- a photon that Compton-scatters
+across a cell boundary --- is then detected by comparing the block ids of its
+deposits, with no stepping at the boundaries; the gaps can be reinstated later as thin
+non-interacting layers, at which point the $\varphi$- and $z$-plane crossing distances
+(the nearest $\varphi=k\,\Delta\varphi$ and $z=-H+k\,\Delta z$ planes ahead) are added
+to the boundary set.
+
+\end{document}

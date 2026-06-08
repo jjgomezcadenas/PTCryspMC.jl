@@ -161,6 +161,99 @@ function distance_to_entry(pos, dir, b::Box)::Float64
     (t_near > SURFACE_EPS && t_near < t_far) ? t_near : Inf
 end
 
+"A cylindrical shell (hollow cylinder), axis along z, centred at the origin [cm]."
+struct CylShell <: Solid
+    r_inner_cm::Float64
+    wall_thickness_cm::Float64
+    half_length_cm::Float64
+end
+
+r_outer(cs::CylShell)::Float64 = cs.r_inner_cm + cs.wall_thickness_cm
+volume(cs::CylShell)::Float64 =
+    π * (r_outer(cs)^2 - cs.r_inner_cm^2) * 2.0 * cs.half_length_cm
+
+function is_inside(cs::CylShell, p)::Bool
+    r2 = p[1]^2 + p[2]^2
+    (cs.r_inner_cm^2 <= r2 <= r_outer(cs)^2) && (abs(p[3]) <= cs.half_length_cm)
+end
+
+# Parameter interval [lo, hi] where the ray is inside the disc ρ² ≤ R² (the
+# transverse quadratic a t² + b t + (pperp² − R²) = 0). Empty → (Inf, -Inf).
+@inline function _disc_interval(a::Float64, b::Float64, pperp2::Float64, R2::Float64)
+    if a > PARALLEL_EPS
+        c = pperp2 - R2
+        Δ = b * b - 4.0 * a * c
+        Δ < 0.0 && return (Inf, -Inf)
+        s = sqrt(Δ)
+        return ((-b - s) / (2a), (-b + s) / (2a))
+    end
+    pperp2 <= R2 ? (-Inf, Inf) : (Inf, -Inf)   # parallel to axis: ρ constant
+end
+
+# Parameter interval [lo, hi] where the ray is inside the slab |z| ≤ H.
+@inline function _z_interval(pz::Float64, dz::Float64, H::Float64)
+    if abs(dz) > PARALLEL_EPS
+        t1 = (-H - pz) / dz; t2 = (H - pz) / dz
+        return (min(t1, t2), max(t1, t2))
+    end
+    abs(pz) <= H ? (-Inf, Inf) : (Inf, -Inf)   # parallel to caps
+end
+
+"""
+    _shell_intervals(pos, dir, cs) -> (s1, e1, s2, e2)
+
+The up-to-two parameter intervals [s1,e1], [s2,e2] where the ray lies in the shell
+wall, S = (outer ∩ z-slab) ∖ bore. Absent pieces are returned as (Inf, -Inf). See
+docs/navigation.tex. Allocation-free hot path.
+"""
+@inline function _shell_intervals(pos, dir, cs::CylShell)
+    a = dir[1]^2 + dir[2]^2
+    b = 2.0 * (pos[1] * dir[1] + pos[2] * dir[2])
+    pperp2 = pos[1]^2 + pos[2]^2
+
+    olo, ohi = _disc_interval(a, b, pperp2, r_outer(cs)^2)   # inside outer disc
+    zlo, zhi = _z_interval(pos[3], dir[3], cs.half_length_cm)
+    ta = max(olo, zlo); tb = min(ohi, zhi)                   # outer ∩ slab
+    ta > tb && return (Inf, -Inf, Inf, -Inf)                 # never in the wall
+
+    blo, bhi = _disc_interval(a, b, pperp2, cs.r_inner_cm^2) # inside the bore
+    if blo > bhi || bhi <= ta || blo >= tb
+        return (ta, tb, Inf, -Inf)                           # bore irrelevant: one piece
+    end
+    # bore (blo, bhi) carves [ta, tb] into the wall before it and after it
+    s1, e1 = blo <= ta ? (Inf, -Inf) : (ta,  blo)
+    s2, e2 = bhi >= tb ? (Inf, -Inf) : (bhi, tb)
+    (s1, e1, s2, e2)
+end
+
+"""
+    distance_to_exit(pos, dir, cs::CylShell) -> Float64
+
+Distance to where the ray leaves the wall — the end of the shell interval the
+photon is in (outer wall, inner wall into the bore, or a cap). `Inf` if `pos` is
+not in the wall.
+"""
+function distance_to_exit(pos, dir, cs::CylShell)::Float64
+    s1, e1, s2, e2 = _shell_intervals(pos, dir, cs)
+    (s1 <= SURFACE_EPS && e1 > SURFACE_EPS) && return e1
+    (s2 <= SURFACE_EPS && e2 > SURFACE_EPS) && return e2
+    Inf
+end
+
+"""
+    distance_to_entry(pos, dir, cs::CylShell) -> Float64
+
+Distance to where the ray first enters the wall — the nearest shell-interval start
+ahead. `Inf` if the ray misses the wall (or only grazes the bore).
+"""
+function distance_to_entry(pos, dir, cs::CylShell)::Float64
+    s1, e1, s2, e2 = _shell_intervals(pos, dir, cs)
+    t = Inf
+    s1 > SURFACE_EPS && (t = min(t, s1))
+    s2 > SURFACE_EPS && (t = min(t, s2))
+    t
+end
+
 # =====================================================================
 # Logical volumes (solid + material)
 # =====================================================================
@@ -207,6 +300,50 @@ distance_to_entry(pos, dir, pv::PhysicalVolume)::Float64 =
     distance_to_entry(_to_local(pv, pos), dir, solid(pv))
 
 # =====================================================================
+# Detector scanner: a placed CylShell + its (φ, z) block / wheel grid
+# =====================================================================
+
+"""
+    Scanner
+
+The detector ring: a placed `CylShell` physical volume plus its readout
+segmentation into `n_phi` azimuthal blocks × `n_z` axial wheels. A block is one
+(φ, z) cell spanning the full wall depth (the radial depth is the DOI). See
+docs/navigation.tex.
+"""
+struct Scanner
+    volume::PhysicalVolume{CylShell}
+    n_phi::Int
+    n_z::Int
+end
+
+"Number of readout blocks (= n_phi · n_z)."
+nblocks(sc::Scanner)::Int = sc.n_phi * sc.n_z
+
+"""
+    block_index(sc, p) -> (iφ, iz)
+
+The azimuthal block and axial wheel indices of a world-frame point `p` in the
+scanner shell: φ = atan2(y,x) sectored into n_phi, z sectored into n_z. φ = 0 on
+the +x axis, increasing counter-clockwise; the top edges (φ = 2π, z = +H) clamp
+to the last cell.
+"""
+function block_index(sc::Scanner, p)::Tuple{Int,Int}
+    lp = _to_local(sc.volume, p)
+    H  = solid(sc.volume).half_length_cm
+    φ  = mod(atan(lp[2], lp[1]), 2π)
+    iφ = clamp(floor(Int, φ / (2π / sc.n_phi)), 0, sc.n_phi - 1)
+    iz = clamp(floor(Int, (lp[3] + H) / (2H / sc.n_z)), 0, sc.n_z - 1)
+    (iφ, iz)
+end
+
+"Linear block id of a world-frame point: iz·n_phi + iφ, in 0 … nblocks−1."
+function block_id(sc::Scanner, p)::Int
+    iφ, iz = block_index(sc, p)
+    iz * sc.n_phi + iφ
+end
+
+# =====================================================================
 # Loading
 # =====================================================================
 
@@ -223,8 +360,11 @@ function load_solid(d)::Solid
         Cylinder(Float64(d["radius_cm"]), Float64(d["half_length_cm"]))
     elseif shape == "box"
         Box(Float64(d["half_x_cm"]), Float64(d["half_y_cm"]), Float64(d["half_z_cm"]))
+    elseif shape == "cyl_shell"
+        CylShell(Float64(d["r_inner_cm"]), Float64(d["wall_thickness_cm"]),
+                 Float64(d["half_length_cm"]))
     else
-        error("unsupported solid shape '$shape' (cylinder, box)")
+        error("unsupported solid shape '$shape' (cylinder, box, cyl_shell)")
     end
 end
 
@@ -246,31 +386,42 @@ function _load_volume(d, materials::Dict{String,Material},
     PhysicalVolume(LogicalVolume(String(get(d, "name", default_name)), sol, mat), pos)
 end
 
+"Build a Scanner from its geometry section: a placed CylShell + n_phi, n_z."
+function _load_scanner(d, materials::Dict{String,Material})::Scanner
+    vol = _load_volume(d, materials, "scanner")
+    vol.logical.solid isa CylShell ||
+        error("scanner must be a 'cyl_shell' (got '$(get(d, "shape", "?"))')")
+    Scanner(vol, Int(d["n_phi"]), Int(d["n_z"]))
+end
+
 """
     Geometry
 
 The full geometry the photons traverse. `world` is the absolute mother volume — a
-cylinder of (non-interacting) Air enclosing everything; `phantom` is a daughter
-embedded in it. The detector ring will be added as a further daughter. This is the
+cylinder of (non-interacting) Air enclosing everything; `phantom` is a daughter,
+and `scanner` (the detector ring, optional) is a further daughter. This is the
 volume set a multi-volume navigator will walk.
 """
 struct Geometry
-    world::PhysicalVolume      # the Air mother volume enclosing all daughters
-    phantom::PhysicalVolume    # daughter
+    world::PhysicalVolume                 # the Air mother volume enclosing all daughters
+    phantom::PhysicalVolume               # daughter
+    scanner::Union{Scanner,Nothing}       # daughter (the detector ring), if present
 end
 
 """
     load_geometry(path, materials) -> Geometry
 
 Load the full geometry from a JSON file whose named sections each describe one
-volume. Reads the `world` (mother) and `phantom` sections; the detector ring will
-be a further section.
+volume. The `world` (mother) and `phantom` sections are required; the `scanner`
+section (the detector ring) is optional.
 """
 function load_geometry(path::AbstractString,
                        materials::Dict{String,Material})::Geometry
     d = open(io -> JSON.parse(io), path, "r")
     haskey(d, "world")   || error("geometry file $path has no 'world' section")
     haskey(d, "phantom") || error("geometry file $path has no 'phantom' section")
+    scanner = haskey(d, "scanner") ? _load_scanner(d["scanner"], materials) : nothing
     Geometry(_load_volume(d["world"],   materials, "world"),
-             _load_volume(d["phantom"], materials, "phantom"))
+             _load_volume(d["phantom"], materials, "phantom"),
+             scanner)
 end

@@ -15,5 +15,16 @@
         "half_length_cm": 8.0,
         "position_cm": [0.0, 0.0, 0.0],
         "material": "Water"
+    },
+    "scanner": {
+        "name": "CRYSP_CSI_1M",
+        "shape": "cyl_shell",
+        "r_inner_cm": 38.7,
+        "wall_thickness_cm": 3.7,
+        "half_length_cm": 51.2,
+        "n_phi": 48,
+        "n_z": 20,
+        "position_cm": [0.0, 0.0, 0.0],
+        "material": "CsI"
     }
 }
