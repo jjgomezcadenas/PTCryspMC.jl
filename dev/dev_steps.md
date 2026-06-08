@@ -118,10 +118,38 @@ photons through it, write the photon stack per event.
     (backscatter), so the Compton opening angle is recoverable from the stack; mean
     energy deposited ≈ 210 keV/event.
 
-**Test status:** `Pkg.test` — **56 tests** pass (materials loading + cross-section
-range/pair; cylinder solid incl. the rim corner case; logical-volume mass;
-physical-volume placement transform; geometry loading incl. no-phantom-section,
-bad-shape and missing-material rejection). All scripts run.
+### Single crystal — CsI & BGO containment study
+
+Characterising the crystal response (energy containment, interaction depth) on a
+single crystal modelled as a box, before the full ring.
+
+- **`Box` solid** (`src/geometry.jl`) — axis-aligned, analytic slab method for
+  `is_inside` / `distance_to_entry` / `distance_to_exit` / `volume`; a `"box"`
+  branch in `load_solid`.
+- **Crystal materials** (`data/materials.json` + XCOM tables, 10 keV–10 MeV): CsI
+  (4.51 g/cm³, attenuation length 2.44 cm @511 keV) and BGO (Bi₄Ge₃O₁₂,
+  7.13 g/cm³, 1.10 cm), both with K-edges (I 33 keV, Bi 90.5 keV).
+- **Cross-section tooling, now generic over material**: `material_xsections.jl`
+  (was `water_xsections.jl`) + `py/plot_material_xsections.py` →
+  `output/<material>_xsections.{csv,png}`.
+- **`scripts/shoot_gammas_to_crystal.jl`** — 511 keV photons into a crystal box,
+  fully parametric beam (`--beam-xy`, `--beam-opening` = total cone opening,
+  `--material`, `--tag`) → `output/<material>_crystal_<tag>_stack.csv`.
+  **`py/plot_crystal.py`** — a 3×3 panel (containment, photo/compton split, Etot,
+  scatters, 1st/2nd Compton depth and separation, x–y interaction map).
+- **Results** (48×48×37 mm, 511 keV; cone = 45° opening, pencil = on-axis):
+
+  | beam | CsI contained | BGO contained |
+  |---|---|---|
+  | cone   | 48% | 84% |
+  | pencil | 58% | 92% |
+
+  BGO's short attenuation length and high-Z Bi give far higher containment and a
+  larger photoelectric share (photo ≈ 48% of contained vs ≈ 33% for CsI).
+
+**Test status:** `Pkg.test` — **86 tests** pass (the foundations and phantom tests
+above, plus the `Box` solid and the CsI/BGO materials — attenuation length and the
+K-edge surviving the duplicate-energy rows). All scripts run.
 
 ---
 
@@ -129,7 +157,9 @@ bad-shape and missing-material rejection). All scripts run.
 
 - **Step 2 — detector ring.** `CylShell` solid + the structured (φ, z) block/wheel
   grid (block index by arithmetic, plane-crossing distances closed-form); propagate
-  the back-to-back 511 keV pair from an annihilation point to the ring.
+  the back-to-back 511 keV pair from an annihilation point to the ring. (The `Box`
+  solid and the CsI/BGO crystal tables are already in place — see above. CRYSP1M
+  ring: Ø77.4 cm, AFOV 102.4 cm, 48 φ-blocks × 20 z-wheels, 37 mm crystal.)
 - **Step 3 — coincidences.** Transport → singles list + same-annihilation
   coincidences (true / scatter), via the multi-volume navigator (phantom → air →
   ring, switching material at boundaries).
@@ -137,13 +167,13 @@ bad-shape and missing-material rejection). All scripts run.
   window) and the two-opposite-block selection.
 - **Step 5 — randoms.** The time-tag-and-pair pass over the singles.
 - **Step 6 — detectors.** The monolithic detector configs (CsI, CsI(Tl), BGO):
-  crystal material tables + resolutions.
+  crystal material tables (CsI, BGO done; CsI(Tl), LYSO to add) + resolutions.
 
 Carried-over technical TODOs from the foundations:
 
 - the multi-volume **World/navigator** with material switching at boundaries (Step 3);
 - **rotation** in the placement transform, when a volume needs it;
-- crystal **XCOM tables** (CsI, BGO, LYSO) — and relaxing the loader's leading-digit
-  filter so absorption-edge-labelled rows aren't silently dropped;
+- crystal **XCOM tables** — CsI and BGO done (edges came through numeric); LYSO to
+  add, watching the loader's leading-digit filter in case its edge rows are labelled;
 - **pair production** in transport, only if runs ever go multi-MeV (correct at 511 keV
   as-is).
