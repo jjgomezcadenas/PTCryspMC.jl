@@ -284,7 +284,7 @@ const GEOM_JSON = joinpath(@__DIR__, "..", "geometry", "geometry.json")
 
         # A photon in pure Air takes one straight step to the world boundary,
         # unchanged in energy, depositing nothing.
-        recs = propagate_photon(0.511, (0.0, 0.0, 0.0), (0.0, 0.0, 1.0), air, rng)
+        recs = propagate_photon(0.511, (0.0, 0.0, 0.0), (0.0, 0.0, 1.0), air, rng).recs
         @test length(recs) == 1
         @test recs[1].process == :escape
         @test isapprox(recs[1].z, 60.0)        # exits the +z face at half_length
@@ -292,7 +292,7 @@ const GEOM_JSON = joinpath(@__DIR__, "..", "geometry", "geometry.json")
         @test recs[1].e_dep == 0.0
 
         # Along +x it exits the lateral wall at the world radius.
-        recs2 = propagate_photon(0.511, (0.0, 0.0, 0.0), (1.0, 0.0, 0.0), air, rng)
+        recs2 = propagate_photon(0.511, (0.0, 0.0, 0.0), (1.0, 0.0, 0.0), air, rng).recs
         @test length(recs2) == 1 && recs2[1].process == :escape
         @test isapprox(recs2[1].x, 60.0)
         @test isapprox(recs2[1].e_in, 0.511)
@@ -326,32 +326,111 @@ const GEOM_JSON = joinpath(@__DIR__, "..", "geometry", "geometry.json")
         @test block_id(sc, (-40.0, 0.0, 51.0)) == iz * 48 + iφ
     end
 
-    @testset "ring transport (navigation)" begin
+    @testset "locate" begin
         mats = load_materials(DATA_DIR)
-        sc   = load_geometry(GEOM_JSON, mats).scanner
-        rng  = MersenneTwister(3)
+        geom = load_geometry(GEOM_JSON, mats)
 
-        # A transverse photon from the origin flies straight (through air) to the
-        # inner wall, then transports through the crystal — the unit-test path.
-        pos, dir = (0.0, 0.0, 0.0), (1.0, 0.0, 0.0)
-        de = distance_to_entry(pos, dir, sc.volume)
-        @test isapprox(de, 38.7)                       # the inner radius
-        entry = (pos[1] + de*dir[1], pos[2] + de*dir[2], pos[3] + de*dir[3])
-        @test is_inside(sc.volume, entry)              # on the inner wall (inclusive)
+        @test locate(geom, (0.0, 0.0, 0.0))   === geom.phantom          # phantom centre
+        @test locate(geom, (5.0, 0.0, 0.0))   === geom.phantom          # inside phantom
+        @test locate(geom, (20.0, 0.0, 0.0))  === geom.world            # air bore
+        @test locate(geom, (40.0, 0.0, 0.0))  === geom.scanner.volume   # in the ring wall
+        @test locate(geom, (50.0, 0.0, 0.0))  === geom.world            # air, beyond the ring
+        @test locate(geom, (100.0, 0.0, 0.0)) === nothing               # escaped the world
+    end
 
-        recs = propagate_photon(0.511, entry, dir, sc.volume, rng)
-        @test !isempty(recs)
-        # energy conservation: the photon entered at 511 keV.
-        @test sum(r.e_dep for r in recs) <= 0.511 + 1e-9
-        # every interaction lies inside the wall (r in [38.7, 42.4] cm).
-        for r in recs
-            @test 38.7 - 1e-6 <= hypot(r.x, r.y) <= 42.4 + 1e-6
+    @testset "next_boundary + bore re-entry" begin
+        mats = load_materials(DATA_DIR)
+        geom = load_geometry(GEOM_JSON, mats)
+
+        # From the air bore heading +x at the ring: the near (inner) wall at 38.7.
+        d = next_boundary(geom, geom.world, (20.0, 0.0, 0.0), (1.0, 0.0, 0.0))
+        @test isapprox(d, 18.7)                          # 38.7 − 20
+
+        # Bore re-entry capability: a chord that misses the central phantom (closest
+        # approach 20 cm > the 8 cm phantom) crosses the bore and lands on the FAR
+        # inner wall — the opposite crystal a backscattered photon would re-enter.
+        start, dir = (-30.0, 20.0, 0.0), (1.0, 0.0, 0.0)
+        d = next_boundary(geom, geom.world, start, dir)
+        @test isfinite(d)
+        far = (start[1] + d*dir[1], start[2] + d*dir[2], start[3])
+        @test isapprox(hypot(far[1], far[2]), 38.7; atol=1e-6)   # the inner wall
+        @test is_inside(geom.scanner.volume, far)
+        @test far[1] > 0                                          # the OPPOSITE side
+    end
+
+    @testset "navigate_photon — reduction to single-volume" begin
+        mats = load_materials(DATA_DIR)
+        geom = load_geometry(GEOM_JSON, mats)
+
+        # A photon launched in the air bore (outside the phantom) straight at the ring
+        # must give the SAME crystal deposits as a bare single-volume transport from the
+        # inner wall: the air leg consumes no randomness, so with an identical seed the
+        # ring segment is bit-for-bit the same. This is the navigator reducing to
+        # `propagate_photon` when one absorbing material is crossed.
+        start, dir = (20.0, 0.0, 0.0), (1.0, 0.0, 0.0)   # r=20 > phantom (8): misses it
+        steps = navigate_photon(geom, 0.511, start, dir, MersenneTwister(7))
+        scan  = filter(s -> s.volume == :scanner, steps)
+        @test !isempty(scan)
+
+        entry = (38.7, 0.0, 0.0)                          # where the air skip lands
+        ref = propagate_photon(0.511, entry, dir, geom.scanner.volume, MersenneTwister(7)).recs
+        @test length(scan) >= length(ref)                 # ≥ (bore re-entry may add more)
+        for i in eachindex(ref)                           # the first ring segment matches
+            @test scan[i].hit.process == ref[i].process
+            @test isapprox(scan[i].hit.e_dep, ref[i].e_dep)
+            @test isapprox(scan[i].hit.x, ref[i].x; atol=1e-9)
+            @test isapprox(scan[i].hit.y, ref[i].y; atol=1e-9)
         end
-        # the impact (first interaction) maps to a valid crystal.
-        iφ, iz = block_index(sc, (recs[1].x, recs[1].y, recs[1].z))
-        @test 0 <= iφ < sc.n_phi && 0 <= iz < sc.n_z
+        # off the scanner the block tags are -1; on it they are valid.
+        for s in steps
+            if s.volume == :scanner
+                @test 0 <= s.iphi < geom.scanner.n_phi && 0 <= s.iz < geom.scanner.n_z
+            else
+                @test s.iz == -1 && s.iphi == -1
+            end
+        end
+    end
 
-        # A photon straight down the axis misses the ring (no entry).
-        @test !isfinite(distance_to_entry((0.0, 0.0, 0.0), (0.0, 0.0, 1.0), sc.volume))
+    @testset "navigate_photon — phantom leg + conservation" begin
+        mats = load_materials(DATA_DIR)
+        geom = load_geometry(GEOM_JSON, mats)
+        rng  = MersenneTwister(11)
+
+        saw_phantom = false
+        for _ in 1:300
+            c = 2rand(rng) - 1; φ = 2π*rand(rng); s = sqrt(1 - c^2)
+            dir = (s*cos(φ), s*sin(φ), c)
+            steps = navigate_photon(geom, 0.511, (0.0, 0.0, 0.0), dir, rng)  # born in phantom
+
+            # energy conservation across all volumes.
+            @test sum(st.hit.e_dep for st in steps) <= 0.511 + 1e-9
+
+            for st in steps
+                if st.volume == :phantom && st.hit.process != :escape
+                    saw_phantom = true
+                    # phantom interactions lie inside the water cylinder (r≤8, |z|≤8).
+                    @test hypot(st.hit.x, st.hit.y) <= 8.0 + 1e-6
+                    @test abs(st.hit.z) <= 8.0 + 1e-6
+                elseif st.volume == :scanner
+                    @test 38.7 - 1e-6 <= hypot(st.hit.x, st.hit.y) <= 42.4 + 1e-6
+                end
+            end
+        end
+        @test saw_phantom        # some photons Compton-scatter in the water phantom
+
+        # A straight axial line misses the ring geometrically (r = 0 never reaches the
+        # 38.7 cm inner wall).
+        @test !isfinite(distance_to_entry((0.0, 0.0, 0.0), (0.0, 0.0, 1.0),
+                                           geom.scanner.volume))
+
+        # But a photon fired down the axis can still light the ring: it Compton-scatters
+        # in the phantom, deflects off-axis, and the scattered photon reaches a crystal —
+        # the patient-scatter path the navigator must follow across volumes. (Seed chosen
+        # to scatter; energy is fully conserved phantom + ring = 511 keV.)
+        steps = navigate_photon(geom, 0.511, (0.0, 0.0, 0.0), (0.0, 0.0, 1.0),
+                                MersenneTwister(2))
+        @test any(s -> s.volume == :phantom && s.hit.process == :compton, steps)
+        @test any(s -> s.volume == :scanner, steps)
+        @test isapprox(sum(s.hit.e_dep for s in steps), 0.511; atol=1e-9)
     end
 end

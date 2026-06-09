@@ -42,10 +42,12 @@ detector comparison, reconstruction.
 
 ## 2. Achieved so far
 
-Today the code loads a geometry and materials, transports 511 keV photons through
-the phantom, and writes the per-interaction photon stack — validated against
-Beer–Lambert. This sits on the foundations below; pipeline stages 1 and 3–6 are
-not yet built.
+Today the code loads a geometry and materials and **navigates** 511 keV photons
+across the full geometry — phantom (water) → air → crystal ring, switching material
+at each boundary — writing the per-interaction stack tagged with volume and detector
+block. The transport (pipeline stage 2) is in place and validated against Beer–Lambert;
+what remains is the scenario source (stage 1) and the coincidence/hit/randoms/detector
+bookkeeping on top (stages 3–6).
 
 ### Foundations — geometry, materials & physics core, tooling
 
@@ -184,9 +186,47 @@ trivial: straight through air to the crystal (`distance_to_entry`), then transpo
     BGO **0.88 / 0.77** (= containment²); ≈ 85 % of interacting gammas stay in one
     crystal (CsI), 14 % overspill to a neighbour.
 
-**Test status:** `Pkg.test` — **141 tests** pass (foundations, phantom, single
-crystal, the `CylShell` shell intersections, the block/wheel grid, scanner loading,
-the air world, and the source→ring transport composition). All scripts run.
+### Navigator — multi-volume transport (Step 3a)
+
+The general walk that carries a photon **across volumes**, switching material at each
+boundary: phantom (water, may scatter) → air gap → crystal ring. Built by *reusing* the
+single-volume transporter, not duplicating it — three functions, one physics kernel:
+
+- **`sample_interaction`** (`src/sampling.jl`) — the physics at one point (process choice
+  + Compton kinematics), record-type agnostic; returns `(process, e_dep, new_dir, new_E)`.
+- **`propagate_photon`** (`src/transport.jl`) — the single-volume loop, now returning a
+  `Transported{recs, pos, dir, E, escaped}` (the exit state, previously discarded, is what
+  lets the navigator chain volumes). Calls the kernel. Single-volume callers read `.recs`.
+- **`navigate_photon`** (`src/navigator.jl`) — chains volumes with **no transport loop of
+  its own**: `locate` the current volume; in a *leaf* absorber (phantom, ring) transport
+  with `propagate_photon` to its surface and carry the exit state on; in the
+  non-interacting *air mother* skip straight to `next_boundary`. Output is a tagged stack
+  (`NavStep` = `Interaction` + `volume`/`iz`/`iphi`). A backscattered photon crossing the
+  bore re-enters the opposite crystal with no special case.
+- **`scripts/navigate_back_to_back.jl`** — back-to-back pairs from the phantom, both
+  photons navigated through water → air → ring; CSV tagged with volume, block and a
+  per-photon phantom-scatter flag (`--source point|phantom`, `--material`).
+- The navigation algorithm (world model, `locate`, `next_boundary`, the leaf/air walk,
+  bore re-entry) is documented in `docs/navigation.tex` §4.
+
+**Validated** (30k back-to-back from the phantom centre, CRYSP1M):
+
+| | air-only unit test | navigator (through the phantom) |
+|---|---|---|
+| phantom-scattered / photon | — | **57.7 %** (Beer–Lambert: 54 % for 8 cm water) |
+| reached the ring / photon | 79.5 % | 69.4 % |
+| clean coincidence, CsI | 29 % | **4.4 %** |
+| clean coincidence, BGO | 77 % | 11.2 % |
+
+The phantom-scatter background appears and the clean-coincidence fraction drops sharply
+(both photons must now cross the water without scattering). The reduction test confirms
+`navigate_photon` is bit-for-bit `propagate_photon` when a single absorbing material is
+crossed (the air leg consumes no randomness).
+
+**Test status:** `Pkg.test` — **1701 assertions** pass (foundations, phantom, single
+crystal, the `CylShell` shell intersections, the block/wheel grid, scanner loading, the
+air world, `locate`, `next_boundary` + bore re-entry, the navigator's reduction to
+single-volume transport, and the phantom leg + energy conservation). All scripts run.
 
 ---
 
@@ -196,11 +236,14 @@ the air world, and the source→ring transport composition). All scripts run.
   (φ, z) block/wheel grid, the `CRYSP_CSI_1M` scanner, and a back-to-back unit test
   reaching the ring through air. Deferred within it: the φ/z plane-crossing
   distances (only needed once dead gaps return).
-- **Step 3 — the navigator + coincidences.** The general multi-volume walk so a
-  photon born in the water phantom scatters, exits, crosses the air, and reaches the
-  ring — switching material at each boundary (the unit test already does the
-  air→ring leg with no phantom). → singles list + same-annihilation coincidences
-  (true / scatter).
+- **Step 3 — the navigator + coincidences.**
+  - *3a — the multi-volume navigator: done* (see above). A photon born in the water
+    phantom scatters, exits, crosses the air and reaches the ring, switching material at
+    each boundary; validated against Beer–Lambert and the air-only unit test.
+  - *3b — coincidences (next):* turn the navigated stacks into a singles list +
+    same-annihilation coincidences, tagged **true** (neither photon scattered in the
+    phantom) / **scatter** (≥1 did). The CSV already carries the phantom-scatter flag, so
+    this is bookkeeping on the navigated output, with a phantom-distributed source.
 - **Step 4 — hits & selection.** Hit formation (first interaction, smear, energy
   window) and the two-opposite-block selection.
 - **Step 5 — randoms.** The time-tag-and-pair pass over the singles.
@@ -209,7 +252,6 @@ the air world, and the source→ring transport composition). All scripts run.
 
 Carried-over technical TODOs from the foundations:
 
-- the multi-volume **World/navigator** with material switching at boundaries (Step 3);
 - **rotation** in the placement transform, when a volume needs it;
 - crystal **XCOM tables** — CsI and BGO done (edges came through numeric); LYSO to
   add, watching the loader's leading-digit filter in case its edge rows are labelled;

@@ -81,7 +81,7 @@ function main()
             ϕ = 2π * rand(rng)
             dir = (sin(θ) * cos(ϕ), sin(θ) * sin(ϕ), cos(θ))
 
-            recs = propagate_photon(E0, start, dir, pv, rng)
+            recs = propagate_photon(E0, start, dir, pv, rng).recs
             for (k, r) in enumerate(recs)
                 println(io, join((ev, k,
                     round(r.x * 10, digits=4), round(r.y * 10, digits=4), round(r.z * 10, digits=4),

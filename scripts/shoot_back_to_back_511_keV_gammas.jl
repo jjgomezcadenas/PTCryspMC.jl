@@ -96,7 +96,7 @@ function main()
                 end
                 n_hit += 1
                 entry = (pos[1] + de*dir[1], pos[2] + de*dir[2], pos[3] + de*dir[3])
-                recs = propagate_photon(E0, entry, dir, sc.volume, rng; egamma_cut=cut_MeV)
+                recs = propagate_photon(E0, entry, dir, sc.volume, rng; egamma_cut=cut_MeV).recs
                 for (k, r) in enumerate(recs)
                     iϕ, iz = block_index(sc, (r.x, r.y, r.z))
                     println(io, join((ev, g, k,

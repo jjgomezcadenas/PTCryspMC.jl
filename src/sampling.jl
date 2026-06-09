@@ -52,3 +52,32 @@ function rotate_to_global(local_vec, ref_dir)::Vector{Float64}
     e2 = Float64[-rd[2], rd[1], 0.0] ./ rp
     local_vec[1] .* e1 .+ local_vec[2] .* e2 .+ local_vec[3] .* rd
 end
+
+"""
+    sample_interaction(E, dir, ΣC, ΣPh, ΣP, rng) -> (process, e_dep, new_dir, new_E)
+
+The physics at a single interaction point, record-type agnostic. Given the photon
+energy `E` [MeV], its direction, and the already-computed macroscopic cross sections
+(so `sigma_macro` is called once per step in the caller's loop), pick the process and
+return what is deposited and the photon's new state:
+
+- `:compton`  — deposit the electron recoil `E − E'`, photon continues as `(new_dir, E')`;
+- `:photoelectric` / `:pair` — full absorption, `new_E = 0` (`new_dir` returned unchanged).
+
+Shared by the single-volume `propagate_photon` and the multi-volume `navigate_photon`;
+the below-cut / stop bookkeeping is a loop concern and stays in each caller.
+"""
+function sample_interaction(E::Float64, dir, ΣC::Float64, ΣPh::Float64, ΣP::Float64,
+                            rng::AbstractRNG)
+    Σ = ΣC + ΣPh + ΣP
+    proc = sample_process(ΣC / Σ, ΣPh / Σ, ΣP / Σ, rng)
+    if proc === :compton
+        Eprime, cosθ = sample_compton(E, rng)
+        ϕ = 2π * rand(rng)
+        sinθ = sqrt(max(0.0, 1.0 - cosθ^2))
+        ndir = rotate_to_global(Float64[sinθ*cos(ϕ), sinθ*sin(ϕ), cosθ], dir)
+        return (:compton, E - Eprime, ndir, Eprime)
+    else
+        return (proc, E, dir, 0.0)        # photoelectric / pair: full absorption
+    end
+end

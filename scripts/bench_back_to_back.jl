@@ -43,7 +43,7 @@ function run!(sc::Scanner, n::Int, cut_MeV::Float64, rng)
             isfinite(de) || continue
             acc += 1
             entry = (de * dir[1], de * dir[2], de * dir[3])
-            recs = propagate_photon(E0, entry, dir, sc.volume, rng; egamma_cut=cut_MeV)
+            recs = propagate_photon(E0, entry, dir, sc.volume, rng; egamma_cut=cut_MeV).recs
             for r in recs
                 iϕ, iz = block_index(sc, (r.x, r.y, r.z))
                 acc += (iϕ + iz) & 0   # touch the indices without changing the count

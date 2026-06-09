@@ -187,21 +187,32 @@ photoelectric and pair cross sections at an energy. Tables (\SI{10}{keV}--\SI{10
 in place for water (the phantom) and the CsI and BGO crystals; tissue and LYSO can be added
 the same way.
 \item \textbf{Transport} (\texttt{sampling.jl}, \texttt{transport.jl}): the Compton and
-photoelectric samplers and the photon step loop (\texttt{propagate\_photon}). Only the
-photon path is followed, with local energy deposition; electrons are not transported.
+photoelectric samplers, the interaction kernel (\texttt{sample\_interaction}) and the
+single-volume step loop (\texttt{propagate\_photon}). Only the photon path is followed,
+with local energy deposition; electrons are not transported.
+\item \textbf{Navigation} (\texttt{navigator.jl}): \texttt{navigate\_photon} carries a
+photon \emph{across} volumes --- phantom (water) $\to$ air $\to$ ring --- switching the
+material at each boundary. It reuses \texttt{propagate\_photon} for each absorbing volume
+and skips straight through the non-interacting air mother, so the interaction physics and
+the step loop are each written once (\texttt{docs/navigation.tex}~\S4). Its output stack
+tags every interaction with its volume and, in the ring, its readout block.
 \end{itemize}
 
 \paragraph{Built and checked so far.} The geometry (air world, phantom, the
-\texttt{CylShell} ring and its $(\varphi,z)$ grid), the cross sections and the transport are
-in place and tested. Three studies exercise them: \SI{511}{keV} photons through the water
-phantom reproduce Beer--Lambert attenuation; photons fired into a single crystal (a
-\texttt{Box} of CsI or BGO) give its containment, photoelectric/Compton split and
-interaction-depth distributions; and a point source firing back-to-back \SI{511}{keV} pairs
-isotropically into the ring gives the geometric acceptance ($\sim$\SI{79.5}{\percent}, the
-ring's axial subtense) and the per-crystal containment --- the clean-coincidence fraction
-(both photons fully absorbed in one crystal) is $\sim$0.29 for CsI and $\sim$0.77 for the
-denser BGO. What remains: the multi-volume navigator that carries a phantom-born photon
-through to the ring, then hit formation, selection and the randoms pass.
+\texttt{CylShell} ring and its $(\varphi,z)$ grid), the cross sections, the transport and
+the multi-volume navigation are in place and tested. Four studies exercise them:
+\SI{511}{keV} photons through the water phantom reproduce Beer--Lambert attenuation;
+photons fired into a single crystal (a \texttt{Box} of CsI or BGO) give its containment,
+photoelectric/Compton split and interaction-depth distributions; a point source firing
+back-to-back \SI{511}{keV} pairs isotropically into the ring (interior treated as air)
+gives the geometric acceptance ($\sim$\SI{79.5}{\percent}, the ring's axial subtense) and
+the per-crystal containment --- the clean-coincidence fraction (both photons fully absorbed
+in one crystal) $\sim$0.29 for CsI, $\sim$0.77 for the denser BGO; and navigating the same
+pairs through the \emph{water phantom} makes the patient-scatter background appear
+($\sim$\SI{58}{\percent} of photons Compton-scatter in \SI{8}{cm} of water, matching
+Beer--Lambert) and drops the clean-coincidence fraction to $\sim$0.04 (CsI) --- both
+photons must now cross the phantom unscattered. What remains: the same-annihilation
+coincidence output (true/scatter), then hit formation, selection and the randoms pass.
 
 What must be written on top:
 \begin{itemize}[nosep]

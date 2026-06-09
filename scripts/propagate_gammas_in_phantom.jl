@@ -45,7 +45,7 @@ function main()
     open(a["out"], "w") do io
         println(io, "event_number,step,x_mm,y_mm,z_mm,e_in_keV,e_dep_keV,process")
         for ev in 1:a["nevents"]
-            recs = propagate_photon(E0, start, dir, pv, rng)
+            recs = propagate_photon(E0, start, dir, pv, rng).recs
             for (k, r) in enumerate(recs)
                 println(io, join((ev, k,
                     round(r.x * 10, digits=4), round(r.y * 10, digits=4), round(r.z * 10, digits=4),

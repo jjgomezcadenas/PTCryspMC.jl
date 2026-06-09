@@ -181,4 +181,78 @@ non-interacting layers, at which point the $\varphi$- and $z$-plane crossing dis
 (the nearest $\varphi=k\,\Delta\varphi$ and $z=-H+k\,\Delta z$ planes ahead) are added
 to the boundary set.
 
+\section{Multi-volume navigation}
+\label{sec:nav}
+
+\S\ref{sec:cyl}--\ref{sec:shell} give the boundary distance for a photon inside
+\emph{one} solid. A photon history crosses several: it is born in the water phantom,
+may scatter there, leaves into the air gap, and reaches the crystal ring. The
+\emph{navigator} carries it across these volumes, switching the material at each
+boundary, while reusing the single-volume transport unchanged.
+
+\paragraph{World model: one mother, leaf absorbers.}
+The volumes are placed in a non-interacting \emph{mother} --- a cylinder of air,
+$\rho\le\SI{60}{cm}$ --- that encloses two radially disjoint \emph{daughters}: the
+phantom ($\rho\le\SI{8}{cm}$) and the ring ($\SI{38.7}\le\rho\le\SI{42.4}{cm}$). The
+daughters are \emph{leaves}: nothing is nested inside either, so a photon inside a leaf
+sees only that leaf's own boundary (\S\ref{sec:cyl}--\ref{sec:shell}). The mother is the
+only volume that contains others, and it has zero cross section --- a photon never
+interacts in air, only traverses it.
+
+\paragraph{Locating a point.}
+The material at a point $\mathbf{p}$ is that of the innermost volume containing it ---
+daughters first, mother last:
+\begin{equation}
+  \texttt{locate}(\mathbf{p}) =
+  \begin{cases}
+    \text{phantom} & \mathbf{p}\in\text{phantom},\\
+    \text{ring}    & \mathbf{p}\in\text{ring},\\
+    \text{world (air)} & \mathbf{p}\in\text{world},\\
+    \varnothing    & \text{otherwise (escaped)}.
+  \end{cases}
+\end{equation}
+
+\paragraph{Distance to the next material change.}
+For the air traverse we need the nearest distance at which membership changes --- leave
+the current volume, or enter another:
+\begin{equation}
+  \texttt{next\_boundary}(\text{current},\mathbf{p},\dvec) =
+  \min\Bigl(\,\texttt{exit}(\text{current}),\ \min_{v\neq\text{current}}
+  \texttt{entry}(v)\,\Bigr).
+\end{equation}
+This is well defined because $\texttt{entry}(v)=\infty$ for a $v$ that already contains
+$\mathbf{p}$ (\S\ref{sec:cyl}), so the enclosing mother never contributes a spurious
+candidate.
+
+\paragraph{The walk.}
+The history advances volume by volume. In a \emph{leaf} the photon is transported by the
+single-volume routine, which already stops at that leaf's surface and returns the exit
+state $(\mathbf{p},\dvec,E)$ and whether the photon left alive; the navigator carries
+that state into the next volume. In the \emph{mother} (air, $\Sigma=0$) there is no
+interaction to sample, so the step is a straight skip to \texttt{next\_boundary}:
+\begin{equation}
+  \text{leaf: transport to its surface} \quad\longrightarrow\quad
+  \text{air: skip to next\_boundary} \quad\longrightarrow\quad
+  \text{leaf: transport \dots}
+\end{equation}
+until the photon is absorbed in a leaf or the skip carries it out of the world. Treating
+air as a skip --- rather than transporting it with the mother's own boundary --- is what
+keeps the photon from sailing through the embedded ring to the world edge; it relies on
+the mother being non-interacting and the daughters being leaves.
+
+\paragraph{Backscatter across the bore.}
+A photon that Compton-scatters in the crystal back toward the patient exits the ring's
+\emph{inner} wall --- a leaf exit into the bore (\S\ref{sec:shell}). The bore is air, so
+the next skip evaluates \texttt{next\_boundary} from inside the bore, whose
+$\texttt{entry}(\text{ring})$ is the \emph{far} wall: the photon re-enters the opposite
+crystal and is transported there. The diametral re-entry is produced by the same two
+rules, with no special case.
+
+\paragraph{Boundary nudge.}
+A photon handed from one volume to the next sits exactly on their shared surface, where
+the inclusive ($\le$) membership test is true for both. To re-locate unambiguously the
+navigator evaluates \texttt{locate} a nudge $\varepsilon_{\mathrm{nav}}\sim\SI{1}{nm}$
+ahead, $\mathbf{p}+\varepsilon_{\mathrm{nav}}\dvec$; the per-solid $t>\texttt{SURFACE\_EPS}$
+test (\S\ref{sec:setup}) already discards the surface just crossed.
+
 \end{document}

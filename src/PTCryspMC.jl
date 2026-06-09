@@ -10,8 +10,9 @@ using JSON
 include("nist_data.jl")    # XCOM loader + interpolation
 include("materials.jl")    # Material + macroscopic cross sections
 include("geometry.jl")     # Cylinder + ray distance + phantom loader
-include("sampling.jl")     # distance / process / Compton samplers
-include("transport.jl")    # photon-only transport through a cylinder
+include("sampling.jl")     # distance / process / Compton samplers + interaction kernel
+include("transport.jl")    # photon-only transport through one volume
+include("navigator.jl")    # multi-volume navigation across the geometry
 
 export XCOMData, load_xcom,
        Material, load_material, load_materials, sigma_macro, mfp,
@@ -20,6 +21,8 @@ export XCOMData, load_xcom,
        solid, material, name, volume, mass,
        load_solid, load_geometry,
        is_inside, distance_to_exit, distance_to_entry,
-       Interaction, propagate_photon
+       sample_interaction,
+       Interaction, Transported, propagate_photon,
+       NavStep, locate, next_boundary, navigate_photon
 
 end # module PTCryspMC
