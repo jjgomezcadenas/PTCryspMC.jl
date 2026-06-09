@@ -7,8 +7,16 @@
 #
 # This is the multi-volume counterpart of shoot_back_to_back_511_keV_gammas.jl (which
 # treats the interior as air and flies straight to the ring). The only added physics is
-# the water phantom in between: the clean-coincidence fraction should drop below the
-# air-only value, and a phantom-scatter background should appear.
+# the water phantom in between, so a phantom-scatter background appears.
+#
+# IMPORTANT — what "full-energy" means here. These are TRUTH energies (no detector
+# resolution yet). A photon is called full-energy if it deposits ≥505 keV in a single
+# crystal. At truth level a fully-absorbed photon deposits exactly 511 keV, so this just
+# picks out the full-energy peak — BUT a ≥505 keV cut also rejects every photon that
+# Compton-scattered in the phantom (it arrives with <511 keV). So the "both full-energy"
+# fraction below is the UNSCATTERED, fully-contained subset — NOT the coincidence
+# efficiency. The real selection (Step 4) smears by FWHM(E) and applies a ±2·FWHM energy
+# window, which also accepts scattered photons as *scatter* coincidences.
 #
 # Run from the repo root:
 #   julia --project=. scripts/navigate_back_to_back.jl --nevents 100000 --material CsI
@@ -81,9 +89,12 @@ function photon_stats(steps)
             push!(blocks, (st.iz, st.iphi))
         end
     end
-    reached   = !isempty(blocks)
-    contained = Escan >= 0.505 && length(blocks) == 1     # full 511 keV in one crystal
-    (reached, contained, phscat, Escan, length(blocks))
+    reached  = !isempty(blocks)
+    # TRUTH full-energy: ≥505 keV in one crystal. At truth level a fully-absorbed photon
+    # deposits exactly 511 keV, so this is the full-energy peak; it also implies the photon
+    # was ~unscattered in the phantom (a phantom Compton would leave it below 505).
+    full_E   = Escan >= 0.505 && length(blocks) == 1
+    (reached, full_E, phscat, Escan, length(blocks))
 end
 
 function main()
@@ -108,26 +119,29 @@ function main()
     uniform = a["source"] == "phantom"
     rng     = MersenneTwister(a["seed"])
 
-    println("source: back-to-back $(a["energy"]) keV from the $(a["source"]) " *
-            "(phantom $(name(geom.phantom))); ring $(name(sc.volume)) ($(a["material"])), " *
-            "nblocks=$(nblocks(sc)), cutoff $(a["cutoff"]) keV")
+    srcdesc = uniform ? "uniform in the water phantom" : "point at the phantom centre"
+    println("source: back-to-back $(a["energy"]) keV, $srcdesc; " *
+            "ring $(name(sc.volume)) ($(a["material"])), nblocks=$(nblocks(sc)), " *
+            "cutoff $(a["cutoff"]) keV")
 
-    n_reach = 0; n_cont = 0; n_phscat = 0
-    n_clean = 0; n_both = 0                # clean coincidence = both photons contained
+    n_reach = 0; n_fullE = 0; n_phscat = 0
+    n_both_fullE = 0; n_both_unscat = 0
+    nevents = a["nevents"]
     nrows = 0
     mkpath(dirname(out))
     open(out, "w") do io
         println(io, "event_number,gamma,step,x_mm,y_mm,z_mm,e_in_keV,e_dep_keV,process,volume,iz,iphi,phantom_scatter")
-        for ev in 1:a["nevents"]
+        for ev in 1:nevents
             pos, d1, d2 = emit_pair(rng, geom.phantom, uniform)
-            cont = (false, false)
+            fe = (false, false); us = (false, false)
             for (g, dir) in ((1, d1), (2, d2))
                 steps = navigate_photon(geom, E0, pos, dir, rng; egamma_cut=cut_MeV)
-                reached, contained, phscat, _, _ = photon_stats(steps)
+                reached, full_E, phscat, _, _ = photon_stats(steps)
                 n_reach  += reached
-                n_cont   += contained
+                n_fullE  += full_E
                 n_phscat += phscat
-                cont = g == 1 ? (contained, cont[2]) : (cont[1], contained)
+                fe = g == 1 ? (full_E, fe[2])      : (fe[1], full_E)
+                us = g == 1 ? (!phscat, us[2])     : (us[1], !phscat)
                 for (k, st) in enumerate(steps)
                     r = st.hit
                     println(io, join((ev, g, k,
@@ -137,19 +151,22 @@ function main()
                     nrows += 1
                 end
             end
-            n_both  += 1                          # both photons always emitted (back-to-back)
-            n_clean += (cont[1] && cont[2])
+            n_both_unscat += (us[1] && us[2])      # both photons crossed the phantom unscattered
+            n_both_fullE  += (fe[1] && fe[2])      # both fully contained at 511 keV (truth)
         end
     end
 
-    ngamma = 2 * a["nevents"]
-    println("wrote $(a["nevents"]) events ($nrows interaction rows) -> $out")
+    ngamma = 2 * nevents
+    println("wrote $nevents events ($nrows interaction rows) -> $out")
     println("per-photon:  reached ring $(round(100*n_reach/ngamma, digits=1))%   " *
-            "contained $(round(100*n_cont/ngamma, digits=1))%   " *
-            "phantom-scattered $(round(100*n_phscat/ngamma, digits=1))%")
-    println("clean coincidences (both photons contained in one crystal): " *
-            "$(round(100*n_clean/n_both, digits=1))%  ($n_clean / $n_both)")
-    println("(compare the air-only unit test: CsI ~29%, BGO ~77% — the phantom lowers it)")
+            "unscattered in phantom $(round(100*(1 - n_phscat/ngamma), digits=1))%   " *
+            "full-energy (≥505 keV, 1 crystal) $(round(100*n_fullE/ngamma, digits=1))%")
+    println("per-event:   both photons unscattered $(round(100*n_both_unscat/nevents, digits=1))%   " *
+            "both full-energy (truth) $(round(100*n_both_fullE/nevents, digits=1))%  " *
+            "($n_both_fullE / $nevents)")
+    println("NOTE: 'full-energy' is a TRUTH ≥505 keV cut — it is the UNSCATTERED, fully-")
+    println("      contained subset, NOT the coincidence efficiency. The real ±2·FWHM energy")
+    println("      window (Step 4) also keeps scattered photons as *scatter* coincidences.")
 end
 
 main()

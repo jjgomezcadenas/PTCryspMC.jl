@@ -209,19 +209,30 @@ single-volume transporter, not duplicating it — three functions, one physics k
 - The navigation algorithm (world model, `locate`, `next_boundary`, the leaf/air walk,
   bore re-entry) is documented in `docs/navigation.tex` §4.
 
-**Validated** (30k back-to-back from the phantom centre, CRYSP1M):
+**Validated** (`scripts/phantom_effect_on_coincidences.jl`, 20k back-to-back from the
+phantom centre, CRYSP1M, CsI — same emission directions air vs phantom):
 
-| | air-only unit test | navigator (through the phantom) |
+| per photon | air-only | through the phantom |
 |---|---|---|
-| phantom-scattered / photon | — | **57.7 %** (Beer–Lambert: 54 % for 8 cm water) |
-| reached the ring / photon | 79.5 % | 69.4 % |
-| clean coincidence, CsI | 29 % | **4.4 %** |
-| clean coincidence, BGO | 77 % | 11.2 % |
+| unscattered in the phantom | 100 % | **42 %** (Beer–Lambert: exp(−8/10.44) = 46 %) |
+| deposited in a crystal | 65 % | 70 % |
+| full-energy (≥505 keV, 1 crystal) | 43 % | 18 % |
 
-The phantom-scatter background appears and the clean-coincidence fraction drops sharply
-(both photons must now cross the water without scattering). The reduction test confirms
-`navigate_photon` is bit-for-bit `propagate_photon` when a single absorbing material is
-crossed (the air leg consumes no randomness).
+| per event | air-only | through the phantom |
+|---|---|---|
+| both photons unscattered | 100 % | **18 %** |
+| both full-energy (truth) | 24 % | **4 %** |
+
+**"Full-energy" here is a TRUTH ≥505 keV cut** — at truth level a fully-absorbed photon
+deposits exactly 511 keV, so it isolates the full-energy peak, but the cut also rejects
+every phantom-scattered photon. So the 4 % is the *unscattered, fully-contained* subset,
+**not** the coincidence efficiency: the real selection (Step 4) smears by FWHM(E) and
+applies a ±2·FWHM energy window that keeps scattered photons as *scatter* coincidences.
+The drop follows `unscat²`: both-full-energy(both-reached) ≈ 0.42² × the air value (8 %
+predicted, measured 8 % CsI), because both photons must cross the water unscattered.
+
+The reduction test confirms `navigate_photon` is bit-for-bit `propagate_photon` when a
+single absorbing material is crossed (the air leg consumes no randomness).
 
 **Test status:** `Pkg.test` — **1701 assertions** pass (foundations, phantom, single
 crystal, the `CylShell` shell intersections, the block/wheel grid, scanner loading, the

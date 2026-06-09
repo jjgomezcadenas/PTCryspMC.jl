@@ -206,13 +206,18 @@ photons fired into a single crystal (a \texttt{Box} of CsI or BGO) give its cont
 photoelectric/Compton split and interaction-depth distributions; a point source firing
 back-to-back \SI{511}{keV} pairs isotropically into the ring (interior treated as air)
 gives the geometric acceptance ($\sim$\SI{79.5}{\percent}, the ring's axial subtense) and
-the per-crystal containment --- the clean-coincidence fraction (both photons fully absorbed
-in one crystal) $\sim$0.29 for CsI, $\sim$0.77 for the denser BGO; and navigating the same
-pairs through the \emph{water phantom} makes the patient-scatter background appear
-($\sim$\SI{58}{\percent} of photons Compton-scatter in \SI{8}{cm} of water, matching
-Beer--Lambert) and drops the clean-coincidence fraction to $\sim$0.04 (CsI) --- both
-photons must now cross the phantom unscattered. What remains: the same-annihilation
-coincidence output (true/scatter), then hit formation, selection and the randoms pass.
+the per-crystal containment; and navigating the same pairs through the \emph{water
+phantom} makes the patient-scatter background appear ($\sim$\SI{58}{\percent} of photons
+Compton-scatter in \SI{8}{cm} of water, matching Beer--Lambert). Note that the
+``full-energy'' fractions quoted by these studies use a \emph{truth} \SI{505}{keV} cut
+(at truth a fully-absorbed photon deposits exactly \SI{511}{keV}): this isolates the
+unscattered, fully-contained subset --- the both-photon full-energy fraction falls from
+$\sim$0.24 (air) to $\sim$0.04 (through the phantom) for CsI, since both photons must
+cross the water unscattered --- and is \emph{not} the coincidence efficiency. The real
+selection smears by $\mathrm{FWHM}(E)$ and applies a $\pm2\,\mathrm{FWHM}$ energy window
+(Sec.~\ref{sec:detsim}), keeping scattered photons as \emph{scatter} coincidences. What
+remains: the same-annihilation coincidence output (true/scatter), then hit formation,
+selection and the randoms pass.
 
 What must be written on top:
 \begin{itemize}[nosep]
