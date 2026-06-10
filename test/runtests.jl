@@ -396,26 +396,32 @@ const GEOM_JSON = joinpath(@__DIR__, "..", "geometry", "geometry.json")
         geom = load_geometry(GEOM_JSON, mats)
         rng  = MersenneTwister(11)
 
+        # Monte Carlo property check over 300 photons born in the phantom: accumulate
+        # the invariants and assert each ONCE, so the test count reflects the properties
+        # checked, not the number of samples.
         saw_phantom = false
+        conserved = true; phantom_inside = true; scanner_inside = true
         for _ in 1:300
             c = 2rand(rng) - 1; φ = 2π*rand(rng); s = sqrt(1 - c^2)
             dir = (s*cos(φ), s*sin(φ), c)
             steps = navigate_photon(geom, 0.511, (0.0, 0.0, 0.0), dir, rng)  # born in phantom
 
-            # energy conservation across all volumes.
-            @test sum(st.hit.e_dep for st in steps) <= 0.511 + 1e-9
-
+            conserved &= sum(st.hit.e_dep for st in steps) <= 0.511 + 1e-9   # across all volumes
             for st in steps
                 if st.volume == :phantom && st.hit.process != :escape
                     saw_phantom = true
                     # phantom interactions lie inside the water cylinder (r≤8, |z|≤8).
-                    @test hypot(st.hit.x, st.hit.y) <= 8.0 + 1e-6
-                    @test abs(st.hit.z) <= 8.0 + 1e-6
+                    phantom_inside &= hypot(st.hit.x, st.hit.y) <= 8.0 + 1e-6 &&
+                                      abs(st.hit.z) <= 8.0 + 1e-6
                 elseif st.volume == :scanner
-                    @test 38.7 - 1e-6 <= hypot(st.hit.x, st.hit.y) <= 42.4 + 1e-6
+                    # scanner interactions lie inside the ring wall (r in [38.7, 42.4]).
+                    scanner_inside &= 38.7 - 1e-6 <= hypot(st.hit.x, st.hit.y) <= 42.4 + 1e-6
                 end
             end
         end
+        @test conserved          # energy conserved across volumes, every event
+        @test phantom_inside     # every phantom interaction inside the water cylinder
+        @test scanner_inside     # every scanner interaction inside the ring wall
         @test saw_phantom        # some photons Compton-scatter in the water phantom
 
         # A straight axial line misses the ring geometrically (r = 0 never reaches the
