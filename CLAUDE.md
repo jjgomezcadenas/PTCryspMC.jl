@@ -107,10 +107,18 @@ formation + selection, the randoms pass.
 
 ## Tech stack
 
-- **Julia** — the photon transport and geometry.
-- **Python** — read a scenario, hit formation, selection, randoms, write the coincidence
-  list.
+- **Julia** — the photon transport and geometry, and the coincidence selection. The
+  selection runs as a *streaming* pass over the event-ordered stack
+  (`scripts/build_coincidences.jl`): O(1) memory, no whole-file load, so it scales to the
+  large stacks a full run produces (this is why it is Julia, not Python — see the note
+  below).
+- **Python** — read a scenario, the control plots, and lighter downstream analysis.
 - **CSV** in and out.
+
+Originally the selection/coincidence step was slated for Python; it was moved to a Julia
+streaming reader for the memory/throughput on large stacks. Hit formation, the energy
+window and the randoms pass will follow the same Julia-streaming approach; Python stays
+for scenario reading and plotting.
 
 ## Reference material
 
