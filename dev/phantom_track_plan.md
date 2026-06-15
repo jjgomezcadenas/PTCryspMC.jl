@@ -18,9 +18,16 @@ midpoint "image" to compare against the known phantom. Phantoms in order:
 
 ## Locked decisions (from review)
 
-- **Source = attenuator** (no decoupling): the phantom solid is filled with uniform
-  activity *and* attenuates. The `Source` samples uniformly inside `geom.phantom`; the
-  same water volume both emits and attenuates.
+- **Source = attenuator** (no decoupling): the phantom is a `solid + material` filled with
+  uniform activity. The same volume both emits and attenuates; the `Source` samples
+  uniformly inside `geom.phantom`'s **solid** (shape), independent of material.
+- **Material is a free parameter** of the phantom. Filling the solid with **Vacuum/Air
+  (Σ=0)** gives the **non-attenuated reference** — pairs emitted, nothing attenuated or
+  scattered (LORs straight, every coincidence tagged `true`), recovering the pure source
+  geometry modulo acollinearity + detector resolution. **Water** gives realistic
+  attenuation + scatter. Comparing the two isolates the phantom-scatter contribution.
+  (The navigator already handles a Σ=0 leaf: `propagate_photon` returns a single straight
+  `:escape` segment, no interaction — no code change.)
 - **Acollinearity** is on (~0.5° FWHM): the two photons are not exactly 180° apart.
 - **Plotter** and **smearing** (Step 4) are both in scope.
 - **Reconstruction is out of scope** here (deferred downstream, CLAUDE.md: separate,
@@ -51,16 +58,21 @@ midpoint "image" to compare against the known phantom. Phantoms in order:
 
 ## Phase B — phantom geometry configs
 
-- Add `geometry/geometry_sphere.json` (phantom = water **sphere**); keep the existing
-  `geometry.json` (water **cylinder**). Because source = attenuator, choosing a phantom is
-  just choosing the geometry file; `--geometry` already selects it. Sphere radius: **TBD**
-  (open choice 1 — e.g. 5 cm, or match the cylinder's 8 cm).
+- Add `geometry/geometry_sphere.json` (phantom = **sphere**); keep the existing
+  `geometry.json` (**cylinder**). Choosing a phantom shape = choosing the geometry file
+  (`--geometry`). Sphere radius: **TBD** (open choice 1 — e.g. 5 cm, or match the
+  cylinder's 8 cm).
+- The phantom **material** is a separate axis: a **`--phantom-material`** override on the
+  driver (default = the JSON value, like the existing scanner `--material`) selects
+  Vacuum/Air (non-attenuated reference) vs Water (realistic) without new geometry files.
 
 ## Phase C — driver
 
 - Generalize `scripts/navigate_back_to_back.jl` to emit via
   `UniformVolumeSource(geom.phantom)` + acollinearity, so `--source phantom` works for a
   cylinder *or* a sphere phantom, writing the same tagged stack.
+- Add the **`--phantom-material`** override (default = JSON) so the same run can be done
+  with a Vacuum/Air phantom (non-attenuated reference) or a Water phantom (realistic).
 - Optionally add the **true emission point** `(x0, y0, z0)` to the stack / coincidence CSV
   — ignored downstream, but lets the plotter overlay ground truth (open choice 3,
   recommended yes).
