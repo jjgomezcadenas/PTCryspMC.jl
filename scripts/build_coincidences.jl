@@ -1,6 +1,6 @@
 #!/usr/bin/env julia
 # Build a TRUTH-level list-mode coincidence file from a navigated back-to-back stack
-# (scripts/navigate_back_to_back.jl output). One record per accepted gamma pair.
+# (scripts/simulate_phantom.jl output). One record per accepted gamma pair.
 #
 # Selection (truth, no detector resolution yet):
 #   • both gammas of the annihilation interact in the detector (≥1 scanner deposit each), and
@@ -21,14 +21,14 @@
 # no whole-file load (the point of doing this in Julia for large stacks).
 #
 # Run from the repo root:
-#   julia --project=. scripts/build_coincidences.jl --stack output/nav_b2b_bgo_stack.csv
+#   julia --project=. scripts/build_coincidences.jl --stack output/phantom_bgo_stack.csv
 
 using ArgParse
 
 function parse_cli()
     s = ArgParseSettings(description="Build a truth list-mode coincidence file from a navigated back-to-back stack.")
     @add_arg_table! s begin
-        "--stack"; help = "input stack CSV (navigate_back_to_back.jl output)"; required = true
+        "--stack"; help = "input stack CSV (simulate_phantom.jl output)"; required = true
         "--out";   help = "output coincidence CSV (default output/coincidences_<stack>.csv)"; default = ""
     end
     parse_args(s)

@@ -4,7 +4,7 @@
 # comparing, per crystal material:
 #
 #   air-only  — each photon flies straight through air to the ring (the unit-test path,
-#               shoot_back_to_back_511_keV_gammas.jl): no phantom, full 511 keV arrives.
+#               shoot_into_ring.jl): no phantom, full 511 keV arrives.
 #   phantom   — each photon is NAVIGATED from the phantom centre through water → air →
 #               ring (navigate_photon): ~8 cm of water in the way.
 #

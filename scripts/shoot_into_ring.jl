@@ -10,7 +10,7 @@
 # every photon reaches the ring or escapes with no scattering on the way.
 #
 # Run from the repo root:
-#   julia --project=. scripts/shoot_back_to_back_511_keV_gammas.jl --nevents 100000
+#   julia --project=. scripts/shoot_into_ring.jl --nevents 100000
 
 using PTCryspMC
 using ArgParse

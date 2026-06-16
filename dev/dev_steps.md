@@ -172,7 +172,7 @@ A point source emitting back-to-back pairs isotropically into the ring — the f
 source→ring path. The interior is air (no phantom scatter), so the navigation is
 trivial: straight through air to the crystal (`distance_to_entry`), then transport.
 
-- **`scripts/shoot_back_to_back_511_keV_gammas.jl`** — script-local `emit_pair`
+- **`scripts/shoot_into_ring.jl`** — script-local `emit_pair`
   (no phantom/scenario), settable low-energy cutoff (default 10 keV = XCOM min).
   One CSV records both photon stacks tagged with the crystal `(iz, iphi)`:
   `event_number, gamma, step, x,y,z, e_in, e_dep, process, iz, iphi`.
@@ -203,7 +203,7 @@ single-volume transporter, not duplicating it — three functions, one physics k
   non-interacting *air mother* skip straight to `next_boundary`. Output is a tagged stack
   (`NavStep` = `Interaction` + `volume`/`iz`/`iphi`). A backscattered photon crossing the
   bore re-enters the opposite crystal with no special case.
-- **`scripts/navigate_back_to_back.jl`** — back-to-back pairs from the phantom, both
+- **`scripts/simulate_phantom.jl`** — back-to-back pairs from the phantom, both
   photons navigated through water → air → ring; CSV tagged with volume, block and a
   per-photon phantom-scatter flag (`--source point|phantom`, `--material`).
 - The navigation algorithm (world model, `locate`, `next_boundary`, the leaf/air walk,

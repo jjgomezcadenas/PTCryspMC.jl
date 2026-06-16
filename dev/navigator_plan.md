@@ -212,7 +212,7 @@ Annihilations now originate **in the phantom**, not a bare point. For Step 3:
 - **3a (do first):** the navigator library (`sample_interaction`, the `Transported`
   rework of `propagate_photon`, `locate`, `next_boundary`, `navigate_photon`, `NavStep`,
   `tag`), the 7-caller `.recs` rework, reworked tests, and a validation script
-  `scripts/navigate_back_to_back.jl` (emit back-to-back from the origin / phantom,
+  `scripts/simulate_phantom.jl` (emit back-to-back from the origin / phantom,
   navigate both photons, write the stack tagged with volume + block + a phantom-scatter
   flag).
 - **3b (next):** phantom-distributed source + same-annihilation coincidence output — a
@@ -228,12 +228,12 @@ Annihilations now originate **in the phantom**, not a bare point. For Step 3:
   `tag`, `NAV_EPS`, `MAX_SEGMENTS`.
 - `src/PTCryspMC.jl` — `include("navigator.jl")` + exports (`navigate_photon`,
   `NavStep`, `locate`, `next_boundary`, `Transported`).
-- 4 scripts (`shoot_back_to_back_511_keV_gammas.jl`, `shoot_gammas_to_crystal.jl`,
+- 4 scripts (`shoot_into_ring.jl`, `shoot_gammas_to_crystal.jl`,
   `propagate_gammas_in_phantom.jl`, `bench_back_to_back.jl`) — `propagate_photon(...)`
   → `propagate_photon(...).recs`.
 - `test/runtests.jl` — the two air tests (287, 295) → `.recs`; **replace** the
   source→ring test (342, now a subset of `navigate_photon`) with a navigator testset.
-- `scripts/navigate_back_to_back.jl` (new) — validation/driver.
+- `scripts/simulate_phantom.jl` (new) — validation/driver.
 - Optional later: a plotter; update `dev_steps.md` + `pet_simulation.tex`.
 
 ## Validation / tests (reworked, no compat shims)

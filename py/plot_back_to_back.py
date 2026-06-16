@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Summary plots for the back-to-back stack written by
-scripts/shoot_back_to_back_511_keV_gammas.jl.
+scripts/shoot_into_ring.jl.
 
 Reads a stack CSV (one row per interaction:
 event_number, gamma, step, x_mm, y_mm, z_mm, e_in_keV, e_dep_keV, process, iz, iphi)

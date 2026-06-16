@@ -1,6 +1,6 @@
 #!/usr/bin/env julia
 # Per-event timing of the back-to-back transport (the work in
-# shoot_back_to_back_511_keV_gammas.jl, minus the CSV writing): emit an isotropic
+# shoot_into_ring.jl, minus the CSV writing): emit an isotropic
 # 511 keV pair from the origin, navigate each photon straight to the ring, transport
 # it through the crystal, and tag every interaction with its block. Reports the
 # compute cost per annihilation, after a warm-up, for each material.

@@ -5,7 +5,7 @@
 # photons, tagged with the volume (:phantom / :air / :scanner), the crystal (iz, iphi)
 # of each scanner deposit, and a per-photon phantom-scatter flag.
 #
-# This is the multi-volume counterpart of shoot_back_to_back_511_keV_gammas.jl (which
+# This is the multi-volume counterpart of shoot_into_ring.jl (which
 # treats the interior as air and flies straight to the ring). The only added physics is
 # the water phantom in between, so a phantom-scatter background appears.
 #
@@ -19,8 +19,8 @@
 # window, which also accepts scattered photons as *scatter* coincidences.
 #
 # Run from the repo root:
-#   julia --project=. scripts/navigate_back_to_back.jl --nevents 100000 --material CsI
-#   julia --project=. scripts/navigate_back_to_back.jl --source phantom --material BGO
+#   julia --project=. scripts/simulate_phantom.jl --nevents 100000 --material CsI
+#   julia --project=. scripts/simulate_phantom.jl --source phantom --material BGO
 
 using PTCryspMC
 using ArgParse
@@ -31,7 +31,7 @@ function parse_cli()
     @add_arg_table! s begin
         "--data";     help = "data dir";        default = joinpath(@__DIR__, "..", "data")
         "--geometry"; help = "geometry JSON";   default = joinpath(@__DIR__, "..", "geometry", "geometry.json")
-        "--out";      help = "output CSV (default output/nav_b2b_<material>_stack.csv)"; default = ""
+        "--out";      help = "output CSV (default output/phantom_<material>_stack.csv)"; default = ""
         "--material"; help = "crystal material"; default = "CsI"
         "--source";   help = "source: 'point' (origin) or 'phantom' (uniform in the phantom)"; default = "point"
         "--nevents";  help = "n annihilations"; arg_type = Int;     default = 100000
@@ -113,7 +113,7 @@ function main()
     geom = Geometry(geom.world, geom.phantom, sc)
 
     out = isempty(a["out"]) ?
-        joinpath(@__DIR__, "..", "output", "nav_b2b_$(lowercase(a["material"]))_stack.csv") : a["out"]
+        joinpath(@__DIR__, "..", "output", "phantom_$(lowercase(a["material"]))_stack.csv") : a["out"]
     E0      = a["energy"] / 1000.0
     cut_MeV = a["cutoff"] / 1000.0
     uniform = a["source"] == "phantom"

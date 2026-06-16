@@ -73,7 +73,7 @@ record per coincidence = one LOR), with a **diagnostics plotter**. Phantoms now:
 
 ## Phase C — driver
 
-- Generalize `scripts/navigate_back_to_back.jl` to emit via
+- Generalize `scripts/simulate_phantom.jl` to emit via
   `UniformVolumeSource(geom.phantom)` + acollinearity, so `--source phantom` works for a
   cylinder *or* a sphere phantom, writing the same tagged stack.
 - Add the **`--phantom-material`** override (default = JSON) so the same run can be done
@@ -120,7 +120,7 @@ the energy window tightens. The deliverable is the list-mode coincidence file.
 - `src/PTCryspMC.jl` — include + exports.
 - `test/runtests.jl` — sphere, uniform sampling, acollinearity testsets.
 - `geometry/geometry_sphere.json` (new).
-- `scripts/navigate_back_to_back.jl` — emit via the `Source`; optional `(x0,y0,z0)`.
+- `scripts/simulate_phantom.jl` — emit via the `Source`; optional `(x0,y0,z0)`.
 - `scripts/build_coincidences.jl` — smearing + energy window (Step 4 flags).
 - `py/plot_coincidences.py` (new) — the coincidence plotter.
 
