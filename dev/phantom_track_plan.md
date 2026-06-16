@@ -113,6 +113,72 @@ Run the full chain for the cylinder and sphere phantoms (CsI and BGO), both Vacu
 uniformly, the Vacuum case is all-`true`, and the true/scatter split behaves sensibly as
 the energy window tightens. The deliverable is the list-mode coincidence file.
 
+## Phase G — production I/O: singles stack, CSV/HDF5, TOML config
+
+CSV + the full per-interaction stack is ideal for the testing phase and detailed plots
+(good to ~10⁵ events). Production (10⁸ decays) needs a compact stack and a binary format.
+
+### The `--singles` (reduced) stack
+
+The full stack is one row per *interaction* (~3–6 per photon) and is the size bottleneck
+(order 10⁹ rows at 10⁸ decays). The **singles** stack is **one row per *detected photon***
+— the formed hit — which is exactly the reduction `build_coincidences` already computes
+internally (`GammaAcc`). It is the *singles list* the method calls for (randoms + the hit
+truth), minus the per-interaction detail (which only the CNN R&D needs, run at small scale
+on the full stack).
+
+Singles schema (one row per photon that deposited in the ring; a miss writes nothing):
+```
+event_number, gamma, x_mm, y_mm, z_mm, e_keV, iz, iphi, nblocks, phantom_scatter, x0_mm, y0_mm, z0_mm
+```
+`x,y,z` = first scanner interaction (the LOR point); `e_keV` = summed crystal energy
+(truth, unsmeared — smearing stays in `build_coincidences`); `nblocks` = distinct blocks
+touched (1 = contained, >1 = overspill). ~5–10× fewer rows and narrower than the full stack.
+
+`simulate_phantom.jl` writes the singles row directly when `--singles` is set (transport
+is unchanged; only the I/O is reduced — the giant full stack is never materialised).
+`photon_stats` is extended to also return the first scanner interaction `(x,y,z,iz,iphi)`.
+
+### CSV / HDF5 (`--format csv|hdf5`)
+
+Binary HDF5 for production: compact (compression), typed, partial/chunked reads (randoms
+and the CNN pull just the events/columns they need), and self-describing — the run
+parameters live in root **attributes** (the `_meta` companion, in the same file).
+Streaming write = chunked extensible datasets (buffer N rows → append a chunk), so both
+scripts keep O(1) memory. Adds `HDF5.jl` (Julia) + `h5py` (Python).
+
+`build_coincidences` **auto-detects**: input format by extension (`.csv`/`.h5`), input
+*kind* by header columns (full has `step`/`process`/`volume`; singles has `e_keV`/`nblocks`).
+The selection + smearing (`finish_event!`) is **shared** — both paths just fill `GammaAcc`
+(full: accumulate scanner deposits; singles: one row already is the hit). Its own LOR
+output also takes `--format`.
+
+### TOML config (the parameter source of truth)
+
+A single pipeline `run.toml` with sections, read by **both** scripts (each uses its
+relevant sections), replaces the long CLI and **doubles as the run metadata** stamped into
+the HDF5 attributes / output:
+```toml
+[geometry]  file, phantom_material
+[source]    kind (point|phantom), acol_fwhm_deg, energy_keV, nevents
+[transport] crystal_material, cutoff_keV, seed
+[detector]  sigma_xyz_mm, eres, window_fwhm, seed
+[output]    format (csv|hdf5), singles (bool), dir, tag
+```
+Invoked as `julia … simulate_phantom.jl --config run.toml` (a thin `--key value` override
+layer is allowed for quick sweeps; TOML is the source of truth). A `[meta]`/header section
+carries scenario name + seed so every output is traceable.
+
+### Matrix
+| scale | stack | format |
+|---|---|---|
+| dev / plots (≤10⁵) | full | csv |
+| medium / CNN sample | full | hdf5 |
+| production (10⁸) | singles | hdf5 |
+
+Largely independent of E/F: the plotter reads whichever format/kind it is given, so the
+dev chain can stay CSV+full while G is built. Do G when the scale demands it.
+
 ## Files to touch
 
 - `src/geometry.jl` — `Sphere` solid + `load_solid` branch + export.
@@ -120,9 +186,11 @@ the energy window tightens. The deliverable is the list-mode coincidence file.
 - `src/PTCryspMC.jl` — include + exports.
 - `test/runtests.jl` — sphere, uniform sampling, acollinearity testsets.
 - `geometry/geometry_sphere.json` (new).
-- `scripts/simulate_phantom.jl` — emit via the `Source`; optional `(x0,y0,z0)`.
-- `scripts/build_coincidences.jl` — smearing + energy window (Step 4 flags).
-- `py/plot_coincidences.py` (new) — the coincidence plotter.
+- `scripts/simulate_phantom.jl` — emit via the `Source`; `(x0,y0,z0)`; `--singles`, format, TOML.
+- `scripts/build_coincidences.jl` — smearing + window; auto-detect format/kind; TOML.
+- `py/plot_coincidences.py` (new) — the coincidence plotter (reads CSV or HDF5).
+- **Phase G:** `Project.toml` (+ `HDF5.jl`); a shared CSV/HDF5 row-writer + TOML config
+  reader (e.g. `src/io.jl`); a `run.toml` example.
 
 ## Choices — resolved
 
@@ -135,6 +203,8 @@ the energy window tightens. The deliverable is the list-mode coincidence file.
 
 ## Suggested order
 
-Phase A (Source + Sphere) first — it is foundational and testable in isolation. Then B/C
-(geometry + driver), D (smearing + window), E (plotter), F (validate). Jaszczak/Derenzo is
-a later addition to the `Source` (a composite of weighted sub-regions).
+Phase A (Source + Sphere) first — foundational and testable in isolation. Then B/C
+(geometry + driver), D (smearing + window), E (plotter), F (validate). **A–D are done and
+committed.** Phase G (production I/O: `--singles`, CSV/HDF5, TOML) is largely independent
+and can be built when the scale demands it; the dev chain stays CSV+full meanwhile.
+Jaszczak/Derenzo are a later addition to the `Source` (a composite of weighted sub-regions).
