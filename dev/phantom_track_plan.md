@@ -4,17 +4,17 @@ Self-contained plan for the controlled-phantom validation track. Status at time 
 writing: Step 3a (the multi-volume navigator) and a truth-level coincidence builder
 (`scripts/build_coincidences.jl`) are done and committed. This track adds a proper
 emission `Source`, a `Sphere` solid, detector smearing + the energy window, and a
-coincidence plotter, so we can generate LOR lists from known phantoms and eyeball the
-reconstruction-ready output against ground truth.
+coincidence plotter, so we can generate **list-mode coincidence files** from known
+phantoms. No reconstruction here — the deliverable is the LM coincidence file.
 
 ## Goal
 
-A controlled **analytic-phantom → LOR-list** chain: a water volume that is *both* the
-source (uniform activity) *and* the attenuator, emitted as back-to-back pairs **with
-acollinearity**, navigated to the ring, run through **detector smearing + an energy
-window**, and written as a coincidence list — with a **plotter** showing a crude
-midpoint "image" to compare against the known phantom. Phantoms in order:
-**uniform cylinder → uniform sphere → Jaszczak/Derenzo**.
+A controlled **analytic-phantom → list-mode coincidence file** chain: a phantom volume
+(`solid + material`) that is *both* the source (uniform activity) *and* the attenuator,
+emitted as back-to-back pairs **with acollinearity**, navigated to the ring, run through
+**detector smearing + an energy window**, and written as a list-mode coincidence list (one
+record per coincidence = one LOR), with a **diagnostics plotter**. Phantoms now:
+**uniform cylinder + sphere** (Jaszczak/Derenzo later, on request).
 
 ## Locked decisions (from review)
 
@@ -30,10 +30,15 @@ midpoint "image" to compare against the known phantom. Phantoms in order:
   `:escape` segment, no interaction — no code change.)
 - **Acollinearity** is on (~0.5° FWHM): the two photons are not exactly 180° apart.
 - **Plotter** and **smearing** (Step 4) are both in scope.
-- **Reconstruction is out of scope** here (deferred downstream, CLAUDE.md: separate,
-  possibly its own repo). This track delivers validated LOR lists + a midpoint-image
-  sanity check, not a reconstructor. (Open question below: minimal reconstruction here
-  or kept separate.)
+- **True emission point** `(x0, y0, z0)` is carried in the stack and coincidence CSV — used
+  only to **validate the source** (histogram to confirm the phantom is uniformly filled),
+  not to feed any reconstruction.
+- **No reconstruction at all.** The track's deliverable is the **list-mode coincidence
+  file** (one record per coincidence = one LOR), which `build_coincidences.jl` already
+  produces. Inverting LORs into an image (range precision, detector comparison) is the
+  separate, deferred downstream analysis (CLAUDE.md: possibly its own repo).
+- **Phantoms now:** uniform **cylinder** and **sphere** only. Jaszczak *and* Derenzo come
+  later, on request (a composite `Source` of weighted sub-regions).
 
 ## Phase A — `Source` + `Sphere` solid (emission)
 
@@ -60,8 +65,8 @@ midpoint "image" to compare against the known phantom. Phantoms in order:
 
 - Add `geometry/geometry_sphere.json` (phantom = **sphere**); keep the existing
   `geometry.json` (**cylinder**). Choosing a phantom shape = choosing the geometry file
-  (`--geometry`). Sphere radius: **TBD** (open choice 1 — e.g. 5 cm, or match the
-  cylinder's 8 cm).
+  (`--geometry`). Sphere radius defaults to **R = 8 cm** (matches the cylinder radius, for
+  a direct comparison) — just a JSON value, editable anytime.
 - The phantom **material** is a separate axis: a **`--phantom-material`** override on the
   driver (default = the JSON value, like the existing scanner `--material`) selects
   Vacuum/Air (non-attenuated reference) vs Water (realistic) without new geometry files.
@@ -74,8 +79,8 @@ midpoint "image" to compare against the known phantom. Phantoms in order:
 - Add the **`--phantom-material`** override (default = JSON) so the same run can be done
   with a Vacuum/Air phantom (non-attenuated reference) or a Water phantom (realistic).
 - Optionally add the **true emission point** `(x0, y0, z0)` to the stack / coincidence CSV
-  — ignored downstream, but lets the plotter overlay ground truth (open choice 3,
-  recommended yes).
+  — carried so the plotter can confirm the source is uniformly filled (source
+  validation), not for reconstruction.
 
 ## Phase D — smearing + energy window in `build_coincidences.jl` (Step 4)
 
@@ -95,17 +100,18 @@ deferred** — there is no real `t` until the randoms pass, so `t` stays the dum
 
 ## Phase E — coincidence plotter (Python, `py/plot_coincidences.py`)
 
-Reads a coincidence CSV. Panels: energy spectra `e1`/`e2` with the window overlaid; the
-true/scatter split; **LOR-midpoint density** in x–y and x–z (the crude "image" to compare
-to the phantom shape); the φ–z endpoint map; a radial profile. If the truth `(x0,y0,z0)`
-columns are kept, overlay the true source distribution. (Plotting stays Python per the
-updated CLAUDE.md tech-stack.)
+Reads a coincidence CSV — **diagnostics only, no reconstruction**. Panels: energy spectra
+`e1`/`e2` with the window overlaid; the true/scatter split; the φ–z endpoint map; a radial
+profile of the hits; and the **true source distribution** from `(x0,y0,z0)` (x–y and x–z
+density) to confirm the phantom is uniformly filled. (Plotting stays Python per the updated
+CLAUDE.md tech-stack.)
 
-## Phase F — run + eyeball
+## Phase F — run + check
 
-Run the full chain for the cylinder and sphere phantoms (CsI and BGO): check the midpoint
-image resembles the phantom and the true/scatter split behaves sensibly as the energy
-window tightens.
+Run the full chain for the cylinder and sphere phantoms (CsI and BGO), both Vacuum
+(non-attenuated reference) and Water: confirm the source `(x0,y0,z0)` fills the phantom
+uniformly, the Vacuum case is all-`true`, and the true/scatter split behaves sensibly as
+the energy window tightens. The deliverable is the list-mode coincidence file.
 
 ## Files to touch
 
@@ -118,13 +124,14 @@ window tightens.
 - `scripts/build_coincidences.jl` — smearing + energy window (Step 4 flags).
 - `py/plot_coincidences.py` (new) — the coincidence plotter.
 
-## Open choices to confirm before coding
+## Choices — resolved
 
-1. **Sphere phantom radius** — 5 cm, or match the cylinder (r = 8 cm)?
-2. **Jaszczak vs Derenzo** for phantom #3 (built last).
-3. Include the **true emission point** `(x0,y0,z0)` columns for ground-truth overlay?
-   (recommended: yes)
-4. **Reconstruction**: a minimal reconstructor here, or kept as the next separate track?
+1. **Sphere radius** — default **R = 8 cm** in `geometry_sphere.json` (just a JSON value).
+2. **Phantoms** — uniform **cylinder + sphere** now; **Jaszczak and Derenzo both later**,
+   on request.
+3. **True emission point `(x0,y0,z0)`** — **yes**, carried for source validation only.
+4. **Reconstruction** — **none**. The deliverable is the list-mode coincidence file;
+   inverting LORs to an image is the separate, deferred downstream.
 
 ## Suggested order
 
