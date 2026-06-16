@@ -1,0 +1,29 @@
+{
+    "_doc": "Sphere-phantom variant of geometry.json: the phantom is a water sphere (R=8 cm) instead of a cylinder; the world and scanner are identical. Source = attenuator, so this sphere both emits (UniformVolumeSource) and attenuates. Material is a default — the driver's --phantom-material overrides it (Vacuum = non-attenuated reference, Water = realistic). Dimensions in cm; material keys into data/materials.json.",
+    "world": {
+        "name": "world",
+        "shape": "cylinder",
+        "radius_cm": 60.0,
+        "half_length_cm": 60.0,
+        "position_cm": [0.0, 0.0, 0.0],
+        "material": "Air"
+    },
+    "phantom": {
+        "name": "phantom",
+        "shape": "sphere",
+        "radius_cm": 8.0,
+        "position_cm": [0.0, 0.0, 0.0],
+        "material": "Water"
+    },
+    "scanner": {
+        "name": "CRYSP_CSI_1M",
+        "shape": "cyl_shell",
+        "r_inner_cm": 38.7,
+        "wall_thickness_cm": 3.7,
+        "half_length_cm": 51.2,
+        "n_phi": 48,
+        "n_z": 20,
+        "position_cm": [0.0, 0.0, 0.0],
+        "material": "CsI"
+    }
+}
