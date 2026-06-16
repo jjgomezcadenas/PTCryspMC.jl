@@ -13,16 +13,18 @@ include("geometry.jl")     # Cylinder + ray distance + phantom loader
 include("sampling.jl")     # distance / process / Compton samplers + interaction kernel
 include("transport.jl")    # photon-only transport through one volume
 include("navigator.jl")    # multi-volume navigation across the geometry
+include("source.jl")       # emission source + back-to-back acollinearity
 
 export XCOMData, load_xcom,
        Material, load_material, load_materials, sigma_macro, mfp,
-       Solid, Cylinder, Box, CylShell, LogicalVolume, PhysicalVolume, Geometry,
+       Solid, Cylinder, Box, CylShell, Sphere, LogicalVolume, PhysicalVolume, Geometry,
        Scanner, r_outer, block_index, block_id, nblocks,
        solid, material, name, volume, mass,
        load_solid, load_geometry,
        is_inside, distance_to_exit, distance_to_entry,
        sample_interaction,
        Interaction, Transported, propagate_photon,
-       NavStep, locate, next_boundary, navigate_photon
+       NavStep, locate, next_boundary, navigate_photon,
+       Source, UniformVolumeSource, sample_point_in, sample_position, emit_pair, rand_direction
 
 end # module PTCryspMC

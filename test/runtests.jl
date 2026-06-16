@@ -187,6 +187,35 @@ const GEOM_JSON = joinpath(@__DIR__, "..", "geometry", "geometry.json")
         @test distance_to_entry((0.0, 0.0, -100.0), (0.0, 0.0, 1.0), cs) == Inf
     end
 
+    @testset "sphere solid" begin
+        s = Sphere(5.0)
+        @test s isa Solid
+        @test isapprox(volume(s), (4 / 3) * π * 5.0^3)
+
+        @test is_inside(s, (0.0, 0.0, 0.0))       # centre
+        @test is_inside(s, (5.0, 0.0, 0.0))       # surface (inclusive)
+        @test is_inside(s, (3.0, 4.0, 0.0))       # on the surface (r=5)
+        @test !is_inside(s, (5.1, 0.0, 0.0))      # just outside
+
+        # From the centre, the exit is one radius away in any direction; no entry.
+        @test isapprox(distance_to_exit((0.0, 0.0, 0.0), (1.0, 0.0, 0.0), s), 5.0)
+        @test isapprox(distance_to_exit((0.0, 0.0, 0.0), (0.0, 0.0, 1.0), s), 5.0)
+        @test distance_to_entry((0.0, 0.0, 0.0), (1.0, 0.0, 0.0), s) == Inf
+
+        # From outside heading at the centre: enter the near face, exit the far one.
+        @test isapprox(distance_to_entry((-10.0, 0.0, 0.0), (1.0, 0.0, 0.0), s), 5.0)
+        @test isapprox(distance_to_exit((-10.0, 0.0, 0.0), (1.0, 0.0, 0.0), s), 15.0)
+
+        # Heading away, a miss (offset > R), and a tangent all give Inf.
+        @test distance_to_entry((10.0, 0.0, 0.0), (1.0, 0.0, 0.0), s) == Inf
+        @test distance_to_entry((-10.0, 6.0, 0.0), (1.0, 0.0, 0.0), s) == Inf
+        @test distance_to_exit((10.0, 0.0, 0.0), (1.0, 0.0, 0.0), s) == Inf
+
+        # Loaded from JSON like the other shapes.
+        sl = load_solid(Dict("shape" => "sphere", "radius_cm" => 8.0))
+        @test sl isa Sphere && isapprox(sl.radius_cm, 8.0)
+    end
+
     @testset "logical volume" begin
         w  = load_material(DATA_DIR, "Water")
         lv = LogicalVolume("phantom", Cylinder(8.0, 8.0), w)
@@ -267,7 +296,7 @@ const GEOM_JSON = joinpath(@__DIR__, "..", "geometry", "geometry.json")
         rm(np)
 
         # An unsupported shape is rejected, not silently loaded as a cylinder.
-        bad = tmpgeo("""{"shape":"sphere","radius_cm":5.0,"material":"Water"}""")
+        bad = tmpgeo("""{"shape":"torus","radius_cm":5.0,"material":"Water"}""")
         @test_throws ErrorException load_geometry(bad, mats)
         rm(bad)
 
@@ -438,5 +467,71 @@ const GEOM_JSON = joinpath(@__DIR__, "..", "geometry", "geometry.json")
         @test any(s -> s.volume == :phantom && s.hit.process == :compton, steps)
         @test any(s -> s.volume == :scanner, steps)
         @test isapprox(sum(s.hit.e_dep for s in steps), 0.511; atol=1e-9)
+    end
+
+    @testset "uniform volume sampling" begin
+        rng = MersenneTwister(7)
+
+        # Every drawn point lies inside its solid, for each shape.
+        cyl = Cylinder(8.0, 8.0); sph = Sphere(8.0); box = Box(2.4, 2.4, 1.85)
+        all_in = true
+        for _ in 1:2000
+            all_in &= is_inside(cyl, sample_point_in(cyl, rng))
+            all_in &= is_inside(sph, sample_point_in(sph, rng))
+            all_in &= is_inside(box, sample_point_in(box, rng))
+        end
+        @test all_in
+
+        # Uniform-by-volume signatures: a uniform ball has mean radius 3R/4; a uniform
+        # cylinder is centred on its axis with <z> ≈ 0.
+        N = 40000
+        rsum = 0.0; zsum = 0.0; xsum = 0.0; ysum = 0.0
+        for _ in 1:N
+            p = sample_point_in(sph, rng)
+            rsum += sqrt(p[1]^2 + p[2]^2 + p[3]^2)
+            q = sample_point_in(cyl, rng)
+            xsum += q[1]; ysum += q[2]; zsum += q[3]
+        end
+        @test isapprox(rsum / N, 0.75 * 8.0; rtol=0.02)     # <r> = 3R/4 = 6.0
+        @test abs(zsum / N) < 0.15 && abs(xsum / N) < 0.15 && abs(ysum / N) < 0.15
+
+        # Through a placed PhysicalVolume the source samples in the world frame.
+        pv = PhysicalVolume(LogicalVolume("ph", sph, load_material(DATA_DIR, "Water")),
+                            (10.0, 0.0, 0.0))
+        src = UniformVolumeSource(pv)
+        @test all(is_inside(pv, sample_position(src, rng)) for _ in 1:2000)
+    end
+
+    @testset "back-to-back emission + acollinearity" begin
+        rng = MersenneTwister(9)
+        pv  = PhysicalVolume(LogicalVolume("ph", Sphere(8.0), load_material(DATA_DIR, "Water")),
+                             (0.0, 0.0, 0.0))
+        src = UniformVolumeSource(pv)
+
+        # Exactly back to back when acollinearity is off (accumulate, assert once).
+        inside = true; unit = true; antiparallel = true
+        for _ in 1:500
+            pos, d1, d2 = emit_pair(src, rng; acol_fwhm_deg=0.0)
+            inside &= is_inside(pv, pos)
+            unit &= isapprox(d1[1]^2 + d1[2]^2 + d1[3]^2, 1.0) &&
+                    isapprox(d2[1]^2 + d2[2]^2 + d2[3]^2, 1.0)
+            antiparallel &= isapprox(d1[1]*d2[1] + d1[2]*d2[2] + d1[3]*d2[3], -1.0; atol=1e-9)
+        end
+        @test inside
+        @test unit
+        @test antiparallel
+
+        # With 0.5° FWHM the deviation of d2 from −d1 has the right RMS angle.
+        fwhm = 0.5
+        N = 20000; sumsq = 0.0
+        for _ in 1:N
+            _, d1, d2 = emit_pair(src, rng; acol_fwhm_deg=fwhm)
+            dot = -(d1[1]*d2[1] + d1[2]*d2[2] + d1[3]*d2[3])         # ≈ cos(deviation)
+            δ = acos(clamp(dot, -1.0, 1.0))                         # deviation from 180°
+            sumsq += δ^2
+        end
+        rms = sqrt(sumsq / N)
+        σ = deg2rad(fwhm) / 2.3548200450309493
+        @test isapprox(rms, sqrt(2) * σ; rtol=0.05)   # 2-D Gaussian: <δ²> = 2σ²
     end
 end

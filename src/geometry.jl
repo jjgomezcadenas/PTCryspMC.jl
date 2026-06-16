@@ -161,6 +161,52 @@ function distance_to_entry(pos, dir, b::Box)::Float64
     (t_near > SURFACE_EPS && t_near < t_far) ? t_near : Inf
 end
 
+"A sphere, centred at the origin [cm]."
+struct Sphere <: Solid
+    radius_cm::Float64
+end
+
+volume(s::Sphere)::Float64 = (4.0 / 3.0) * π * s.radius_cm^3
+
+is_inside(s::Sphere, p)::Bool = p[1]^2 + p[2]^2 + p[3]^2 <= s.radius_cm^2
+
+"""
+    _sphere_crossings(pos, dir, s) -> (t_near, t_far)
+
+Nearest and farthest distances [cm] at which the ray from `pos` along `dir` crosses
+the sphere's surface (the two roots of ‖pos + t·dir‖ = R), in the local frame and
+counting only crossings ahead (t > SURFACE_EPS). `(Inf, -Inf)` when there is none.
+Allocation-free hot path.
+"""
+@inline function _sphere_crossings(pos, dir, s::Sphere)::Tuple{Float64,Float64}
+    R = s.radius_cm
+    a  = dir[1]^2 + dir[2]^2 + dir[3]^2
+    t_near = Inf; t_far = -Inf
+    a > PARALLEL_EPS || return (t_near, t_far)
+    b  = 2.0 * (pos[1] * dir[1] + pos[2] * dir[2] + pos[3] * dir[3])
+    cc = pos[1]^2 + pos[2]^2 + pos[3]^2 - R^2
+    disc = b^2 - 4.0 * a * cc
+    if disc >= 0.0
+        sq = sqrt(disc)
+        for t in ((-b + sq) / (2a), (-b - sq) / (2a))
+            if t > SURFACE_EPS
+                t_near = min(t_near, t); t_far = max(t_far, t)
+            end
+        end
+    end
+    (t_near, t_far)
+end
+
+function distance_to_exit(pos, dir, s::Sphere)::Float64
+    _, t_far = _sphere_crossings(pos, dir, s)
+    t_far > 0.0 ? t_far : Inf
+end
+
+function distance_to_entry(pos, dir, s::Sphere)::Float64
+    t_near, t_far = _sphere_crossings(pos, dir, s)
+    t_near < t_far ? t_near : Inf
+end
+
 "A cylindrical shell (hollow cylinder), axis along z, centred at the origin [cm]."
 struct CylShell <: Solid
     r_inner_cm::Float64
@@ -350,9 +396,10 @@ end
 """
     load_solid(d) -> Solid
 
-Build a solid from a JSON dict, dispatching on its `shape` field. Only
-`"cylinder"` (radius_cm, half_length_cm) is supported so far — any other shape
-is rejected rather than silently mis-loaded.
+Build a solid from a JSON dict, dispatching on its `shape` field: `"cylinder"`
+(radius_cm, half_length_cm), `"box"` (half_x_cm, half_y_cm, half_z_cm),
+`"cyl_shell"` (r_inner_cm, wall_thickness_cm, half_length_cm) or `"sphere"`
+(radius_cm). Any other shape is rejected rather than silently mis-loaded.
 """
 function load_solid(d)::Solid
     shape = get(d, "shape", "cylinder")
@@ -363,8 +410,10 @@ function load_solid(d)::Solid
     elseif shape == "cyl_shell"
         CylShell(Float64(d["r_inner_cm"]), Float64(d["wall_thickness_cm"]),
                  Float64(d["half_length_cm"]))
+    elseif shape == "sphere"
+        Sphere(Float64(d["radius_cm"]))
     else
-        error("unsupported solid shape '$shape' (cylinder, box, cyl_shell)")
+        error("unsupported solid shape '$shape' (cylinder, box, cyl_shell, sphere)")
     end
 end
 
