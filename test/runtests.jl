@@ -543,4 +543,32 @@ const GEOM_JSON = joinpath(@__DIR__, "..", "geometry", "geometry.json")
         @test isapprox(rms, sqrt(2) * σ; rtol=0.05)        # 2-D Gaussian: <δ²> = 2σ²
         @test isapprox(rsum / N, 0.75 * 8.0; rtol=0.02)    # uniform fill: <r> = 3R/4 = 6.0
     end
+
+    @testset "detector response (smearing)" begin
+        rng = MersenneTwister(13)
+
+        # Energy resolution: FWHM(E) = a·√(511/E) → equals a (fractional) at 511 keV and
+        # scales as √(511/E). a = 5% → 25.55 keV FWHM at 511, ×√2 wider at 255.5.
+        @test isapprox(energy_fwhm(511.0, 0.05), 0.05 * 511.0)              # 25.55 keV
+        @test isapprox(energy_fwhm(255.5, 0.05) / 255.5, 0.05 * sqrt(2.0)) # fractional ×√2
+        @test isapprox(energy_sigma(511.0, 0.05), 0.05 * 511.0 / 2.3548200450309493)
+
+        # smear_energy: a = 0 is exact; a > 0 is unbiased with the right σ.
+        @test smear_energy(511.0, 0.0, rng) == 511.0
+        N = 60000; s = 0.0; s2 = 0.0
+        for _ in 1:N
+            e = smear_energy(511.0, 0.05, rng); s += e; s2 += (e - 511.0)^2
+        end
+        @test isapprox(s / N, 511.0; atol=0.5)                              # unbiased
+        @test isapprox(sqrt(s2 / N), energy_sigma(511.0, 0.05); rtol=0.03)  # right width
+
+        # smear_position: σ = 0 is exact; σ > 0 is unbiased per axis with width σ.
+        @test smear_position((1.0, 2.0, 3.0), 0.0, rng) === (1.0, 2.0, 3.0)
+        sx = 0.0; sx2 = 0.0
+        for _ in 1:N
+            p = smear_position((10.0, 0.0, -5.0), 1.7, rng); sx += p[1]; sx2 += (p[1] - 10.0)^2
+        end
+        @test isapprox(sx / N, 10.0; atol=0.05)
+        @test isapprox(sqrt(sx2 / N), 1.7; rtol=0.03)
+    end
 end

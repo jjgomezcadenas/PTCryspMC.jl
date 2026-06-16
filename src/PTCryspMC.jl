@@ -14,6 +14,7 @@ include("sampling.jl")     # distance / process / Compton samplers + interaction
 include("transport.jl")    # photon-only transport through one volume
 include("navigator.jl")    # multi-volume navigation across the geometry
 include("source.jl")       # emission source + back-to-back acollinearity
+include("detector.jl")     # detector response: energy + position smearing
 
 export XCOMData, load_xcom,
        Material, load_material, load_materials, sigma_macro, mfp,
@@ -25,6 +26,7 @@ export XCOMData, load_xcom,
        sample_interaction,
        Interaction, Transported, propagate_photon,
        NavStep, locate, next_boundary, navigate_photon,
-       Source, UniformVolumeSource, PointSource, sample_point_in, sample_position, emit_pair, rand_direction
+       Source, UniformVolumeSource, PointSource, sample_point_in, sample_position, emit_pair, rand_direction,
+       energy_fwhm, energy_sigma, smear_energy, smear_position
 
 end # module PTCryspMC
