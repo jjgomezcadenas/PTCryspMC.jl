@@ -508,6 +508,11 @@ const GEOM_JSON = joinpath(@__DIR__, "..", "geometry", "geometry.json")
                              (0.0, 0.0, 0.0))
         src = UniformVolumeSource(pv)
 
+        # A point source returns its fixed position, with the same emission machinery.
+        ps = PointSource((1.0, 2.0, 3.0))
+        p0, _, _ = emit_pair(ps, rng; acol_fwhm_deg=0.0)
+        @test p0 == (1.0, 2.0, 3.0)
+
         # Exactly back to back when acollinearity is off (accumulate, assert once).
         inside = true; unit = true; antiparallel = true
         for _ in 1:500
@@ -521,17 +526,21 @@ const GEOM_JSON = joinpath(@__DIR__, "..", "geometry", "geometry.json")
         @test unit
         @test antiparallel
 
-        # With 0.5° FWHM the deviation of d2 from −d1 has the right RMS angle.
+        # With 0.5° FWHM the deviation of d2 from −d1 has the right RMS angle; in the same
+        # loop, the emission points fill the sphere phantom uniformly (the driver's source
+        # path: emit_pair → sample_position), so their mean radius is 3R/4.
         fwhm = 0.5
-        N = 20000; sumsq = 0.0
+        N = 20000; sumsq = 0.0; rsum = 0.0
         for _ in 1:N
-            _, d1, d2 = emit_pair(src, rng; acol_fwhm_deg=fwhm)
+            pos, d1, d2 = emit_pair(src, rng; acol_fwhm_deg=fwhm)
+            rsum += sqrt(pos[1]^2 + pos[2]^2 + pos[3]^2)
             dot = -(d1[1]*d2[1] + d1[2]*d2[2] + d1[3]*d2[3])         # ≈ cos(deviation)
             δ = acos(clamp(dot, -1.0, 1.0))                         # deviation from 180°
             sumsq += δ^2
         end
         rms = sqrt(sumsq / N)
         σ = deg2rad(fwhm) / 2.3548200450309493
-        @test isapprox(rms, sqrt(2) * σ; rtol=0.05)   # 2-D Gaussian: <δ²> = 2σ²
+        @test isapprox(rms, sqrt(2) * σ; rtol=0.05)        # 2-D Gaussian: <δ²> = 2σ²
+        @test isapprox(rsum / N, 0.75 * 8.0; rtol=0.02)    # uniform fill: <r> = 3R/4 = 6.0
     end
 end

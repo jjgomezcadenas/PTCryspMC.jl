@@ -25,6 +25,6 @@ export XCOMData, load_xcom,
        sample_interaction,
        Interaction, Transported, propagate_photon,
        NavStep, locate, next_boundary, navigate_photon,
-       Source, UniformVolumeSource, sample_point_in, sample_position, emit_pair, rand_direction
+       Source, UniformVolumeSource, PointSource, sample_point_in, sample_position, emit_pair, rand_direction
 
 end # module PTCryspMC

@@ -58,6 +58,19 @@ function sample_position(src::UniformVolumeSource, rng::AbstractRNG)
     (p[1] + o[1], p[2] + o[2], p[3] + o[3])
 end
 
+"""
+    PointSource(position)
+
+A point source at a fixed world-frame `position` (e.g. the phantom centre) — the
+degenerate phantom, useful for quick checks. Goes through the same `emit_pair`
+acollinearity machinery as a volume source.
+"""
+struct PointSource <: Source
+    position::NTuple{3,Float64}
+end
+
+sample_position(src::PointSource, ::AbstractRNG) = src.position
+
 # Tilt the unit vector `axis` by a small 2-D Gaussian deviation in its transverse plane:
 # each transverse component ~ N(0, σ), so each projected angle has the given FWHM. As
 # σ -> 0 the result is `axis` exactly. Used for the back-to-back acollinearity.
