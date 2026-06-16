@@ -2,7 +2,7 @@
 
 julia_version = "1.12.6"
 manifest_format = "2.0"
-project_hash = "6b1309680d8bace37908b358aded1246fd7aa52e"
+project_hash = "653b203fa14a796a98fa888fa1f736513d229586"
 
 [[deps.ArgParse]]
 deps = ["Logging", "TextWrap"]
@@ -133,6 +133,7 @@ uuid = "bac558e1-5e72-5ebc-8fee-abe8a469f55d"
 version = "1.8.2"
 
 [[deps.PTCryspMC]]
+deps = ["ArgParse", "CSV", "JSON", "Random", "TOML", "Test"]
 path = "."
 uuid = "86d9c5d8-637d-49d7-a5f8-a1e1341710d5"
 version = "0.1.0"

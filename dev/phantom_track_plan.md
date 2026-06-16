@@ -153,21 +153,36 @@ The selection + smearing (`finish_event!`) is **shared** — both paths just fil
 (full: accumulate scanner deposits; singles: one row already is the hit). Its own LOR
 output also takes `--format`.
 
-### TOML config (the parameter source of truth)
+### TOML config (the parameter source of truth) + run/output layout
 
-A single pipeline `run.toml` with sections, read by **both** scripts (each uses its
-relevant sections), replaces the long CLI and **doubles as the run metadata** stamped into
-the HDF5 attributes / output:
+A single pipeline config with sections, read by **both** scripts (each uses its relevant
+sections), replaces the long CLI and **doubles as the run metadata**:
 ```toml
 [geometry]  file, phantom_material
 [source]    kind (point|phantom), acol_fwhm_deg, energy_keV, nevents
 [transport] crystal_material, cutoff_keV, seed
 [detector]  sigma_xyz_mm, eres, window_fwhm, seed
-[output]    format (csv|hdf5), singles (bool), dir, tag
+[output]    dir, tag, format (csv|hdf5), singles (bool)
 ```
-Invoked as `julia … simulate_phantom.jl --config run.toml` (a thin `--key value` override
-layer is allowed for quick sweeps; TOML is the source of truth). A `[meta]`/header section
-carries scenario name + seed so every output is traceable.
+
+**Directory layout.**
+- `runs/` (**tracked** in git) — one config per condition, named `<shape>_<phantom_mat>_<crystal>.toml`,
+  e.g. `runs/sphere_water_csi.toml`, `runs/sphere_vacuum_csi.toml`. These are the
+  reproducible recipes (the provenance of every result), so they are versioned.
+- `output/<tag>/` (**gitignored**) — per-run subdirectory, self-describing:
+  `stack.csv`, `coincidences_{truth|det}.csv`, the plot `.png`, and a **copy of the
+  config** (`config.toml`). With many conditions this keeps results from colliding.
+
+**The `tag`** = `[output].tag` if set, **else the config filename** (without `.toml`). So
+`runs/sphere_water_csi.toml` → tag `sphere_water_csi` → everything lands in
+`output/sphere_water_csi/`. One token names the config, the output dir, and the metadata.
+
+**Invocation.** `julia … simulate_phantom.jl --config runs/sphere_water_csi.toml` and
+`build_coincidences.jl --config runs/sphere_water_csi.toml` (derives the stack from the
+tag). TOML is the source of truth; a thin `--key value` override (e.g. `--nevents`,
+`--seed`) is allowed for sweeps. Config reading uses the Julia `TOML` stdlib
+(`src/config.jl`: `read_config`, `run_tag`, `cfg_get`); paths resolve against the repo
+root so runs work from anywhere.
 
 ### Matrix
 | scale | stack | format |

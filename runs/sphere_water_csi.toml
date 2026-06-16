@@ -1,0 +1,28 @@
+# Sphere phantom (water) uniformly filled, CsI ring, realistic detector response.
+# tag = config filename = sphere_water_csi -> output/sphere_water_csi/
+
+[geometry]
+file = "geometry/geometry_sphere.json"
+phantom_material = "Water"      # override; "" = use the geometry JSON value
+
+[source]
+kind = "phantom"                # point | phantom (uniform fill of the phantom solid)
+acol_fwhm_deg = 0.5
+energy_keV = 511.0
+nevents = 50000
+
+[transport]
+crystal_material = "CsI"
+cutoff_keV = 10.0
+seed = 1234
+
+[detector]
+sigma_xyz_mm = 1.7              # CRYSP position resolution (incl. DOI)
+eres = 0.05                     # 5% FWHM at 511 keV (pure CsI)
+window_fwhm = 2.0               # ±2·FWHM energy window
+
+[output]
+dir = "output"
+# tag = "..."                   # default = config filename
+format = "csv"                  # csv | hdf5 (hdf5 deferred)
+singles = false                 # false = full stack (singles deferred)

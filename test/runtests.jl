@@ -571,4 +571,26 @@ const GEOM_JSON = joinpath(@__DIR__, "..", "geometry", "geometry.json")
         @test isapprox(sx / N, 10.0; atol=0.05)
         @test isapprox(sqrt(sx2 / N), 1.7; rtol=0.03)
     end
+
+    @testset "run config (TOML)" begin
+        path = tempname() * ".toml"
+        write(path, """
+        [source]
+        nevents = 1234
+        [output]
+        tag = "myrun"
+        """)
+        cfg = read_config(path)
+        @test cfg_get(cfg, "source", "nevents", 0) == 1234
+        @test cfg_get(cfg, "source", "missing", 99) == 99    # default for a missing key
+        @test cfg_get(cfg, "nope", "x", 7) == 7              # default for a missing section
+        @test run_tag(cfg, path) == "myrun"                  # [output].tag wins
+        rm(path)
+
+        # Without [output].tag, the tag is the config filename (without .toml).
+        p2 = joinpath(tempdir(), "sphere_water_csi.toml")
+        write(p2, "[source]\nnevents = 1\n")
+        @test run_tag(read_config(p2), p2) == "sphere_water_csi"
+        rm(p2)
+    end
 end

@@ -100,7 +100,15 @@ The photon transport and geometry are photon-only:
   with local energy deposition.
 
 Other dirs: `geometry/` (JSON world), `data/` (materials + XCOM), `scripts/` (Julia
-drivers), `py/` (Python plotters), `output/` (CSVs + `control_plots/`), `test/`.
+drivers), `py/` (Python plotters), `runs/` (TOML run configs, tracked), `output/` (per-run
+`output/<tag>/` results, gitignored), `test/`.
+
+The LOR-generation pipeline (`simulate_phantom.jl` → `build_coincidences.jl` →
+`plot_coincidences.py`) is **TOML-config driven**: a `runs/<tag>.toml` (sections
+`[geometry] [source] [transport] [detector] [output]`) is the parameter source of truth
+and the run's provenance. The `tag` (= config filename, overridable) names the per-run
+output dir `output/<tag>/`, which holds the stack, the coincidence file(s), the plot, and a
+copy of the config. `src/config.jl` reads it (`read_config`, `run_tag`, `cfg_get`).
 
 Still to write: source injection, the block-grid index and plane-crossing distances, hit
 formation + selection, the randoms pass.

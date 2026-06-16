@@ -1,48 +1,33 @@
 #!/usr/bin/env julia
-# Phantom simulation driver. A back-to-back 511 keV source fills the phantom (uniform by
-# volume, or a point at its centre) and emits pairs with ~0.5 deg FWHM acollinearity; each
-# photon is NAVIGATED across the full geometry — phantom → air gap → crystal ring — by
+# Phantom simulation driver — TOML-config driven. A back-to-back 511 keV source fills the
+# phantom (uniform by volume, or a point at its centre) and emits pairs with acollinearity;
+# each photon is NAVIGATED across the full geometry — phantom → air gap → crystal ring — by
 # `navigate_photon`. We record the full interaction stack of both photons, tagged with the
 # volume (:phantom / :air / :scanner), the crystal (iz, iphi) of each scanner deposit, a
 # per-photon phantom-scatter flag, and the true emission point (x0, y0, z0).
 #
-# The phantom is a solid (cylinder or sphere) + material: --phantom-material picks it, so
-# Vacuum/Air is the non-attenuated reference (no scatter) and Water is realistic. Source =
-# attenuator: the same volume both emits and attenuates (see dev/phantom_track_plan.md).
-# Its air-only counterpart is shoot_into_ring.jl (point source, no phantom).
+# The phantom is a solid (cylinder or sphere) + material from the geometry JSON, with the
+# material optionally overridden (Vacuum/Air = non-attenuated reference, Water = realistic).
+# Source = attenuator: the same volume both emits and attenuates.
 #
-# IMPORTANT — what "full-energy" means here. These are TRUTH energies (no detector
-# resolution yet). A photon is called full-energy if it deposits ≥505 keV in a single
-# crystal. At truth level a fully-absorbed photon deposits exactly 511 keV, so this just
-# picks out the full-energy peak — BUT a ≥505 keV cut also rejects every photon that
-# Compton-scattered in the phantom (it arrives with <511 keV). So the "both full-energy"
-# fraction below is the UNSCATTERED, fully-contained subset — NOT the coincidence
-# efficiency. The real selection (Step 4) smears by FWHM(E) and applies a ±2·FWHM energy
-# window, which also accepts scattered photons as *scatter* coincidences.
+# All parameters come from a run config TOML (see dev/phantom_track_plan.md, runs/*.toml);
+# the run `tag` (= config filename) names the per-run output dir output/<tag>/, where the
+# stack and a copy of the config are written. Its air-only counterpart is shoot_into_ring.jl.
 #
 # Run from the repo root:
-#   julia --project=. scripts/simulate_phantom.jl --source phantom --material CsI
-#   julia --project=. scripts/simulate_phantom.jl --geometry geometry/geometry_sphere.json \
-#         --source phantom --phantom-material Vacuum --material BGO   # non-attenuated reference
+#   julia --project=. scripts/simulate_phantom.jl --config runs/sphere_water_csi.toml
+#   julia --project=. scripts/simulate_phantom.jl --config runs/sphere_vacuum_csi.toml --nevents 5000
 
 using PTCryspMC
 using ArgParse
 using Random
 
 function parse_cli()
-    s = ArgParseSettings(description="Back-to-back 511 keV pairs from the phantom, navigated through water → air → ring.")
+    s = ArgParseSettings(description="Phantom simulation driver (TOML-config driven).")
     @add_arg_table! s begin
-        "--data";     help = "data dir";        default = joinpath(@__DIR__, "..", "data")
-        "--geometry"; help = "geometry JSON";   default = joinpath(@__DIR__, "..", "geometry", "geometry.json")
-        "--out";      help = "output CSV (default output/phantom_<material>_stack.csv)"; default = ""
-        "--material"; help = "crystal material"; default = "CsI"
-        "--phantom-material"; help = "override the phantom material (default = geometry JSON value; Vacuum = non-attenuated reference)"; default = ""
-        "--source";   help = "source: 'point' (phantom centre) or 'phantom' (uniform in the phantom)"; default = "point"
-        "--acol-fwhm"; help = "acollinearity FWHM [deg] (0 = exactly back-to-back)"; arg_type = Float64; default = 0.5
-        "--nevents";  help = "n annihilations"; arg_type = Int;     default = 100000
-        "--energy";   help = "energy [keV]";    arg_type = Float64; default = 511.0
-        "--cutoff";   help = "low-energy cutoff [keV] (default 10 = XCOM min)"; arg_type = Float64; default = 10.0
-        "--seed";     help = "RNG seed";        arg_type = Int;     default = 1234
+        "--config";  help = "run config TOML"; required = true
+        "--nevents"; help = "override [source].nevents"; arg_type = Int; default = -1
+        "--seed";    help = "override [transport].seed"; arg_type = Int; default = -1
     end
     parse_args(s)
 end
@@ -60,59 +45,74 @@ function photon_stats(steps)
         end
     end
     reached  = !isempty(blocks)
-    # TRUTH full-energy: ≥505 keV in one crystal. At truth level a fully-absorbed photon
-    # deposits exactly 511 keV, so this is the full-energy peak; it also implies the photon
-    # was ~unscattered in the phantom (a phantom Compton would leave it below 505).
+    # TRUTH full-energy: ≥505 keV in one crystal (implies ~unscattered in the phantom).
     full_E   = Escan >= 0.505 && length(blocks) == 1
     (reached, full_E, phscat, Escan, length(blocks))
 end
 
 function main()
     a = parse_cli()
-    mats = load_materials(a["data"])
-    geom = load_geometry(a["geometry"], mats)
-    geom.scanner === nothing && error("geometry $(a["geometry"]) has no scanner section")
-    haskey(mats, a["material"]) || error("material '$(a["material"])' not found")
-    a["source"] in ("point", "phantom") || error("--source must be 'point' or 'phantom'")
+    REPO = normpath(joinpath(@__DIR__, ".."))
+    rp(p) = (q = String(p); isabspath(q) ? q : joinpath(REPO, q))
 
-    # Swap in the chosen crystal material, keeping the ring geometry/segmentation.
+    cfg = read_config(a["config"])
+    datadir = rp(cfg_get(cfg, "paths", "data", "data"))
+    geomfile = rp(cfg_get(cfg, "geometry", "file", "geometry/geometry.json"))
+    phmat    = String(cfg_get(cfg, "geometry", "phantom_material", ""))
+    crystal  = String(cfg_get(cfg, "transport", "crystal_material", "CsI"))
+    kind     = String(cfg_get(cfg, "source", "kind", "point"))
+    acol     = Float64(cfg_get(cfg, "source", "acol_fwhm_deg", 0.5))
+    energy   = Float64(cfg_get(cfg, "source", "energy_keV", 511.0))
+    cutoff   = Float64(cfg_get(cfg, "transport", "cutoff_keV", 10.0))
+    nevents  = a["nevents"] >= 0 ? a["nevents"] : Int(cfg_get(cfg, "source", "nevents", 100000))
+    seed     = a["seed"]    >= 0 ? a["seed"]    : Int(cfg_get(cfg, "transport", "seed", 1234))
+    fmt      = String(cfg_get(cfg, "output", "format", "csv"))
+    singles  = Bool(cfg_get(cfg, "output", "singles", false))
+
+    kind in ("point", "phantom") || error("[source].kind must be 'point' or 'phantom'")
+    fmt == "csv" || error("[output].format '$fmt' not supported yet (csv only; hdf5 deferred)")
+    singles && error("[output].singles not implemented yet (full stack only; deferred)")
+
+    tag = run_tag(cfg, a["config"])
+    outdir = joinpath(rp(cfg_get(cfg, "output", "dir", "output")), tag)
+    mkpath(outdir)
+    cp(a["config"], joinpath(outdir, "config.toml"); force=true)
+    out = joinpath(outdir, "stack.csv")
+
+    mats = load_materials(datadir)
+    geom = load_geometry(geomfile, mats)
+    geom.scanner === nothing && error("geometry $geomfile has no scanner section")
+    haskey(mats, crystal) || error("crystal material '$crystal' not found")
+
+    # Crystal material swap, keeping the ring geometry/segmentation.
     sc0 = geom.scanner
     sc  = Scanner(PhysicalVolume(LogicalVolume(name(sc0.volume), solid(sc0.volume),
-                                               mats[a["material"]]), sc0.volume.position),
+                                              mats[crystal]), sc0.volume.position),
                   sc0.n_phi, sc0.n_z)
-
-    # Optional phantom-material override (Vacuum = non-attenuated reference, Water = realistic).
+    # Optional phantom-material override.
     phantom = geom.phantom
-    if !isempty(a["phantom-material"])
-        pm = a["phantom-material"]
-        haskey(mats, pm) || error("phantom material '$pm' not found")
-        phantom = PhysicalVolume(LogicalVolume(name(phantom), solid(phantom), mats[pm]),
+    if !isempty(phmat)
+        haskey(mats, phmat) || error("phantom material '$phmat' not found")
+        phantom = PhysicalVolume(LogicalVolume(name(phantom), solid(phantom), mats[phmat]),
                                  phantom.position)
     end
     geom = Geometry(geom.world, phantom, sc)
 
-    out = isempty(a["out"]) ?
-        joinpath(@__DIR__, "..", "output", "phantom_$(lowercase(a["material"]))_stack.csv") : a["out"]
-    E0      = a["energy"] / 1000.0
-    cut_MeV = a["cutoff"] / 1000.0
-    uniform = a["source"] == "phantom"
-    acol    = a["acol-fwhm"]
-    rng     = MersenneTwister(a["seed"])
-
-    # Source = attenuator: fill the phantom uniformly (or a point at its centre).
+    E0 = energy / 1000.0
+    cut_MeV = cutoff / 1000.0
+    uniform = kind == "phantom"
+    rng = MersenneTwister(seed)
     src = uniform ? UniformVolumeSource(geom.phantom) : PointSource(geom.phantom.position)
 
     srcdesc = uniform ? "uniform in $(name(geom.phantom)) ($(material(geom.phantom).name))" :
                         "point at the phantom centre ($(material(geom.phantom).name))"
-    println("source: back-to-back $(a["energy"]) keV, $srcdesc, acol $(acol)° FWHM; " *
-            "ring $(name(sc.volume)) ($(a["material"])), nblocks=$(nblocks(sc)), " *
-            "cutoff $(a["cutoff"]) keV")
+    println("run '$tag': back-to-back $energy keV, $srcdesc, acol $(acol)° FWHM; " *
+            "ring $(name(sc.volume)) ($crystal), nblocks=$(nblocks(sc)), cutoff $cutoff keV, " *
+            "$nevents events, seed $seed")
 
     n_reach = 0; n_fullE = 0; n_phscat = 0
     n_both_fullE = 0; n_both_unscat = 0
-    nevents = a["nevents"]
     nrows = 0
-    mkpath(dirname(out))
     open(out, "w") do io
         println(io, "event_number,gamma,step,x_mm,y_mm,z_mm,e_in_keV,e_dep_keV,process,volume,iz,iphi,phantom_scatter,x0_mm,y0_mm,z0_mm")
         for ev in 1:nevents
@@ -125,8 +125,8 @@ function main()
                 n_reach  += reached
                 n_fullE  += full_E
                 n_phscat += phscat
-                fe = g == 1 ? (full_E, fe[2])      : (fe[1], full_E)
-                us = g == 1 ? (!phscat, us[2])     : (us[1], !phscat)
+                fe = g == 1 ? (full_E, fe[2])  : (fe[1], full_E)
+                us = g == 1 ? (!phscat, us[2]) : (us[1], !phscat)
                 for (k, st) in enumerate(steps)
                     r = st.hit
                     println(io, join((ev, g, k,
@@ -136,8 +136,8 @@ function main()
                     nrows += 1
                 end
             end
-            n_both_unscat += (us[1] && us[2])      # both photons crossed the phantom unscattered
-            n_both_fullE  += (fe[1] && fe[2])      # both fully contained at 511 keV (truth)
+            n_both_unscat += (us[1] && us[2])
+            n_both_fullE  += (fe[1] && fe[2])
         end
     end
 
@@ -147,11 +147,9 @@ function main()
             "unscattered in phantom $(round(100*(1 - n_phscat/ngamma), digits=1))%   " *
             "full-energy (≥505 keV, 1 crystal) $(round(100*n_fullE/ngamma, digits=1))%")
     println("per-event:   both photons unscattered $(round(100*n_both_unscat/nevents, digits=1))%   " *
-            "both full-energy (truth) $(round(100*n_both_fullE/nevents, digits=1))%  " *
-            "($n_both_fullE / $nevents)")
-    println("NOTE: 'full-energy' is a TRUTH ≥505 keV cut — it is the UNSCATTERED, fully-")
-    println("      contained subset, NOT the coincidence efficiency. The real ±2·FWHM energy")
-    println("      window (Step 4) also keeps scattered photons as *scatter* coincidences.")
+            "both full-energy (truth) $(round(100*n_both_fullE/nevents, digits=1))%")
+    println("NOTE: 'full-energy' is a TRUTH ≥505 keV cut — the UNSCATTERED, fully-contained")
+    println("      subset, NOT the coincidence efficiency (that comes from build_coincidences).")
 end
 
 main()

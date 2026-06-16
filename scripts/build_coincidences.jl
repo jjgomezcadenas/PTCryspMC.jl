@@ -9,11 +9,11 @@
 #     still gives a clean line of response), and
 #   • (detector mode only) both smeared energies fall inside the energy window.
 #
-# Detector response (all OFF by default → TRUTH mode, unchanged):
-#   --sigma-xyz  Gaussian smear of each hit position [mm] (includes DOI)
-#   --eres a     energy resolution: fractional FWHM at 511 keV; FWHM(E)=a·√(511/E)
-#   --window w   energy window half-width in FWHM(511) units → keep |E−511| ≤ w·a·511 keV
-#   --seed       RNG seed for the smearing
+# Detector response comes from the run config's [detector] section (all OFF → TRUTH mode):
+#   sigma_xyz_mm  Gaussian smear of each hit position [mm] (includes DOI)
+#   eres          energy resolution: fractional FWHM at 511 keV; FWHM(E)=a·√(511/E)
+#   window_fwhm   energy window half-width in FWHM(511) units → keep |E−511| ≤ w·a·511 keV
+#   seed          RNG seed for the smearing
 #
 # Per gamma the record carries the first-interaction point (the LOR point, smeared in
 # detector mode), the summed energy in that crystal (smeared), the block (iz,iphi), and a
@@ -22,28 +22,24 @@
 # validation. The pair is tagged `true` if neither gamma scattered in the phantom, else
 # `scatter` (smearing does not change the truth tag).
 #
-# Streaming: the stack is event-ordered, so we read line by line, accumulate one event at
-# a time, emit its coincidence when the event number changes, and discard — O(1) memory,
-# no whole-file load (the point of doing this in Julia for large stacks).
+# TOML-config driven: the stack is read from output/<tag>/stack.csv and the coincidences
+# written to output/<tag>/coincidences_{truth|det}.csv (tag = config filename). Streaming:
+# the stack is event-ordered, so we read line by line, accumulate one event at a time, emit
+# its coincidence when the event number changes, and discard — O(1) memory.
 #
 # Run from the repo root:
-#   julia --project=. scripts/build_coincidences.jl --stack output/phantom_bgo_stack.csv
-#   julia --project=. scripts/build_coincidences.jl --stack output/phantom_csi_stack.csv \
-#         --sigma-xyz 1.7 --eres 0.05 --window 2     # CRYSP CsI detector response
+#   julia --project=. scripts/build_coincidences.jl --config runs/sphere_water_csi.toml
 
-using PTCryspMC                       # detector response: smear_energy, smear_position, energy_fwhm
+using PTCryspMC                       # detector response + config: smear_*, energy_fwhm, read_config
 using ArgParse
 using Random
 
 function parse_cli()
-    s = ArgParseSettings(description="Build a list-mode coincidence file from a phantom-simulation stack.")
+    s = ArgParseSettings(description="Build a list-mode coincidence file from a phantom-simulation stack (TOML-config driven).")
     @add_arg_table! s begin
-        "--stack";     help = "input stack CSV (simulate_phantom.jl output)"; required = true
-        "--out";       help = "output coincidence CSV (default output/coincidences_<stack>.csv)"; default = ""
-        "--sigma-xyz"; help = "position smear σ [mm] (0 = off)"; arg_type = Float64; default = 0.0
-        "--eres";      help = "energy resolution a = fractional FWHM at 511 keV (0 = off)"; arg_type = Float64; default = 0.0
-        "--window";    help = "energy window half-width in FWHM(511) units (0 = no window)"; arg_type = Float64; default = 0.0
-        "--seed";      help = "RNG seed for smearing"; arg_type = Int; default = 1234
+        "--config"; help = "run config TOML"; required = true
+        "--stack";  help = "override the input stack path (default output/<tag>/stack.csv)"; default = ""
+        "--out";    help = "override the output coincidence path"; default = ""
     end
     parse_args(s)
 end
@@ -101,23 +97,36 @@ end
 
 function main()
     a = parse_cli()
-    stack = a["stack"]
-    isfile(stack) || error("stack file '$stack' not found")
-    out = isempty(a["out"]) ?
-        joinpath(dirname(stack), "coincidences_" * basename(stack)) : a["out"]
+    REPO = normpath(joinpath(@__DIR__, ".."))
+    rp(p) = (q = String(p); isabspath(q) ? q : joinpath(REPO, q))
 
-    window = a["window"]; eres = a["eres"]
+    cfg = read_config(a["config"])
+    tag = run_tag(cfg, a["config"])
+    outdir = joinpath(rp(cfg_get(cfg, "output", "dir", "output")), tag)
+
+    sigma_xyz = Float64(cfg_get(cfg, "detector", "sigma_xyz_mm", 0.0))
+    eres      = Float64(cfg_get(cfg, "detector", "eres", 0.0))
+    window    = Float64(cfg_get(cfg, "detector", "window_fwhm", 0.0))
+    seed      = Int(cfg_get(cfg, "detector", "seed", 1234))
+    fmt       = String(cfg_get(cfg, "output", "format", "csv"))
+    fmt == "csv" || error("[output].format '$fmt' not supported yet (csv only; hdf5 deferred)")
     window > 0.0 && eres <= 0.0 &&
-        error("--window requires --eres > 0 (the window width scales with the resolution)")
-    resp = Response(a["sigma-xyz"], eres, window > 0.0, window * energy_fwhm(511.0, eres))
-    rng  = MersenneTwister(a["seed"])
+        error("[detector].window_fwhm requires eres > 0 (the window width scales with the resolution)")
 
-    if resp.sigma_xyz > 0.0 || resp.eres > 0.0 || resp.apply_window
-        println("detector response: σ_xyz=$(resp.sigma_xyz) mm, eres=$(round(100*resp.eres,digits=1))% @511 keV, " *
+    mode  = (sigma_xyz > 0.0 || eres > 0.0 || window > 0.0) ? "det" : "truth"
+    stack = isempty(a["stack"]) ? joinpath(outdir, "stack.csv") : rp(a["stack"])
+    out   = isempty(a["out"])   ? joinpath(outdir, "coincidences_$mode.csv") : rp(a["out"])
+    isfile(stack) || error("stack file '$stack' not found (run simulate_phantom.jl first)")
+
+    resp = Response(sigma_xyz, eres, window > 0.0, window * energy_fwhm(511.0, eres))
+    rng  = MersenneTwister(seed)
+
+    if mode == "det"
+        println("run '$tag' [det]: σ_xyz=$(resp.sigma_xyz) mm, eres=$(round(100*resp.eres,digits=1))% @511 keV, " *
                 (resp.apply_window ? "window ±$(round(resp.win_half,digits=1)) keV" : "no window") *
-                "  (seed $(a["seed"]))")
+                "  (seed $seed)")
     else
-        println("truth mode: no smearing, no energy window")
+        println("run '$tag' [truth]: no smearing, no energy window")
     end
 
     open(stack, "r") do fin
