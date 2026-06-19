@@ -5,6 +5,19 @@ using Random
 const DATA_DIR = joinpath(@__DIR__, "..", "data")
 const GEOM_JSON = joinpath(@__DIR__, "..", "geometry", "geometry.json")
 
+# Allocation probe for `navigate_single_photons`, kept at top level (a normal method, not a
+# testset-local closure) and fed FIXED pos/dir so the measurement isolates the reducer —
+# `emit_pair` is itself allocating (the acollinearity tilt calls `rotate_to_global`), so it
+# must stay out of the loop. The rng advances each call, varying the histories.
+function _singles_alloc_run(geom, rng, n)
+    acc = 0.0
+    pos = (0.0, 0.0, 0.0); dir = (1.0, 0.0, 0.0)   # phantom centre, radially into the ring
+    for _ in 1:n
+        acc += navigate_single_photons(geom, 0.511, pos, dir, rng).e
+    end
+    acc
+end
+
 @testset "PTCryspMC" begin
     @testset "materials loading" begin
         # Single-material loader: reads only the named entry.
@@ -467,6 +480,127 @@ const GEOM_JSON = joinpath(@__DIR__, "..", "geometry", "geometry.json")
         @test any(s -> s.volume == :phantom && s.hit.process == :compton, steps)
         @test any(s -> s.volume == :scanner, steps)
         @test isapprox(sum(s.hit.e_dep for s in steps), 0.511; atol=1e-9)
+    end
+
+    @testset "rotate_to_global_t == rotate_to_global" begin
+        # The tuple twin must reproduce the Vector version bit-for-bit (it is the basis of
+        # the alloc-free singles path). Check across general and near-pole reference axes.
+        rng = MersenneTwister(3)
+        for _ in 1:500
+            lv = (randn(rng), randn(rng), randn(rng))
+            ax = (randn(rng), randn(rng), randn(rng))
+            v = PTCryspMC.rotate_to_global(Float64[lv[1], lv[2], lv[3]], ax)
+            t = rotate_to_global_t(lv[1], lv[2], lv[3], ax)
+            @test t[1] == v[1] && t[2] == v[2] && t[3] == v[3]
+        end
+        for ax in ((0.0, 0.0, 1.0), (0.0, 0.0, -1.0), (1e-7, 0.0, 1.0))   # poles
+            lv = (0.3, -0.5, 0.8)
+            v = PTCryspMC.rotate_to_global(Float64[lv...], ax)
+            t = rotate_to_global_t(lv..., ax)
+            @test t[1] == v[1] && t[2] == v[2] && t[3] == v[3]
+        end
+    end
+
+    @testset "navigate_single_photons — matches the full-stack reduction" begin
+        mats = load_materials(DATA_DIR)
+        geom = load_geometry(GEOM_JSON, mats)
+
+        # navigate_single_photons folds a photon to the singles summary with no allocation;
+        # it must return EXACTLY _reduce_steps(navigate_photon(...)) on the same history —
+        # same physics, same RNG draw order. This guards the two shells against drift.
+        # Both photons of back-to-back pairs from the phantom centre, so the phantom leg,
+        # the ring, overspill and absorption are all exercised.
+        nmismatch = 0; ntested = 0
+        for ev in 1:3000
+            r_emit = MersenneTwister(2000 + ev)
+            pos, d1, d2 = emit_pair(PointSource(geom.phantom.position), r_emit)
+            for dir in (d1, d2)
+                rf = MersenneTwister(7000 + ev)              # identical streams for both calls
+                rs = MersenneTwister(7000 + ev)
+                full = PTCryspMC._reduce_steps(navigate_photon(geom, 0.511, pos, dir, rf))
+                sing = navigate_single_photons(geom, 0.511, pos, dir, rs)
+                ntested += 1
+                full == sing || (nmismatch += 1)
+            end
+        end
+        @test ntested == 6000
+        @test nmismatch == 0
+
+        # The reducer reaches the ring (the summary is non-trivial) and respects the
+        # contract: a reached photon has a valid block, an unreached one is the empty single.
+        r = MersenneTwister(42)
+        reached_any = false; valid = true
+        for ev in 1:2000
+            pos, d1, d2 = emit_pair(PointSource(geom.phantom.position), r)
+            s = navigate_single_photons(geom, 0.511, pos, d1, r)
+            if s.reached
+                reached_any = true
+                valid &= (0 <= s.iphi < geom.scanner.n_phi) && (0 <= s.iz < geom.scanner.n_z) &&
+                         s.nblocks >= 1 && s.e > 0.0
+            else
+                # Unreached → empty LOR fields (but phscat may be true: it can scatter in
+                # the phantom and still never reach a crystal).
+                valid &= s.x == 0.0 && s.y == 0.0 && s.z == 0.0 && s.iz == -1 &&
+                         s.iphi == -1 && s.e == 0.0 && s.nblocks == 0
+            end
+        end
+        @test reached_any
+        @test valid
+    end
+
+    @testset "navigate_single_photons — zero allocation" begin
+        mats = load_materials(DATA_DIR)
+        geom = load_geometry(GEOM_JSON, mats)
+
+        # The whole reason the function exists: fold a photon with no heap traffic, so GC
+        # cannot serialise the threads at 10⁸ decays. Measure with `_singles_alloc_run`
+        # (fixed inputs, only the reducer in the loop): per-photon allocation = the slope,
+        # which must be exactly zero.
+        _singles_alloc_run(geom, MersenneTwister(5), 10)     # compile
+        b1000 = @allocated _singles_alloc_run(geom, MersenneTwister(5), 1000)
+        b2000 = @allocated _singles_alloc_run(geom, MersenneTwister(5), 2000)
+        @test (b2000 - b1000) == 0
+    end
+
+    @testset "simulate_source_mt — chunking & determinism" begin
+        mats = load_materials(DATA_DIR)
+        geom = load_geometry(GEOM_JSON, mats)
+        src  = UniformVolumeSource(geom.phantom)
+
+        # 1. Partition cover: the chunk ranges exactly tile 1:N, no gap/overlap — including
+        #    nchunks > N (clamped) and nchunks = 1.
+        for (N, k) in ((100, 8), (7, 16), (1000, 1), (5, 5), (333, 7))
+            r = chunk_ranges(N, k)
+            @test reduce(vcat, collect.(r)) == collect(1:N)   # exact tiling, in order
+            @test length(r) == max(1, min(k, N))
+        end
+
+        # In-memory generation through the SAME core the driver uses, via a vector sink;
+        # `threaded` toggles the @threads loop vs a sequential one over identical chunks/RNGs.
+        function gen(; nevents, seed, nchunks, threaded)
+            ranges = chunk_ranges(nevents, nchunks)
+            rngs   = [MersenneTwister(seed + (c - 1)) for c in eachindex(ranges)]
+            parts  = [Tuple[] for _ in ranges]
+            body(c) = singles_chunk!(geom, src, 0.511, 0.010, 0.5, ranges[c], rngs[c]) do ev, g, s, _
+                push!(parts[c], (ev, g, s.iz, s.iphi, round(s.e, digits=9), s.nblocks, s.phscat))
+            end
+            if threaded
+                Threads.@threads for c in eachindex(ranges); body(c); end
+            else
+                for c in eachindex(ranges); body(c); end
+            end
+            reduce(vcat, parts)                               # glue in chunk order
+        end
+
+        # 2. Thread-invariance: the @threads loop produces EXACTLY the sequential result —
+        #    no race, no shared RNG across chunks (the core MT-correctness guarantee).
+        @test gen(nevents=4000, seed=1, nchunks=16, threaded=true) ==
+              gen(nevents=4000, seed=1, nchunks=16, threaded=false)
+
+        # 3. Event-ordered output (so the streaming build_coincidences reader needs no change).
+        rows = gen(nevents=4000, seed=1, nchunks=16, threaded=true)
+        @test !isempty(rows)
+        @test issorted(rows; by=first)
     end
 
     @testset "uniform volume sampling" begin

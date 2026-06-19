@@ -60,6 +60,53 @@ function rotate_to_global(local_vec, ref_dir)::Vector{Float64}
 end
 
 """
+    rotate_to_global_t(lx, ly, lz, ref_dir) -> NTuple{3,Float64}
+
+Allocation-free tuple twin of `rotate_to_global`: rotate the local unit vector with
+components `(lx, ly, lz)` (z = ref_dir) into the global frame, returning a tuple instead
+of a `Vector`. Same arithmetic as `rotate_to_global` (verified equal in the tests), so the
+`navigate_single_photons` hot path produces bit-identical directions with no heap traffic.
+"""
+@inline function rotate_to_global_t(lx::Float64, ly::Float64, lz::Float64, ref_dir)::NTuple{3,Float64}
+    n = sqrt(ref_dir[1]^2 + ref_dir[2]^2 + ref_dir[3]^2)
+    rx = ref_dir[1] / n; ry = ref_dir[2] / n; rz = ref_dir[3] / n
+    if abs(rz) > 0.99999
+        s = sign(rz)
+        return (lx * s, ly * s, lz * s)
+    end
+    rp = sqrt(rx^2 + ry^2)
+    e1x = -rz * rx / rp; e1y = -rz * ry / rp; e1z = -(rz^2 - 1.0) / rp
+    e2x = -ry / rp;      e2y = rx / rp        # e2z = 0
+    (lx * e1x + ly * e2x + lz * rx,
+     lx * e1y + ly * e2y + lz * ry,
+     lx * e1z + lz * rz)
+end
+
+"""
+    sample_interaction_t(E, dir, ΣC, ΣPh, ΣP, rng) -> (is_compton, e_dep, new_dir, new_E)
+
+Allocation-free tuple twin of `sample_interaction` for the singles hot path: identical
+physics and identical RNG draw order (so it is statistically — and, modulo direction
+renormalisation, bit — equivalent), but returns `new_dir` as an `NTuple{3,Float64}` and a
+`Bool` `is_compton` instead of a `Symbol` (a Symbol would make the returned tuple non-isbits
+and force an allocation). `is_compton == false` means full absorption (photoelectric/pair).
+"""
+@inline function sample_interaction_t(E::Float64, dir, ΣC::Float64, ΣPh::Float64, ΣP::Float64,
+                                      rng::AbstractRNG)
+    Σ = ΣC + ΣPh + ΣP
+    proc = sample_process(ΣC / Σ, ΣPh / Σ, ΣP / Σ, rng)
+    if proc === :compton
+        Eprime, cosθ = sample_compton(E, rng)
+        ϕ = 2π * rand(rng)
+        sinθ = sqrt(max(0.0, 1.0 - cosθ^2))
+        ndir = rotate_to_global_t(sinθ * cos(ϕ), sinθ * sin(ϕ), cosθ, dir)
+        return (true, E - Eprime, ndir, Eprime)
+    else
+        return (false, E, (dir[1], dir[2], dir[3]), 0.0)   # full absorption
+    end
+end
+
+"""
     sample_interaction(E, dir, ΣC, ΣPh, ΣP, rng) -> (process, e_dep, new_dir, new_E)
 
 The physics at a single interaction point, record-type agnostic. Given the photon

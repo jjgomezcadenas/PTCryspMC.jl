@@ -451,9 +451,12 @@ cylinder of (non-interacting) Air enclosing everything; `phantom` is a daughter,
 and `scanner` (the detector ring, optional) is a further daughter. This is the
 volume set a multi-volume navigator will walk.
 """
-struct Geometry
-    world::PhysicalVolume                 # the Air mother volume enclosing all daughters
-    phantom::PhysicalVolume               # daughter
+# Parametric on the world/phantom solid types (the scanner volume is already a
+# concrete PhysicalVolume{CylShell}) so the navigator's volume calls stay concretely
+# typed — needed for the allocation-free `navigate_single_photons` hot path.
+struct Geometry{W<:PhysicalVolume,P<:PhysicalVolume}
+    world::W                              # the Air mother volume enclosing all daughters
+    phantom::P                            # daughter
     scanner::Union{Scanner,Nothing}       # daughter (the detector ring), if present
 end
 

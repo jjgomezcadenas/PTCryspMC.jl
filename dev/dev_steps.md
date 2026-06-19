@@ -234,11 +234,46 @@ predicted, measured 8 % CsI), because both photons must cross the water unscatte
 The reduction test confirms `navigate_photon` is bit-for-bit `propagate_photon` when a
 single absorbing material is crossed (the air leg consumes no randomness).
 
-**Test status:** `Pkg.test` — **202 assertions** pass (foundations, phantom, single
+### Production singles path — `navigate_single_photons` + `simulate_source_mt.jl`
+
+The scalable half of Phase G (production I/O). The dev chain writes the full per-interaction
+stack (one row per interaction, ideal to ~10⁵ events); a 10⁸-decay run needs the reduced
+**singles** stack — one row per detected photon — and many threads. See
+`dev/simulate_source_mt_plan.md`.
+
+- **`navigate_single_photons`** (`src/navigator.jl`) — the production sibling of
+  `navigate_photon` ("navigate_photon_full_stack"): same physics, same RNG draw order, but it
+  **folds** each interaction into stack-local scalars and returns the singles summary
+  `(reached, x, y, z, iz, iphi, e, nblocks, phscat)` with **zero heap allocation per photon**
+  (verified by the profiler + a slope-is-zero test). The vector path's GC would otherwise
+  serialise the threads at 10⁸. Supporting alloc-free twins `rotate_to_global_t` /
+  `sample_interaction_t` (`src/sampling.jl`, tuple + `Bool` instead of `Vector` + `Symbol`);
+  `_reduce_steps` is the single source of truth for the reduction (the test asserts
+  `navigate_single_photons == _reduce_steps(navigate_photon(...))` on the same seed). Two
+  enablers: `Geometry{W,P}` made parametric (concrete world/phantom types), and `locate_tag`
+  returning a `Symbol` instead of a `PhysicalVolume` (returning the non-isbits volume through
+  a Union return boxed it — the ~455 B/photon the profiler traced to `locate`).
+- **`scripts/simulate_source_mt.jl`** — multi-threaded, singles-only driver (same TOML
+  config). The N events split into `nchunks` **contiguous** ranges (default 8·nthreads); each
+  chunk runs on a thread with its own **pre-allocated** `MersenneTwister(seed+chunk-1)` and
+  streams to its own `singles.part<c>.csv`; the parts are glued **in chunk order** →
+  event-ordered `singles.csv` (the streaming `build_coincidences` reader needs no change).
+  `simulate_phantom.jl` is untouched (still the full-stack path).
+
+**Validated:** `-t 1` ≡ `-t 18` byte-identical at fixed `nchunks` (reproducible over
+`(seed, nchunks, N)`, scheduling-independent); output event-ordered; 69.4 % of photons reach
+the ring (≈ the 70 % from the full-stack phantom-leg study); **6.1× on 18 cores** at 3 M
+events (0.51 → 3.08 M events/s — sub-linear from the 6 Super / 12 Performance core split, not
+GC-bound), so 10⁸ decays ≈ 32 s. **Deferred within Phase G:** HDF5 format; the
+`build_coincidences` singles-reader (needed to consume the singles stack + a bit-for-bit
+diff vs the full stack).
+
+**Test status:** `Pkg.test` — **710 assertions** pass (foundations, phantom, single
 crystal, the `CylShell` shell + the `Sphere` solid, the block/wheel grid, scanner loading,
 the air world, the navigator `locate` / `next_boundary` + bore re-entry / reduction /
-phantom leg, the emission `Source` + acollinearity, the detector smearing, and the TOML
-config). All scripts run.
+phantom leg, `rotate_to_global_t`, `navigate_single_photons` matching the full-stack
+reduction + zero-allocation, the emission `Source` + acollinearity, the detector smearing,
+and the TOML config). All scripts run.
 
 ---
 
@@ -261,9 +296,12 @@ config). All scripts run.
   the two-crystal clean selection (each gamma one block). The whole **analytic-phantom →
   LOR** track (uniform `Source` + acollinearity, `Sphere` solid, TOML-config pipeline,
   per-config + matrix plots, run in parallel) is in `dev/phantom_track_plan.md` (A–F done).
-- **Step 5 — randoms.** The time-tag-and-pair pass over the singles (needs real times).
-- **Production I/O (Phase G remainder).** The `--singles` reduced stack + HDF5 for 10⁸
-  runs (the TOML/naming half is done).
+- **Step 5 — randoms.** The time-tag-and-pair pass over the singles (needs real times). The
+  singles stack it consumes now exists (`simulate_source_mt.jl`); randoms adds an isotope tag
+  + a sampled time to each singles row.
+- **Production I/O (Phase G remainder).** The singles stack + multi-threading are **done**
+  (`navigate_single_photons` + `simulate_source_mt.jl`); still deferred: **HDF5** format, and
+  teaching `build_coincidences` to **read** the singles stack (auto-detect kind by header).
 - **Step 6 — detectors.** CsI and BGO done (via the run configs); CsI(Tl), LYSO to add.
 
 Carried-over technical TODOs from the foundations:
