@@ -47,13 +47,16 @@ def from_config(path):
     det = cfg.get("detector", {})
     eres = det.get("eres", 0.0)
     win = det.get("window_fwhm", 0.0)
-    mode = "det" if (det.get("sigma_xyz_mm", 0.0) or eres or win) else "truth"
+    emin_keV = det.get("emin_keV", 0.0)
+    mode = "det" if (det.get("sigma_xyz_mm", 0.0) or eres or win or emin_keV) else "truth"
     coinc = os.path.join(rundir, f"coincidences_{mode}.csv")
     png = os.path.join(rundir, f"coincidences_{mode}.png")
     emin = emax = None
-    if eres and win:
+    if eres and win:                       # symmetric window
         half = win * eres * 511.0
         emin, emax = 511.0 - half, 511.0 + half
+    elif emin_keV:                         # lower threshold (Compton shoulder visible)
+        emin = emin_keV
     return coinc, png, emin, emax
 
 

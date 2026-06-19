@@ -1,15 +1,16 @@
-# Sphere phantom (water) uniformly filled, CsI ring, realistic detector response.
+# Sphere phantom (water) uniformly filled, CsI ring. Realistic detector response with a
+# 300 keV minimum-energy cut (window off) so the Compton shoulder/edge shows in the spectrum.
 # tag = config filename = sphere_water_csi -> output/sphere_water_csi/
 
 [geometry]
 file = "geometry/geometry_sphere.json"
-phantom_material = "Water"      # override; "" = use the geometry JSON value
+phantom_material = "Water"
 
 [source]
-kind = "phantom"                # point | phantom (uniform fill of the phantom solid)
+kind = "phantom"
 acol_fwhm_deg = 0.5
 energy_keV = 511.0
-nevents = 50000
+nevents = 100000
 
 [transport]
 crystal_material = "CsI"
@@ -17,12 +18,12 @@ cutoff_keV = 10.0
 seed = 1234
 
 [detector]
-sigma_xyz_mm = 1.7              # CRYSP position resolution (incl. DOI)
+sigma_xyz_mm = 1.7
 eres = 0.05                     # 5% FWHM at 511 keV (pure CsI)
-window_fwhm = 2.0               # ±2·FWHM energy window
+emin_keV = 300.0               # minimum gamma energy — keeps the Compton shoulder (window off)
+seed = 1234
 
 [output]
 dir = "output"
-# tag = "..."                   # default = config filename
-format = "csv"                  # csv | hdf5 (hdf5 deferred)
-singles = false                 # false = full stack (singles deferred)
+format = "csv"
+singles = false

@@ -1,0 +1,28 @@
+# Sphere phantom (water), BGO ring. BGO: denser (higher containment) but coarser energy
+# resolution (10% FWHM at 511 keV). Emin 300 keV (window off) shows the Compton shoulder.
+
+[geometry]
+file = "geometry/geometry_sphere.json"
+phantom_material = "Water"
+
+[source]
+kind = "phantom"
+acol_fwhm_deg = 0.5
+energy_keV = 511.0
+nevents = 100000
+
+[transport]
+crystal_material = "BGO"
+cutoff_keV = 10.0
+seed = 1234
+
+[detector]
+sigma_xyz_mm = 1.7
+eres = 0.10                     # 10% FWHM at 511 keV (cryogenic BGO)
+emin_keV = 300.0
+seed = 1234
+
+[output]
+dir = "output"
+format = "csv"
+singles = false

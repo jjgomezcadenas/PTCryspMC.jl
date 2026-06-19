@@ -513,6 +513,15 @@ const GEOM_JSON = joinpath(@__DIR__, "..", "geometry", "geometry.json")
         p0, _, _ = emit_pair(ps, rng; acol_fwhm_deg=0.0)
         @test p0 == (1.0, 2.0, 3.0)
 
+        # Regression: the acollinearity near-pole path. rotate_to_global with a tuple
+        # local vector and an axis along ±z must return a unit Vector{Float64}, not a tuple
+        # (a tuple tripped the ::Vector{Float64} return when a photon was emitted ≈ along z).
+        for axis in ((0.0, 0.0, 1.0), (0.0, 0.0, -1.0))
+            g = PTCryspMC.rotate_to_global((0.02, -0.01, sqrt(1 - 0.02^2 - 0.01^2)), axis)
+            @test g isa Vector{Float64}
+            @test isapprox(sum(abs2, g), 1.0; atol=1e-9)
+        end
+
         # Exactly back to back when acollinearity is off (accumulate, assert once).
         inside = true; unit = true; antiparallel = true
         for _ in 1:500

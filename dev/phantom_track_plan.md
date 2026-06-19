@@ -113,6 +113,16 @@ Run the full chain for the cylinder and sphere phantoms (CsI and BGO), both Vacu
 uniformly, the Vacuum case is all-`true`, and the true/scatter split behaves sensibly as
 the energy window tightens. The deliverable is the list-mode coincidence file.
 
+**Done.** Six `runs/*.toml` (Vacuum for CsI only), 100k events each, run in parallel via
+`scripts/run_matrix.sh` (data) then `scripts/plot_all.sh` (plots); ~7 s wall for the data,
+~1 s for the plots. The energy cut is a 300 keV **minimum** (`[detector].emin_keV`, window
+off) so the Compton shoulder/edge shows. Validated: Vacuum = 100 % true; BGO ~2.6× the CsI
+yield; LOR resolution ~1.7 mm (true) across all configs (acollinearity + σ_xyz, material-
+independent). Per-config 9-panel summaries (`plot_coincidences.py`) + a cross-config
+comparison (`plot_matrix.py` → `output/matrix_summary.png`). A near-pole `rotate_to_global`
+bug (tuple vs `Vector{Float64}` for a photon emitted ≈ along z, ~2/100k events) was found
+and fixed + regression-tested.
+
 ## Phase G — production I/O: singles stack, CSV/HDF5, TOML config
 
 CSV + the full per-interaction stack is ideal for the testing phase and detailed plots

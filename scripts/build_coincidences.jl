@@ -44,13 +44,20 @@ function parse_cli()
     parse_args(s)
 end
 
-# Detector response. All-zero / no-window = truth mode (no smearing, no cut).
+# Detector response. All-off = truth mode (no smearing, no energy cut).
 struct Response
     sigma_xyz::Float64       # mm
     eres::Float64            # fractional FWHM at 511 keV
+    emin::Float64            # minimum gamma energy [keV] (0 = off); admits the Compton shoulder
     apply_window::Bool
-    win_half::Float64        # window half-width [keV]
+    win_half::Float64        # symmetric window half-width about 511 keV [keV]
 end
+
+# A (smeared) gamma energy passes the energy selection: above the minimum threshold AND,
+# if a symmetric window is set, within it. Use a low `emin` (e.g. 300 keV) to keep the
+# Compton-region single-crystal hits and see the shoulder; the window purifies to the peak.
+@inline pass_energy(e::Float64, r::Response) =
+    (r.emin <= 0.0 || e >= r.emin) && (!r.apply_window || abs(e - 511.0) <= r.win_half)
 
 # Per-gamma accumulator, reset at each event boundary. We never store the row list: the
 # first scanner deposit (rows are step-ordered) fixes the LOR point and the block; later
@@ -81,9 +88,7 @@ function finish_event!(io, ev::Int, g1::GammaAcc, g2::GammaAcc,
     (contained_one(g1) && contained_one(g2)) || return (false, false)
     e1 = smear_energy(g1.e, resp.eres, rng)
     e2 = smear_energy(g2.e, resp.eres, rng)
-    if resp.apply_window
-        (abs(e1 - 511.0) <= resp.win_half && abs(e2 - 511.0) <= resp.win_half) || return (false, false)
-    end
+    (pass_energy(e1, resp) && pass_energy(e2, resp)) || return (false, false)
     x1, y1, z1 = smear_position((g1.x, g1.y, g1.z), resp.sigma_xyz, rng)
     x2, y2, z2 = smear_position((g2.x, g2.y, g2.z), resp.sigma_xyz, rng)
     is_true = !(g1.phscat || g2.phscat)
@@ -106,6 +111,7 @@ function main()
 
     sigma_xyz = Float64(cfg_get(cfg, "detector", "sigma_xyz_mm", 0.0))
     eres      = Float64(cfg_get(cfg, "detector", "eres", 0.0))
+    emin      = Float64(cfg_get(cfg, "detector", "emin_keV", 0.0))
     window    = Float64(cfg_get(cfg, "detector", "window_fwhm", 0.0))
     seed      = Int(cfg_get(cfg, "detector", "seed", 1234))
     fmt       = String(cfg_get(cfg, "output", "format", "csv"))
@@ -113,20 +119,21 @@ function main()
     window > 0.0 && eres <= 0.0 &&
         error("[detector].window_fwhm requires eres > 0 (the window width scales with the resolution)")
 
-    mode  = (sigma_xyz > 0.0 || eres > 0.0 || window > 0.0) ? "det" : "truth"
+    mode  = (sigma_xyz > 0.0 || eres > 0.0 || window > 0.0 || emin > 0.0) ? "det" : "truth"
     stack = isempty(a["stack"]) ? joinpath(outdir, "stack.csv") : rp(a["stack"])
     out   = isempty(a["out"])   ? joinpath(outdir, "coincidences_$mode.csv") : rp(a["out"])
     isfile(stack) || error("stack file '$stack' not found (run simulate_phantom.jl first)")
 
-    resp = Response(sigma_xyz, eres, window > 0.0, window * energy_fwhm(511.0, eres))
+    resp = Response(sigma_xyz, eres, emin, window > 0.0, window * energy_fwhm(511.0, eres))
     rng  = MersenneTwister(seed)
 
     if mode == "det"
+        ecut = resp.apply_window ? "window ±$(round(resp.win_half,digits=1)) keV" :
+               (emin > 0.0 ? "Emin $(round(emin,digits=0)) keV" : "no energy cut")
         println("run '$tag' [det]: σ_xyz=$(resp.sigma_xyz) mm, eres=$(round(100*resp.eres,digits=1))% @511 keV, " *
-                (resp.apply_window ? "window ±$(round(resp.win_half,digits=1)) keV" : "no window") *
-                "  (seed $seed)")
+                "$ecut  (seed $seed)")
     else
-        println("run '$tag' [truth]: no smearing, no energy window")
+        println("run '$tag' [truth]: no smearing, no energy cut")
     end
 
     open(stack, "r") do fin

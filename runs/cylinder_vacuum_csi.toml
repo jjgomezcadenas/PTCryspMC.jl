@@ -1,9 +1,7 @@
-# Non-attenuated reference: sphere phantom filled with Vacuum (Σ=0, no scatter) so every
-# coincidence is `true`. Same CsI ring + response as sphere_water_csi (Emin 300 keV), so the
-# two differ only in the phantom material — isolating the phantom-scatter contribution.
+# Non-attenuated reference for the cylinder phantom: Vacuum fill, CsI ring. All `true`.
 
 [geometry]
-file = "geometry/geometry_sphere.json"
+file = "geometry/geometry.json"
 phantom_material = "Vacuum"
 
 [source]

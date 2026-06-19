@@ -234,10 +234,11 @@ predicted, measured 8 % CsI), because both photons must cross the water unscatte
 The reduction test confirms `navigate_photon` is bit-for-bit `propagate_photon` when a
 single absorbing material is crossed (the air leg consumes no randomness).
 
-**Test status:** `Pkg.test` — **1701 assertions** pass (foundations, phantom, single
-crystal, the `CylShell` shell intersections, the block/wheel grid, scanner loading, the
-air world, `locate`, `next_boundary` + bore re-entry, the navigator's reduction to
-single-volume transport, and the phantom leg + energy conservation). All scripts run.
+**Test status:** `Pkg.test` — **202 assertions** pass (foundations, phantom, single
+crystal, the `CylShell` shell + the `Sphere` solid, the block/wheel grid, scanner loading,
+the air world, the navigator `locate` / `next_boundary` + bore re-entry / reduction /
+phantom leg, the emission `Source` + acollinearity, the detector smearing, and the TOML
+config). All scripts run.
 
 ---
 
@@ -251,15 +252,19 @@ single-volume transport, and the phantom leg + energy conservation). All scripts
   - *3a — the multi-volume navigator: done* (see above). A photon born in the water
     phantom scatters, exits, crosses the air and reaches the ring, switching material at
     each boundary; validated against Beer–Lambert and the air-only unit test.
-  - *3b — coincidences (next):* turn the navigated stacks into a singles list +
-    same-annihilation coincidences, tagged **true** (neither photon scattered in the
-    phantom) / **scatter** (≥1 did). The CSV already carries the phantom-scatter flag, so
-    this is bookkeeping on the navigated output, with a phantom-distributed source.
-- **Step 4 — hits & selection.** Hit formation (first interaction, smear, energy
-  window) and the two-opposite-block selection.
-- **Step 5 — randoms.** The time-tag-and-pair pass over the singles.
-- **Step 6 — detectors.** The monolithic detector configs (CsI, CsI(Tl), BGO):
-  crystal material tables (CsI, BGO done; CsI(Tl), LYSO to add) + resolutions.
+  - *3b — coincidences: done.* `scripts/build_coincidences.jl` streams the navigated stack
+    into a list-mode coincidence file, tagged **true**/**scatter** from the phantom-scatter
+    flag.
+- **Step 4 — hits & selection: done.** Hit = first scanner interaction (LOR point) +
+  summed crystal energy; detector response (`src/detector.jl`: σ_xyz, FWHM(E)) and the
+  energy selection (symmetric window or an `emin_keV` minimum) in `build_coincidences.jl`;
+  the two-crystal clean selection (each gamma one block). The whole **analytic-phantom →
+  LOR** track (uniform `Source` + acollinearity, `Sphere` solid, TOML-config pipeline,
+  per-config + matrix plots, run in parallel) is in `dev/phantom_track_plan.md` (A–F done).
+- **Step 5 — randoms.** The time-tag-and-pair pass over the singles (needs real times).
+- **Production I/O (Phase G remainder).** The `--singles` reduced stack + HDF5 for 10⁸
+  runs (the TOML/naming half is done).
+- **Step 6 — detectors.** CsI and BGO done (via the run configs); CsI(Tl), LYSO to add.
 
 Carried-over technical TODOs from the foundations:
 

@@ -46,7 +46,13 @@ Rotate a unit vector from a local frame (z = ref_dir) into the global frame.
 function rotate_to_global(local_vec, ref_dir)::Vector{Float64}
     n = sqrt(ref_dir[1]^2 + ref_dir[2]^2 + ref_dir[3]^2)
     rd = ref_dir ./ n
-    abs(rd[3]) > 0.99999 && return local_vec .* sign(rd[3])
+    # Near-pole: the local frame ≈ the global frame (up to a flip). Build a Vector
+    # explicitly so a tuple `local_vec` (e.g. from the acollinearity tilt) still returns
+    # the declared Vector{Float64}, not a tuple.
+    if abs(rd[3]) > 0.99999
+        s = sign(rd[3])
+        return Float64[local_vec[1]*s, local_vec[2]*s, local_vec[3]*s]
+    end
     rp = sqrt(rd[1]^2 + rd[2]^2)
     e1 = Float64[-rd[3]*rd[1], -rd[3]*rd[2], -(rd[3]^2 - 1.0)] ./ rp
     e2 = Float64[-rd[2], rd[1], 0.0] ./ rp
