@@ -285,16 +285,38 @@ QA/benchmark/experiment scripts (`check_singles`, `diff_singles`, `quantize_sing
 `hdf5_size_test`, the benches), `scripts/run/` the parallel launchers (`run_matrix.sh`,
 `plot_all.sh`).
 
-**Deferred within Phase G:** the `build_coincidences` singles-reader (to consume the singles
-stack for LORs + a bit-for-bit diff vs the full stack).
+### LORs from singles — the production coincidence builder
 
-**Test status:** `Pkg.test` — **763 assertions** pass (foundations, phantom, single
+The singles stack feeds the **LOR (coincidence) list**. The LOR selection — pair the two
+photons of an annihilation, require each contained in one block, smear + energy-select — was
+lifted out of `build_coincidences.jl` into a shared **`src/coincidences.jl`** (`Response`,
+`GammaAcc`, `fill_full!`/`fill_singles!`, sink-based `finish_event!`); `build_coincidences.jl`
+now uses it (the full-stack → CSV dev path, **byte-identical** before/after the refactor,
+proven by a worktree diff). The new **`scripts/build_coincidences_from_singles.jl`** reads a
+singles stack (either format) and fills `GammaAcc` directly → `output/<tag>/lors_{truth|det}.h5`
+(`src/coincidences_hdf5.jl`: quantized Int16 columnar, streaming extensible-dataset writer,
+truth ∈ {true=0, scatter=1}, `random=2` reserved, `has_randoms=false`). The LOR list is the
+list-mode deliverable (one record = one LOR); the *complete* measurement adds the Step-5 random
+LORs, merged once real times exist. `scripts/tests/check_lors.jl` validates it.
+
+**Validated:** the deferred bit-for-bit check, as a unit test — the singles fill
+(`navigate_single_photons`) produces the SAME `GammaAcc` and hence the SAME LORs as the
+full-stack fill (`navigate_photon`) on the same events, through the shared core. The honest
+result: discrete selection fields and the LOR point are **exact**, the summed energy agrees to
+**float precision** (the full path sums per-interaction keV; the singles path sums MeV once),
+so the two pipelines accept the same events (bar a vanishingly rare energy-cut boundary flip).
+A 10⁴-event run: 13.7 % acceptance, 56.8 % true / 43.2 % scatter, **87.7 % of LORs join roughly
+opposite blocks** (the back-to-back signature). **Deferred:** real times + the `random` LORs
+(Step 5); a Julia reader/reducer for the production LOR HDF5 (analysis side).
+
+**Test status:** `Pkg.test` — **770 assertions** pass (foundations, phantom, single
 crystal, the `CylShell` shell + the `Sphere` solid, the block/wheel grid, scanner loading,
 the air world, the navigator `locate` / `next_boundary` + bore re-entry / reduction /
 phantom leg, `rotate_to_global_t`, `navigate_single_photons` matching the full-stack
 reduction + zero-allocation, the chunking/determinism, the singles quantization + binary-part
-+ HDF5 round-trip, the emission `Source` + acollinearity, the detector smearing, and the TOML
-config). All scripts run.
++ HDF5 round-trip, the coincidence core singles-fill ≡ full-stack-fill + LOR HDF5 round-trip,
+the emission `Source` + acollinearity, the detector smearing, and the TOML config). All
+scripts run.
 
 ---
 
@@ -320,10 +342,11 @@ config). All scripts run.
 - **Step 5 — randoms.** The time-tag-and-pair pass over the singles (needs real times). The
   singles stack it consumes now exists (`simulate_source_mt.jl`); randoms adds an isotope tag
   + a sampled time to each singles row.
-- **Production I/O (Phase G).** Singles stack + multi-threading + quantized-Int16 HDF5 output
-  are **done** (`navigate_single_photons` + `simulate_source_mt.jl`, csv|hdf5). Still deferred:
-  teaching `build_coincidences` to **read** the singles stack (the LOR builder over singles,
-  auto-detecting csv/hdf5).
+- **Production I/O (Phase G) — done.** Singles stack + multi-threading + quantized-Int16 HDF5
+  (`simulate_source_mt.jl`), and the LOR builder over singles
+  (`build_coincidences_from_singles.jl` → `lors_{truth,det}.h5`) via the shared
+  `src/coincidences.jl`. The full chain `simulate_source_mt → singles → build_coincidences_from_singles`
+  is complete (trues + scatters; randoms are Step 5).
 - **Step 6 — detectors.** CsI and BGO done (via the run configs); CsI(Tl), LYSO to add.
 
 Carried-over technical TODOs from the foundations:

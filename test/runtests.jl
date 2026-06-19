@@ -649,6 +649,97 @@ end
         rm(dir; recursive=true)
     end
 
+    @testset "coincidence core — singles fill ≡ full-stack fill" begin
+        mats = load_materials(DATA_DIR)
+        geom = load_geometry(GEOM_JSON, mats)
+
+        # Reduce a full-stack NavStep history to a GammaAcc the build_coincidences way.
+        # Convert to the pipeline's units as the drivers do: positions cm→mm (×10), energy
+        # MeV→keV (×1000), so the keV energy cut (emin=300) is meaningful.
+        function full_acc(steps)
+            a = GammaAcc()
+            for st in steps
+                st.hit.process === :escape && continue
+                if st.volume === :scanner
+                    fill_full!(a, st.hit.x*10, st.hit.y*10, st.hit.z*10, st.hit.e_dep*1000, st.iz, st.iphi)
+                elseif st.volume === :phantom
+                    a.phscat = true
+                end
+            end
+            a
+        end
+        sing_acc(s) = (a = GammaAcc(); s.reached && fill_singles!(a, s.x*10, s.y*10, s.z*10, s.e*1000, s.iz, s.iphi, s.nblocks, s.phscat); a)
+        # Compared only for REACHED gammas (the only ones that can form a LOR): discrete fields
+        # and the LOR point must be EXACT; the summed energy agrees only to float precision (the
+        # full path sums per-interaction keV, the singles path sums MeV once then ×1000). An
+        # UNREACHED photon writes no singles row, so its phantom-scatter flag is absent there —
+        # irrelevant, since it can never be in a coincidence.
+        feq(a, b) = a.reached == b.reached && (!a.reached || (
+                    a.x == b.x && a.y == b.y && a.z == b.z && a.iz == b.iz && a.iphi == b.iphi &&
+                    a.overspill == b.overspill && a.phscat == b.phscat && isapprox(a.e, b.e; rtol=1e-9)))
+        # A LOR tuple: all fields exact except the two (smeared) energies (indices 5, 12), which
+        # inherit the ~1e-9 energy difference.
+        ceq(p, q) = all(j -> p[j] == q[j], (1, 2, 3, 4, 6, 7, 8, 9, 10, 11, 13, 14, 15, 16, 17, 18, 19)) &&
+                    isapprox(p[5], q[5]; rtol=1e-9) && isapprox(p[12], q[12]; rtol=1e-9)
+
+        # The singles fill (from navigate_single_photons) must produce the SAME GammaAcc as the
+        # full-stack fill (from navigate_photon) — discrete fields exact, energy to float
+        # precision — and hence the SAME coincidences through the shared finish_event!. TRUTH
+        # mode: acceptance is then fixed by the exact discrete fields, so the two lists align
+        # (a det-mode energy cut could flip acceptance for an event whose energy sits within the
+        # ~1e-9 difference of the cut — the smear/window path is shared and tested elsewhere).
+        resp = Response(0.0, 0.0, 0.0, false, 0.0)
+        emit_full = Any[]; emit_sing = Any[]
+        nacc_mismatch = 0
+        for ev in 1:3000
+            pos, d1, d2 = emit_pair(PointSource(geom.phantom.position), MersenneTwister(5000 + ev))
+            af = GammaAcc[]; as = GammaAcc[]
+            for (k, dir) in ((1, d1), (2, d2))
+                seed = 90000 + 2ev + k
+                gf2 = full_acc(navigate_photon(geom, 0.511, pos, dir, MersenneTwister(seed)))
+                gs2 = sing_acc(navigate_single_photons(geom, 0.511, pos, dir, MersenneTwister(seed)))
+                feq(gf2, gs2) || (nacc_mismatch += 1)
+                push!(af, gf2); push!(as, gs2)
+            end
+            finish_event!((a...) -> push!(emit_full, a), ev, af[1], af[2], pos[1], pos[2], pos[3], resp, MersenneTwister(ev))
+            finish_event!((a...) -> push!(emit_sing, a), ev, as[1], as[2], pos[1], pos[2], pos[3], resp, MersenneTwister(ev))
+        end
+        @test nacc_mismatch == 0             # GammaAcc identical (discrete exact, energy to rtol)
+        @test !isempty(emit_full)
+        @test length(emit_full) == length(emit_sing)
+        @test all(((p, q),) -> ceq(p, q), zip(emit_full, emit_sing))   # same LORs through the core
+    end
+
+    @testset "coincidence HDF5 round-trip" begin
+        dir = mktempdir(); p = joinpath(dir, "lors.h5")
+        w = CoincidenceWriter(p, Dict("has_randoms" => false); block=32)   # small block → many flushes
+        ref = Tuple[]
+        for ev in 1:150
+            args = (ev, 100.0 + ev, -50.0, 30.0, 511.0, 0.0, ev % 20, ev % 48,
+                    -200.0, 40.0, -30.0, 480.0, 0.0, (ev + 3) % 20, (ev + 5) % 48,
+                    1.0, 2.0, 3.0, Int8(ev % 2))
+            push_coincidence!(w, args...); push!(ref, args)
+        end
+        @test close(w) == 150
+        got = Tuple[]
+        foreach_coincidences_hdf5(p; batch=32) do b
+            for i in 1:length(b)
+                push!(got, (Int(b.event[i]), decode_xyz(b.x1[i]), decode_e(b.e1[i]),
+                            Int(b.iz1[i]), Int(b.iphi1[i]), Int(b.iz2[i]), Int(b.iphi2[i]), Int8(b.truth[i])))
+            end
+        end
+        @test length(got) == 150
+        ok = true
+        for (r, g) in zip(ref, got)
+            ok &= g[1] == r[1] && g[end] == r[19]                       # event, truth exact
+            ok &= g[4] == r[7] && g[5] == r[8] && g[6] == r[14] && g[7] == r[15]  # blocks exact
+            ok &= abs(g[2] - r[2]) <= XYZ_SCALE_MM/2 + 1e-6             # x1 within ½ step
+            ok &= abs(g[3] - r[5]) <= E_SCALE_KEV/2 + 1e-6             # e1 within ½ step
+        end
+        @test ok
+        rm(dir; recursive=true)
+    end
+
     @testset "uniform volume sampling" begin
         rng = MersenneTwister(7)
 

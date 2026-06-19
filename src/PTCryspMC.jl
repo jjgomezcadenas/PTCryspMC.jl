@@ -18,6 +18,8 @@ include("source.jl")       # emission source + back-to-back acollinearity
 include("singles.jl")      # chunked singles generation core + integer quantization + part I/O
 include("singles_hdf5.jl") # HDF5 container for the singles stack (pack + stream-read)
 include("detector.jl")     # detector response: energy + position smearing
+include("coincidences.jl") # LOR selection core (shared by both coincidence builders)
+include("coincidences_hdf5.jl") # HDF5 container for the LOR list (streaming writer + reader)
 include("config.jl")       # TOML run-config reader (driver scripts)
 
 export XCOMData, load_xcom,
@@ -34,7 +36,10 @@ export XCOMData, load_xcom,
        chunk_ranges, singles_chunk!,
        XYZ_SCALE_MM, E_SCALE_KEV, encode_xyz_mm, encode_e_keV, decode_xyz, decode_e,
        SinglesBuffer, singles_columns, push_single!, write_part, read_part,
-       pack_singles_hdf5, foreach_singles_hdf5,
+       pack_singles_hdf5, foreach_singles_hdf5, singles_hdf5_attr,
+       Response, pass_energy, GammaAcc, reset!, contained_one, fill_full!, fill_singles!,
+       finish_event!, TRUTH_TRUE, TRUTH_SCATTER, TRUTH_RANDOM,
+       CoincidenceBuffer, coinc_columns, push_coincidence!, CoincidenceWriter, set_lor_attr!, foreach_coincidences_hdf5,
        energy_fwhm, energy_sigma, smear_energy, smear_position,
        read_config, cfg_get, run_tag
 

@@ -52,6 +52,10 @@ function pack_singles_hdf5(out::AbstractString, partpaths::Vector{String}, rows:
     total
 end
 
+"Read a root attribute from a singles HDF5 (`default` if absent)."
+singles_hdf5_attr(path::AbstractString, key::AbstractString, default=nothing) =
+    h5open(h -> haskey(attributes(h), key) ? read(attributes(h)[key]) : default, path, "r")
+
 """
     foreach_singles_hdf5(f, path; batch=2^20) -> total
 

@@ -44,60 +44,17 @@ function parse_cli()
     parse_args(s)
 end
 
-# Detector response. All-off = truth mode (no smearing, no energy cut).
-struct Response
-    sigma_xyz::Float64       # mm
-    eres::Float64            # fractional FWHM at 511 keV
-    emin::Float64            # minimum gamma energy [keV] (0 = off); admits the Compton shoulder
-    apply_window::Bool
-    win_half::Float64        # symmetric window half-width about 511 keV [keV]
-end
-
-# A (smeared) gamma energy passes the energy selection: above the minimum threshold AND,
-# if a symmetric window is set, within it. Use a low `emin` (e.g. 300 keV) to keep the
-# Compton-region single-crystal hits and see the shoulder; the window purifies to the peak.
-@inline pass_energy(e::Float64, r::Response) =
-    (r.emin <= 0.0 || e >= r.emin) && (!r.apply_window || abs(e - 511.0) <= r.win_half)
-
-# Per-gamma accumulator, reset at each event boundary. We never store the row list: the
-# first scanner deposit (rows are step-ordered) fixes the LOR point and the block; later
-# deposits add energy and, if in a different block, flag overspill.
-mutable struct GammaAcc
-    reached::Bool
-    x::Float64; y::Float64; z::Float64
-    iz::Int; iphi::Int
-    e::Float64
-    overspill::Bool          # a deposit landed in a second, different block
-    phscat::Bool
-end
-GammaAcc() = GammaAcc(false, 0.0, 0.0, 0.0, -1, -1, 0.0, false, false)
-
-function reset!(a::GammaAcc)
-    a.reached = false; a.x = a.y = a.z = 0.0; a.iz = a.iphi = -1
-    a.e = 0.0; a.overspill = false; a.phscat = false
-    a
-end
-
-"A gamma passes if it reached the detector and stayed within one crystal block."
-contained_one(a::GammaAcc) = a.reached && !a.overspill
-
-# Finalise one event's two gammas: smear, apply the energy window, and emit a coincidence
-# row if both pass. (x0,y0,z0) is the true emission point. Returns (emitted, is_true).
-function finish_event!(io, ev::Int, g1::GammaAcc, g2::GammaAcc,
-                       x0::Float64, y0::Float64, z0::Float64, resp::Response, rng)
-    (contained_one(g1) && contained_one(g2)) || return (false, false)
-    e1 = smear_energy(g1.e, resp.eres, rng)
-    e2 = smear_energy(g2.e, resp.eres, rng)
-    (pass_energy(e1, resp) && pass_energy(e2, resp)) || return (false, false)
-    x1, y1, z1 = smear_position((g1.x, g1.y, g1.z), resp.sigma_xyz, rng)
-    x2, y2, z2 = smear_position((g2.x, g2.y, g2.z), resp.sigma_xyz, rng)
-    is_true = !(g1.phscat || g2.phscat)
-    truth = is_true ? "true" : "scatter"
+# The LOR selection core — Response, GammaAcc, pass_energy, contained_one, fill_full!,
+# finish_event! — now lives in src/coincidences.jl, shared with build_coincidences_from_singles.jl.
+# Here we only supply the CSV-row sink that `finish_event!` emits into; the output schema and
+# values are unchanged (the truth Int8 code is mapped back to the "true"/"scatter" strings).
+function write_lor_row(io, ev, x1, y1, z1, e1, t1, iz1, iphi1,
+                       x2, y2, z2, e2, t2, iz2, iphi2, x0, y0, z0, truth)
+    ts = truth == TRUTH_TRUE ? "true" : "scatter"
     println(io, join((ev,
-        round(x1, digits=4), round(y1, digits=4), round(z1, digits=4), round(e1, digits=4), 0.0, g1.iz, g1.iphi,
-        round(x2, digits=4), round(y2, digits=4), round(z2, digits=4), round(e2, digits=4), 0.0, g2.iz, g2.iphi,
-        round(x0, digits=4), round(y0, digits=4), round(z0, digits=4), truth), ","))
-    (true, is_true)
+        round(x1, digits=4), round(y1, digits=4), round(z1, digits=4), round(e1, digits=4), 0.0, iz1, iphi1,
+        round(x2, digits=4), round(y2, digits=4), round(z2, digits=4), round(e2, digits=4), 0.0, iz2, iphi2,
+        round(x0, digits=4), round(y0, digits=4), round(z0, digits=4), ts), ","))
 end
 
 function main()
@@ -164,7 +121,8 @@ function main()
                 if ev != cur_ev
                     if cur_ev != -1
                         n_ev += 1
-                        emitted, is_true = finish_event!(io, cur_ev, g[1], g[2], ev_x0, ev_y0, ev_z0, resp, rng)
+                        emitted, is_true = finish_event!((a...) -> write_lor_row(io, a...),
+                                                         cur_ev, g[1], g[2], ev_x0, ev_y0, ev_z0, resp, rng)
                         n_pair += emitted; n_true += (emitted && is_true)
                     end
                     reset!(g[1]); reset!(g[2]); cur_ev = ev
@@ -178,19 +136,13 @@ function main()
                 f[ivol] == "scanner" || continue
                 edep = parse(Float64, f[ide])
                 edep > 0.0 || continue                  # skip the scanner :escape row (e_dep=0)
-                blk = (parse(Int, f[iiz]), parse(Int, f[iiphi]))
-                if !acc.reached                          # first scanner deposit: the LOR point
-                    acc.reached = true
-                    acc.x = parse(Float64, f[ix]); acc.y = parse(Float64, f[iy]); acc.z = parse(Float64, f[iz_])
-                    acc.iz, acc.iphi = blk
-                elseif blk != (acc.iz, acc.iphi)
-                    acc.overspill = true                 # a second, different crystal
-                end
-                acc.e += edep
+                fill_full!(acc, parse(Float64, f[ix]), parse(Float64, f[iy]), parse(Float64, f[iz_]),
+                           edep, parse(Int, f[iiz]), parse(Int, f[iiphi]))
             end
             if cur_ev != -1                              # the final event
                 n_ev += 1
-                emitted, is_true = finish_event!(io, cur_ev, g[1], g[2], ev_x0, ev_y0, ev_z0, resp, rng)
+                emitted, is_true = finish_event!((a...) -> write_lor_row(io, a...),
+                                                 cur_ev, g[1], g[2], ev_x0, ev_y0, ev_z0, resp, rng)
                 n_pair += emitted; n_true += (emitted && is_true)
             end
         end
