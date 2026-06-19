@@ -54,7 +54,7 @@ function main()
 
     cfg = read_config(a["config"])
     tag = run_tag(cfg, a["config"])
-    outdir = joinpath(rp(cfg_get(cfg, "output", "dir", "output")), tag)
+    outdir = joinpath(rp(prod_base(cfg)), tag)
     inp = isempty(a["in"])  ? joinpath(outdir, "singles.csv") : rp(a["in"])
     isfile(inp) || error("input '$inp' not found (run simulate_source_mt.jl first)")
     out = isempty(a["out"]) ? joinpath(dirname(inp), "singles_int.csv") : rp(a["out"])

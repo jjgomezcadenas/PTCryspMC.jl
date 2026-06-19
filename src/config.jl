@@ -25,3 +25,12 @@ function run_tag(cfg::AbstractDict, configpath::AbstractString)::String
     t = cfg_get(cfg, "output", "tag", "")
     isempty(String(t)) ? splitext(basename(configpath))[1] : String(t)
 end
+
+"""
+    prod_base(cfg) -> String
+
+Base directory for the **production** chain outputs (singles + LORs), from `[output].prod_dir`
+(default `"prod"`). Kept separate from the dev chain's `[output].dir` (default `"output"`, full
+stacks + dev coincidences + plots) so the two pipelines never collide in one `output/<tag>/`.
+"""
+prod_base(cfg::AbstractDict)::String = String(cfg_get(cfg, "output", "prod_dir", "prod"))

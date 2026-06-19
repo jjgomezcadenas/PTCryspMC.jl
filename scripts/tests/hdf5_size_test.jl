@@ -31,7 +31,7 @@ function main()
     REPO = normpath(joinpath(@__DIR__, "..", ".."))
     rp(p) = (q = String(p); isabspath(q) ? q : joinpath(REPO, q))
     cfg = read_config(a["config"]); tag = run_tag(cfg, a["config"])
-    outdir = joinpath(rp(cfg_get(cfg, "output", "dir", "output")), tag)
+    outdir = joinpath(rp(prod_base(cfg)), tag)
     inp = isempty(a["in"]) ? joinpath(outdir, "singles.csv") : rp(a["in"])
     isfile(inp) || error("input '$inp' not found")
 

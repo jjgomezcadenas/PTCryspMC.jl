@@ -4,8 +4,8 @@
 # row already IS the formed per-gamma hit, so this fills `GammaAcc` directly (vs the full-stack
 # accumulation in build_coincidences.jl) and runs the SAME selection core (src/coincidences.jl).
 #
-# Input: singles in either format (default output/<tag>/singles.{h5,csv} by [output].format;
-# --singles override; format by extension). Output: output/<tag>/lors_{truth|det}.h5 — quantized
+# Input: singles in either format (default prod/<tag>/singles.{h5,csv} by [output].format;
+# --singles override; format by extension). Output: prod/<tag>/lors_{truth|det}.h5 — quantized
 # Int16 columns, chunked + shuffle+deflate, with truth ∈ {true=0, scatter=1} (random=2 reserved
 # for Step 5) and a `has_randoms=false` attribute (this is the LOR list MINUS randoms; the
 # complete, time-ordered measurement = these ∪ the Step-5 random LORs, merged once times exist).
@@ -23,7 +23,7 @@ function parse_cli()
     s = ArgParseSettings(description="Build the LOR list from a singles stack (TOML-config driven).")
     @add_arg_table! s begin
         "--config";  help = "run config TOML"; required = true
-        "--singles"; help = "override the input singles path (default output/<tag>/singles.{h5,csv})"; default = ""
+        "--singles"; help = "override the input singles path (default prod/<tag>/singles.{h5,csv})"; default = ""
         "--out";     help = "override the output LOR path"; default = ""
     end
     parse_args(s)
@@ -98,7 +98,7 @@ function main()
 
     cfg = read_config(a["config"])
     tag = run_tag(cfg, a["config"])
-    outdir = joinpath(rp(cfg_get(cfg, "output", "dir", "output")), tag)
+    outdir = joinpath(rp(prod_base(cfg)), tag)
 
     sigma_xyz = Float64(cfg_get(cfg, "detector", "sigma_xyz_mm", 0.0))
     eres      = Float64(cfg_get(cfg, "detector", "eres", 0.0))

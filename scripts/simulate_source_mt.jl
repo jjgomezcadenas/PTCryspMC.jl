@@ -92,7 +92,7 @@ function main()
     ishdf5 = fmt == "hdf5"
 
     tag = run_tag(cfg, a["config"])
-    outdir = joinpath(rp(cfg_get(cfg, "output", "dir", "output")), tag)
+    outdir = joinpath(rp(prod_base(cfg)), tag)
     mkpath(outdir)
     cp(a["config"], joinpath(outdir, "config.toml"); force=true)
     out = joinpath(outdir, ishdf5 ? "singles.h5" : "singles.csv")

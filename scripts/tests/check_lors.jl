@@ -9,7 +9,7 @@
 # Reported: rows, acceptance %, truth split (true/scatter/random), hit energies, and the block
 # OPPOSITION (a coincidence should join two roughly opposite crystals — Δφ ≈ n_phi/2).
 #
-# TOML-config driven (reads output/<tag>/lors_{truth|det}.h5, mode from [detector]):
+# TOML-config driven (reads prod/<tag>/lors_{truth|det}.h5, mode from [detector]):
 #   julia --project=. scripts/tests/check_lors.jl --config runs/sphere_water_csi.toml
 #   julia --project=. scripts/tests/check_lors.jl --config runs/sphere_water_csi.toml --lors path.h5
 
@@ -22,7 +22,7 @@ function parse_cli()
     s = ArgParseSettings(description="Validate a LOR HDF5 file: structure + distributions.")
     @add_arg_table! s begin
         "--config"; help = "run config TOML"; required = true
-        "--lors";   help = "override the LOR path (default output/<tag>/lors_{truth|det}.h5)"; default = ""
+        "--lors";   help = "override the LOR path (default prod/<tag>/lors_{truth|det}.h5)"; default = ""
     end
     parse_args(s)
 end
@@ -58,7 +58,7 @@ function main()
 
     cfg = read_config(a["config"])
     tag = run_tag(cfg, a["config"])
-    outdir = joinpath(rp(cfg_get(cfg, "output", "dir", "output")), tag)
+    outdir = joinpath(rp(prod_base(cfg)), tag)
     sigma_xyz = Float64(cfg_get(cfg, "detector", "sigma_xyz_mm", 0.0))
     eres   = Float64(cfg_get(cfg, "detector", "eres", 0.0))
     emin   = Float64(cfg_get(cfg, "detector", "emin_keV", 0.0))

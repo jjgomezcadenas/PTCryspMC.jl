@@ -10,7 +10,7 @@
 # Reported: rows, events, reach %, gamma balance, phantom-scatter %, overspill %, energy + a
 # coarse spectrum. The format is auto-detected from the file extension (.csv / .h5).
 #
-# TOML-config driven (reads output/<tag>/singles.{csv,h5}, picking by [output].format):
+# TOML-config driven (reads prod/<tag>/singles.{csv,h5}, picking by [output].format):
 #   julia --project=. scripts/check_singles.jl --config runs/sphere_water_csi.toml
 #   julia --project=. scripts/check_singles.jl --config runs/sphere_water_csi.toml --singles path
 
@@ -26,7 +26,7 @@ function parse_cli()
     s = ArgParseSettings(description="Validate a singles stack (CSV or HDF5): structure + distributions.")
     @add_arg_table! s begin
         "--config";  help = "run config TOML"; required = true
-        "--singles"; help = "override the singles path (default output/<tag>/singles.{csv,h5})"; default = ""
+        "--singles"; help = "override the singles path (default prod/<tag>/singles.{csv,h5})"; default = ""
     end
     parse_args(s)
 end
@@ -91,7 +91,7 @@ function main()
 
     cfg = read_config(a["config"])
     tag = run_tag(cfg, a["config"])
-    outdir = joinpath(rp(cfg_get(cfg, "output", "dir", "output")), tag)
+    outdir = joinpath(rp(prod_base(cfg)), tag)
     fmt = String(cfg_get(cfg, "output", "format", "csv"))
     default = joinpath(outdir, fmt == "hdf5" ? "singles.h5" : "singles.csv")
     singles = isempty(a["singles"]) ? default : rp(a["singles"])

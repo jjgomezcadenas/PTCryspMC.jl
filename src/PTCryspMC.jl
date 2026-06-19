@@ -41,6 +41,6 @@ export XCOMData, load_xcom,
        finish_event!, TRUTH_TRUE, TRUTH_SCATTER, TRUTH_RANDOM,
        CoincidenceBuffer, coinc_columns, push_coincidence!, CoincidenceWriter, set_lor_attr!, foreach_coincidences_hdf5,
        energy_fwhm, energy_sigma, smear_energy, smear_position,
-       read_config, cfg_get, run_tag
+       read_config, cfg_get, run_tag, prod_base
 
 end # module PTCryspMC
