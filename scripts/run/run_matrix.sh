@@ -34,8 +34,8 @@ start=$SECONDS
 for cfg in $configs; do
   tag=${cfg:t:r}
   (
-    julia --project=. scripts/simulate_phantom.jl  --config $cfg &&
-    julia --project=. scripts/build_coincidences.jl --config $cfg
+    julia --project=. scripts/dev/simulate_phantom.jl  --config $cfg &&
+    julia --project=. scripts/dev/build_coincidences.jl --config $cfg
   ) >/tmp/ptc_$tag.log 2>&1 &
 done
 wait

@@ -99,8 +99,10 @@ The photon transport and geometry are photon-only:
   loop `propagate_photon` (through a `PhysicalVolume`); only the photon path is followed,
   with local energy deposition.
 
-Other dirs: `geometry/` (JSON world), `data/` (materials + XCOM), `scripts/` (Julia physics
-drivers; `scripts/tests/` = QA/benchmark/experiment scripts, `scripts/run/` = parallel
+Other dirs: `geometry/` (JSON world), `data/` (materials + XCOM), `scripts/` (the **production
+chain** — `simulate_source_mt.jl`, `build_coincidences_from_singles.jl`; subdirs `scripts/dev/`
+= the full-stack dev chain `simulate_phantom.jl` + `build_coincidences.jl`, `scripts/studies/`
+= one-off explorations, `scripts/tests/` = QA/benchmark scripts, `scripts/run/` = parallel
 launchers), `py/` (Python plotters), `runs/` (TOML run configs, tracked), `output/` (per-run
 `output/<tag>/` results, gitignored), `test/`.
 
@@ -126,7 +128,8 @@ formation + selection, the randoms pass.
 
 - **Julia** — the photon transport and geometry, and the coincidence selection. The
   selection runs as a *streaming* pass over the event-ordered stack
-  (`scripts/build_coincidences.jl`): O(1) memory, no whole-file load, so it scales to the
+  (`scripts/dev/build_coincidences.jl`, and `scripts/build_coincidences_from_singles.jl` for
+  the singles stack): O(1) memory, no whole-file load, so it scales to the
   large stacks a full run produces (this is why it is Julia, not Python — see the note
   below).
 - **Python** — read a scenario, the control plots, and lighter downstream analysis.

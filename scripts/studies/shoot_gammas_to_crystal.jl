@@ -27,7 +27,7 @@ using Random
 function parse_cli()
     s = ArgParseSettings(description="Shoot 511 keV photons into a CsI crystal box; write the interaction stack.")
     @add_arg_table! s begin
-        "--data";         help = "data dir";          default = joinpath(@__DIR__, "..", "data")
+        "--data";         help = "data dir";          default = joinpath(@__DIR__, "..", "..", "data")
         "--tag";          help = "output suffix (csi_crystal_<tag>_stack.csv)"; default = "cone"
         "--out";          help = "output CSV (overrides --tag)"; default = ""
         "--material";     help = "crystal material";  default = "CsI"
@@ -46,7 +46,7 @@ function main()
     a = parse_cli()
     mat = load_material(a["data"], a["material"])
     out = isempty(a["out"]) ?
-        joinpath(@__DIR__, "..", "output",
+        joinpath(@__DIR__, "..", "..", "output",
                  "$(lowercase(a["material"]))_crystal_$(a["tag"])_stack.csv") : a["out"]
 
     # Box centred at the origin, placed so the entry (-z) face sits at world z = 0.

@@ -280,10 +280,12 @@ Measured on the 10⁷ run (13.7 M singles): float CSV 1081 MB → int CSV gzip 2
 validates either format; `diff_singles.jl` compares two stacks (HDF5 `-t 1` ≡ `-t 18` data-
 identical; CSV-vs-HDF5 agree within the 0.05 quantization half-step).
 
-**Scripts reorganised:** `scripts/` now holds only the physics drivers; `scripts/tests/` the
-QA/benchmark/experiment scripts (`check_singles`, `diff_singles`, `quantize_singles`,
-`hdf5_size_test`, the benches), `scripts/run/` the parallel launchers (`run_matrix.sh`,
-`plot_all.sh`).
+**Scripts reorganised:** `scripts/` root holds only the **production chain**
+(`simulate_source_mt.jl`, `build_coincidences_from_singles.jl`); `scripts/dev/` the full-stack
+dev chain (`simulate_phantom.jl`, `build_coincidences.jl`), `scripts/studies/` the one-off
+explorations (`shoot_*`, `propagate_*`, `phantom_effect_*`, `material_xsections`),
+`scripts/tests/` the QA/benchmark scripts (`check_singles`, `check_lors`, `diff_singles`,
+`quantize_singles`, `hdf5_size_test`, benches), `scripts/run/` the parallel launchers.
 
 ### LORs from singles — the production coincidence builder
 

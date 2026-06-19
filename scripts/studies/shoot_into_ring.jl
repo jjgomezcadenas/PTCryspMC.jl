@@ -19,8 +19,8 @@ using Random
 function parse_cli()
     s = ArgParseSettings(description="Back-to-back 511 keV pairs from a point source into the detector ring; write both photon stacks.")
     @add_arg_table! s begin
-        "--data";          help = "data dir";        default = joinpath(@__DIR__, "..", "data")
-        "--geometry";      help = "geometry JSON";   default = joinpath(@__DIR__, "..", "geometry", "geometry.json")
+        "--data";          help = "data dir";        default = joinpath(@__DIR__, "..", "..", "data")
+        "--geometry";      help = "geometry JSON";   default = joinpath(@__DIR__, "..", "..", "geometry", "geometry.json")
         "--out";           help = "output CSV (default output/b2b_<material>_stack.csv)"; default = ""
         "--material";      help = "crystal material"; default = "CsI"
         "--nevents";       help = "n annihilations"; arg_type = Int;     default = 100000
@@ -72,7 +72,7 @@ function main()
                                  sc0.volume.position), sc0.n_phi, sc0.n_z)
 
     out = isempty(a["out"]) ?
-        joinpath(@__DIR__, "..", "output", "b2b_$(lowercase(a["material"]))_stack.csv") : a["out"]
+        joinpath(@__DIR__, "..", "..", "output", "b2b_$(lowercase(a["material"]))_stack.csv") : a["out"]
     E0       = a["energy"] / 1000.0          # MeV
     cut_MeV  = a["cutoff"] / 1000.0
     radius   = a["source-radius"] / 10.0     # mm -> cm

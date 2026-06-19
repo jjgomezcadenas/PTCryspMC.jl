@@ -17,7 +17,7 @@ using Printf
 function parse_cli()
     s = ArgParseSettings(description="Tabulate macroscopic photon cross sections [cm^-1] vs energy for a material.")
     @add_arg_table! s begin
-        "--data";     help = "data dir";          default = joinpath(@__DIR__, "..", "data")
+        "--data";     help = "data dir";          default = joinpath(@__DIR__, "..", "..", "data")
         "--material"; help = "material name";     default = "Water"
         "--out";      help = "output CSV (default output/<material>_xsections.csv)"; default = ""
         "--emin";     help = "min energy [keV]";  arg_type = Float64; default = 10.0
@@ -31,7 +31,7 @@ function main()
     a = parse_cli()
     mat = load_material(a["data"], a["material"])
     out = isempty(a["out"]) ?
-        joinpath(@__DIR__, "..", "output", lowercase(a["material"]) * "_xsections.csv") :
+        joinpath(@__DIR__, "..", "..", "output", lowercase(a["material"]) * "_xsections.csv") :
         a["out"]
 
     emin_MeV, emax_MeV = a["emin"] / 1000.0, a["emax"] / 1000.0

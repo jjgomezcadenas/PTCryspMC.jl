@@ -59,7 +59,7 @@ end
 
 function main()
     a = parse_cli()
-    REPO = normpath(joinpath(@__DIR__, ".."))
+    REPO = normpath(joinpath(@__DIR__, "..", ".."))
     rp(p) = (q = String(p); isabspath(q) ? q : joinpath(REPO, q))
 
     cfg = read_config(a["config"])

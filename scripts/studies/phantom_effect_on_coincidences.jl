@@ -42,8 +42,8 @@ using Printf
 function parse_cli()
     s = ArgParseSettings(description="Compare clean-coincidence fraction air-only vs through the water phantom.")
     @add_arg_table! s begin
-        "--data";      help = "data dir";        default = joinpath(@__DIR__, "..", "data")
-        "--geometry";  help = "geometry JSON";   default = joinpath(@__DIR__, "..", "geometry", "geometry.json")
+        "--data";      help = "data dir";        default = joinpath(@__DIR__, "..", "..", "data")
+        "--geometry";  help = "geometry JSON";   default = joinpath(@__DIR__, "..", "..", "geometry", "geometry.json")
         "--materials"; help = "comma-separated crystal materials"; default = "CsI,BGO"
         "--nevents";   help = "n annihilations"; arg_type = Int;     default = 30000
         "--cutoff";    help = "low-energy cutoff [keV]"; arg_type = Float64; default = 10.0
