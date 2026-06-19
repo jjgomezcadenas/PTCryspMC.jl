@@ -106,13 +106,16 @@ chain** — `simulate_source_mt.jl`, `build_coincidences_from_singles.jl`; subdi
 launchers), `py/` (Python plotters), `runs/` (TOML run configs, tracked), `output/` (per-run
 `output/<tag>/` results, gitignored), `test/`.
 
-The production singles path is `scripts/simulate_source_mt.jl` (multi-threaded, singles-only:
-one row per detected photon via the allocation-free `navigate_single_photons`), writing
-`output/<tag>/singles.{csv,h5}` (`[output].format`). HDF5 stores quantized Int16 columns
-(0.1 mm / 0.1 keV — lossless at detector resolution), chunked + shuffle+deflate, ~6× smaller
-than float CSV and read-fast; the singles list is consumed by the LOR builder and the randoms
-pass. `scripts/tests/check_singles.jl` validates a stack (either format); `diff_singles.jl`
-compares two.
+The **production chain** writes under **`prod/<tag>/`** (separate from the dev `output/<tag>/`;
+base from `[output].prod_dir`, default `prod`): `scripts/simulate_source_mt.jl` (multi-threaded,
+singles-only via the allocation-free `navigate_single_photons`) → `prod/<tag>/singles.{csv,h5}`,
+then `scripts/build_coincidences_from_singles.jl` (reads singles either-format, fills `GammaAcc`
+directly via the shared `src/coincidences.jl`) → `prod/<tag>/lors_{truth,det}.h5`. HDF5 stores
+quantized Int16 columns (0.1 mm / 0.1 keV — lossless at detector resolution), chunked +
+shuffle+deflate (~6× smaller than float CSV, typed/partial fast reads). The LOR list is the
+list-mode deliverable (truth ∈ {true,scatter}; random=2 + a time-ordered merge are Step 5,
+`has_randoms=false` until then). `scripts/tests/check_singles.jl` / `check_lors.jl` validate the
+stacks; `diff_singles.jl` compares two.
 
 The LOR-generation pipeline (`simulate_phantom.jl` → `build_coincidences.jl` →
 `plot_coincidences.py`) is **TOML-config driven**: a `runs/<tag>.toml` (sections

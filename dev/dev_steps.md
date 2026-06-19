@@ -267,7 +267,7 @@ events (0.51 → 3.08 M events/s — sub-linear from the 6 Super / 12 Performanc
 GC-bound), so 10⁸ decays ≈ 32 s.
 
 **Output format — quantized Int16 HDF5.** `simulate_source_mt.jl` writes
-`output/<tag>/singles.{csv,h5}` (`[output].format`, `--format` override), generated *directly*
+`prod/<tag>/singles.{csv,h5}` (`[output].format`, `--format` override), generated *directly*
 (no float intermediate). The compact format quantizes positions to 0.1 mm and energy to
 0.1 keV as integers (`src/singles.jl`: `encode_xyz_mm`/`encode_e_keV`, bounds-checked against
 Int16 → ±3276.7 mm, fails loud not wraps) — lossless vs the ~2 mm / ~50 keV resolution (and
@@ -295,7 +295,7 @@ lifted out of `build_coincidences.jl` into a shared **`src/coincidences.jl`** (`
 `GammaAcc`, `fill_full!`/`fill_singles!`, sink-based `finish_event!`); `build_coincidences.jl`
 now uses it (the full-stack → CSV dev path, **byte-identical** before/after the refactor,
 proven by a worktree diff). The new **`scripts/build_coincidences_from_singles.jl`** reads a
-singles stack (either format) and fills `GammaAcc` directly → `output/<tag>/lors_{truth|det}.h5`
+singles stack (either format) and fills `GammaAcc` directly → `prod/<tag>/lors_{truth|det}.h5`
 (`src/coincidences_hdf5.jl`: quantized Int16 columnar, streaming extensible-dataset writer,
 truth ∈ {true=0, scatter=1}, `random=2` reserved, `has_randoms=false`). The LOR list is the
 list-mode deliverable (one record = one LOR); the *complete* measurement adds the Step-5 random
