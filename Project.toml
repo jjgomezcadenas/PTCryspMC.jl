@@ -6,6 +6,7 @@ authors = ["jjgomezcadenas <jjgomezcadenas@gmail.com>"]
 [deps]
 ArgParse = "c7e460c6-2fb9-53a9-8c5b-16f535851c63"
 CSV = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
+HDF5 = "f67ccb44-e63f-5c2f-98bd-6dc0ccc4ba2f"
 JSON = "682c06a0-de6a-54ab-a142-c8b1cf79cde6"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 TOML = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
@@ -14,6 +15,7 @@ Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 [compat]
 ArgParse = "1.2.0"
 CSV = "0.10.16"
+HDF5 = "0.17.3"
 JSON = "1.6.1"
 Random = "1.11.0"
 TOML = "1.0.3"

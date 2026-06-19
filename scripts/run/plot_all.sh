@@ -2,18 +2,18 @@
 # Make all coincidence plots IN PARALLEL: the per-config 9-panel summaries
 # (plot_coincidences.py, one per config) plus the cross-config comparison
 # (plot_matrix.py, once). Reads the existing output/<tag>/coincidences_*.csv, so run
-# scripts/run_matrix.sh first to generate the data. Plotting is decoupled from the
+# scripts/run/run_matrix.sh first to generate the data. Plotting is decoupled from the
 # transport — re-run this freely after tweaking a plotter, no re-simulation needed.
 #
 # Usage (from anywhere):
-#   scripts/plot_all.sh                                  # every runs/*.toml
-#   scripts/plot_all.sh sphere_water_csi cylinder_water_bgo
+#   scripts/run/plot_all.sh                                  # every runs/*.toml
+#   scripts/run/plot_all.sh sphere_water_csi cylinder_water_bgo
 #
 # Logs: /tmp/ptcplot_<tag>.log (+ /tmp/ptcplot_matrix.log). Outputs:
 #   output/<tag>/coincidences_{truth,det}.png   and   output/matrix_summary.png
 
 set -u
-cd ${0:A:h:h}                       # repo root
+cd ${0:A:h:h:h}                       # repo root
 
 if (( $# )); then
   configs=()

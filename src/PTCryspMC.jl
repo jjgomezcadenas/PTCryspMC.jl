@@ -6,6 +6,7 @@ module PTCryspMC
 
 using Random
 using JSON
+using HDF5
 
 include("nist_data.jl")    # XCOM loader + interpolation
 include("materials.jl")    # Material + macroscopic cross sections
@@ -14,7 +15,8 @@ include("sampling.jl")     # distance / process / Compton samplers + interaction
 include("transport.jl")    # photon-only transport through one volume
 include("navigator.jl")    # multi-volume navigation across the geometry
 include("source.jl")       # emission source + back-to-back acollinearity
-include("singles.jl")      # chunked singles generation core (multi-thread driver + tests)
+include("singles.jl")      # chunked singles generation core + integer quantization + part I/O
+include("singles_hdf5.jl") # HDF5 container for the singles stack (pack + stream-read)
 include("detector.jl")     # detector response: energy + position smearing
 include("config.jl")       # TOML run-config reader (driver scripts)
 
@@ -30,6 +32,9 @@ export XCOMData, load_xcom,
        NavStep, locate, next_boundary, navigate_photon, navigate_single_photons,
        Source, UniformVolumeSource, PointSource, sample_point_in, sample_position, emit_pair, rand_direction,
        chunk_ranges, singles_chunk!,
+       XYZ_SCALE_MM, E_SCALE_KEV, encode_xyz_mm, encode_e_keV, decode_xyz, decode_e,
+       SinglesBuffer, singles_columns, push_single!, write_part, read_part,
+       pack_singles_hdf5, foreach_singles_hdf5,
        energy_fwhm, energy_sigma, smear_energy, smear_position,
        read_config, cfg_get, run_tag
 

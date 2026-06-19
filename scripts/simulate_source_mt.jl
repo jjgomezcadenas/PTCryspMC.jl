@@ -36,15 +36,15 @@ function parse_cli()
         "--nevents"; help = "override [source].nevents"; arg_type = Int; default = -1
         "--seed";    help = "override [transport].seed"; arg_type = Int; default = -1
         "--nchunks"; help = "number of event chunks (default 8·nthreads)"; arg_type = Int; default = -1
+        "--format";  help = "override [output].format (csv | hdf5)"; default = ""
     end
     parse_args(s)
 end
 
-# Write one chunk's singles to a part-file via a file sink over the shared `singles_chunk!`
-# core: for every detected photon, format the CSV row (positions cm→mm, energy MeV→keV) and
-# stream it. Returns the row count.
-function write_chunk(path, geom, src, E0::Float64, cut_MeV::Float64, acol::Float64,
-                     range::UnitRange{Int}, rng::AbstractRNG)
+# Write one chunk's singles to a CSV text part-file via a file sink over `singles_chunk!`:
+# format the row (positions cm→mm, energy MeV→keV) and stream it. Returns the row count.
+function write_chunk_csv(path, geom, src, E0::Float64, cut_MeV::Float64, acol::Float64,
+                         range::UnitRange{Int}, rng::AbstractRNG)
     open(path, "w") do io
         singles_chunk!(geom, src, E0, cut_MeV, acol, range, rng) do ev, g, s, pos0
             println(io, join((ev, g,
@@ -53,6 +53,19 @@ function write_chunk(path, geom, src, E0::Float64, cut_MeV::Float64, acol::Float
                 round(pos0[1]*10, digits=4), round(pos0[2]*10, digits=4), round(pos0[3]*10, digits=4)), ","))
         end
     end
+end
+
+# Write one chunk's singles to a quantized BINARY part-file: accumulate into a columnar
+# SinglesBuffer (no HDF5 in the parallel region), then dump it. The serial glue packs the
+# parts into HDF5. Returns the row count.
+function write_chunk_bin(path, geom, src, E0::Float64, cut_MeV::Float64, acol::Float64,
+                         range::UnitRange{Int}, rng::AbstractRNG)
+    buf = SinglesBuffer()
+    singles_chunk!(geom, src, E0, cut_MeV, acol, range, rng) do ev, g, s, pos0
+        push_single!(buf, ev, g, s, pos0)
+    end
+    open(io -> write_part(io, buf), path, "w")
+    length(buf)
 end
 
 function main()
@@ -71,17 +84,18 @@ function main()
     cutoff   = Float64(cfg_get(cfg, "transport", "cutoff_keV", 10.0))
     nevents  = a["nevents"] >= 0 ? a["nevents"] : Int(cfg_get(cfg, "source", "nevents", 100000))
     seed     = a["seed"]    >= 0 ? a["seed"]    : Int(cfg_get(cfg, "transport", "seed", 1234))
-    fmt      = String(cfg_get(cfg, "output", "format", "csv"))
+    fmt      = isempty(a["format"]) ? String(cfg_get(cfg, "output", "format", "csv")) : a["format"]
 
     kind in ("point", "phantom") || error("[source].kind must be 'point' or 'phantom'")
-    fmt == "csv" || error("[output].format '$fmt' not supported yet (csv only; hdf5 deferred)")
+    fmt in ("csv", "hdf5") || error("[output].format '$fmt' not supported (csv | hdf5)")
     nevents >= 1 || error("nevents must be ≥ 1")
+    ishdf5 = fmt == "hdf5"
 
     tag = run_tag(cfg, a["config"])
     outdir = joinpath(rp(cfg_get(cfg, "output", "dir", "output")), tag)
     mkpath(outdir)
     cp(a["config"], joinpath(outdir, "config.toml"); force=true)
-    out = joinpath(outdir, "singles.csv")
+    out = joinpath(outdir, ishdf5 ? "singles.h5" : "singles.csv")
 
     mats = load_materials(datadir)
     geom = load_geometry(geomfile, mats)
@@ -114,35 +128,44 @@ function main()
     # Pre-allocate one RNG per chunk BEFORE the loop (chunk 1 = base seed); the hot loop only
     # draws from its chunk's RNG, never constructs one.
     rngs = [MersenneTwister(seed + (c - 1)) for c in 1:nchunks]
-    partfile(c) = joinpath(outdir, "singles.part$(c).csv")
+    partfile(c) = joinpath(outdir, ishdf5 ? "singles.part$(c).bin" : "singles.part$(c).csv")
     rows = zeros(Int, nchunks)
 
     srcdesc = uniform ? "uniform in $(name(geom.phantom)) ($(material(geom.phantom).name))" :
                         "point at the phantom centre ($(material(geom.phantom).name))"
     println("run '$tag': back-to-back $energy keV, $srcdesc, acol $(acol)° FWHM; " *
             "ring $(name(sc.volume)) ($crystal), nblocks=$(nblocks(sc)), cutoff $cutoff keV, " *
-            "$nevents events, seed $seed; threads=$nthr, chunks=$nchunks")
+            "$nevents events, seed $seed; threads=$nthr, chunks=$nchunks, format=$fmt")
 
+    write_chunk = ishdf5 ? write_chunk_bin : write_chunk_csv
     t0 = time()
     @threads :dynamic for c in 1:nchunks
         rows[c] = write_chunk(partfile(c), geom, src, E0, cut_MeV, acol, ranges[c], rngs[c])
     end
     t_sim = time() - t0
 
-    # Glue the part-files in chunk order → one event-ordered singles.csv (bounded memory).
+    # Glue the part-files in chunk order → one event-ordered output (bounded memory).
     nsingles = sum(rows)
-    open(out, "w") do io
-        println(io, "event_number,gamma,x_mm,y_mm,z_mm,e_keV,iz,iphi,nblocks,phantom_scatter,x0_mm,y0_mm,z0_mm")
-        buf = Vector{UInt8}(undef, 1 << 20)
-        for c in 1:nchunks
-            p = partfile(c)
-            open(p, "r") do pin
-                while !eof(pin)
-                    n = readbytes!(pin, buf)
-                    write(io, view(buf, 1:n))
+    parts = [partfile(c) for c in 1:nchunks]
+    if ishdf5
+        meta = Dict{String,Any}("scenario_tag"=>tag, "seed"=>seed, "nevents"=>nevents,
+            "nchunks"=>nchunks, "crystal"=>crystal, "phantom_material"=>material(geom.phantom).name,
+            "energy_keV"=>energy, "acol_fwhm_deg"=>acol, "cutoff_keV"=>cutoff,
+            "geometry_file"=>basename(geomfile), "n_phi"=>sc.n_phi, "n_z"=>sc.n_z)
+        pack_singles_hdf5(out, parts, rows, meta)
+    else
+        open(out, "w") do io
+            println(io, "event_number,gamma,x_mm,y_mm,z_mm,e_keV,iz,iphi,nblocks,phantom_scatter,x0_mm,y0_mm,z0_mm")
+            buf = Vector{UInt8}(undef, 1 << 20)
+            for p in parts
+                open(p, "r") do pin
+                    while !eof(pin)
+                        n = readbytes!(pin, buf)
+                        write(io, view(buf, 1:n))
+                    end
                 end
+                rm(p)
             end
-            rm(p)
         end
     end
 

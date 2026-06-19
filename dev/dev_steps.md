@@ -264,16 +264,37 @@ stack (one row per interaction, ideal to ~10⁵ events); a 10⁸-decay run needs
 `(seed, nchunks, N)`, scheduling-independent); output event-ordered; 69.4 % of photons reach
 the ring (≈ the 70 % from the full-stack phantom-leg study); **6.1× on 18 cores** at 3 M
 events (0.51 → 3.08 M events/s — sub-linear from the 6 Super / 12 Performance core split, not
-GC-bound), so 10⁸ decays ≈ 32 s. **Deferred within Phase G:** HDF5 format; the
-`build_coincidences` singles-reader (needed to consume the singles stack + a bit-for-bit
-diff vs the full stack).
+GC-bound), so 10⁸ decays ≈ 32 s.
 
-**Test status:** `Pkg.test` — **710 assertions** pass (foundations, phantom, single
+**Output format — quantized Int16 HDF5.** `simulate_source_mt.jl` writes
+`output/<tag>/singles.{csv,h5}` (`[output].format`, `--format` override), generated *directly*
+(no float intermediate). The compact format quantizes positions to 0.1 mm and energy to
+0.1 keV as integers (`src/singles.jl`: `encode_xyz_mm`/`encode_e_keV`, bounds-checked against
+Int16 → ±3276.7 mm, fails loud not wraps) — lossless vs the ~2 mm / ~50 keV resolution (and
+downstream smearing dwarfs the grid). HDF5 stores columnar typed datasets (chunked,
+shuffle+deflate-4) with the scales + run params as root attributes (`src/singles_hdf5.jl`).
+Thread-safe path: the parallel chunks write binary part-files (no HDF5 in the `@threads`
+region — the HDF5 C lib is not thread-safe), a serial glue packs them in chunk order.
+Measured on the 10⁷ run (13.7 M singles): float CSV 1081 MB → int CSV gzip 256 MB → **HDF5
+163 MB (6.6×)**, and HDF5 reads typed/partial with no parse. `scripts/tests/check_singles.jl`
+validates either format; `diff_singles.jl` compares two stacks (HDF5 `-t 1` ≡ `-t 18` data-
+identical; CSV-vs-HDF5 agree within the 0.05 quantization half-step).
+
+**Scripts reorganised:** `scripts/` now holds only the physics drivers; `scripts/tests/` the
+QA/benchmark/experiment scripts (`check_singles`, `diff_singles`, `quantize_singles`,
+`hdf5_size_test`, the benches), `scripts/run/` the parallel launchers (`run_matrix.sh`,
+`plot_all.sh`).
+
+**Deferred within Phase G:** the `build_coincidences` singles-reader (to consume the singles
+stack for LORs + a bit-for-bit diff vs the full stack).
+
+**Test status:** `Pkg.test` — **763 assertions** pass (foundations, phantom, single
 crystal, the `CylShell` shell + the `Sphere` solid, the block/wheel grid, scanner loading,
 the air world, the navigator `locate` / `next_boundary` + bore re-entry / reduction /
 phantom leg, `rotate_to_global_t`, `navigate_single_photons` matching the full-stack
-reduction + zero-allocation, the emission `Source` + acollinearity, the detector smearing,
-and the TOML config). All scripts run.
+reduction + zero-allocation, the chunking/determinism, the singles quantization + binary-part
++ HDF5 round-trip, the emission `Source` + acollinearity, the detector smearing, and the TOML
+config). All scripts run.
 
 ---
 
@@ -299,9 +320,10 @@ and the TOML config). All scripts run.
 - **Step 5 — randoms.** The time-tag-and-pair pass over the singles (needs real times). The
   singles stack it consumes now exists (`simulate_source_mt.jl`); randoms adds an isotope tag
   + a sampled time to each singles row.
-- **Production I/O (Phase G remainder).** The singles stack + multi-threading are **done**
-  (`navigate_single_photons` + `simulate_source_mt.jl`); still deferred: **HDF5** format, and
-  teaching `build_coincidences` to **read** the singles stack (auto-detect kind by header).
+- **Production I/O (Phase G).** Singles stack + multi-threading + quantized-Int16 HDF5 output
+  are **done** (`navigate_single_photons` + `simulate_source_mt.jl`, csv|hdf5). Still deferred:
+  teaching `build_coincidences` to **read** the singles stack (the LOR builder over singles,
+  auto-detecting csv/hdf5).
 - **Step 6 — detectors.** CsI and BGO done (via the run configs); CsI(Tl), LYSO to add.
 
 Carried-over technical TODOs from the foundations:

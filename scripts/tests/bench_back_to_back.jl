@@ -15,8 +15,8 @@ using Random
 function parse_cli()
     s = ArgParseSettings(description="Time the back-to-back 511 keV transport per annihilation.")
     @add_arg_table! s begin
-        "--data";      help = "data dir";        default = joinpath(@__DIR__, "..", "data")
-        "--geometry";  help = "geometry JSON";   default = joinpath(@__DIR__, "..", "geometry", "geometry.json")
+        "--data";      help = "data dir";        default = joinpath(@__DIR__, "..", "..", "data")
+        "--geometry";  help = "geometry JSON";   default = joinpath(@__DIR__, "..", "..", "geometry", "geometry.json")
         "--materials"; help = "comma-separated crystal materials"; default = "CsI,BGO"
         "--nevents";   help = "n annihilations"; arg_type = Int;     default = 500000
         "--cutoff";    help = "low-energy cutoff [keV]"; arg_type = Float64; default = 10.0

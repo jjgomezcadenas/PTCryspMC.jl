@@ -603,6 +603,52 @@ end
         @test issorted(rows; by=first)
     end
 
+    @testset "singles quantization + binary part + HDF5 round-trip" begin
+        # Quantization is lossless to ≤ half a step, and bounds-checked (fails loud, no wrap).
+        for mm in (0.0, 12.34, -250.0, 511.9)
+            @test abs(decode_xyz(encode_xyz_mm(mm)) - mm) <= XYZ_SCALE_MM/2 + 1e-9
+        end
+        for keV in (0.0, 1.0, 250.5, 511.0)
+            @test abs(decode_e(encode_e_keV(keV)) - keV) <= E_SCALE_KEV/2 + 1e-9
+        end
+        @test_throws ErrorException encode_xyz_mm(4000.0)   # 40000 > Int16 @0.1mm
+        @test_throws ErrorException encode_e_keV(-1.0)
+
+        # A small synthetic buffer (positions cm, energy MeV — as navigate_single_photons returns).
+        buf = SinglesBuffer()
+        for i in 1:200
+            s = (reached=true, x=0.13i, y=-0.07i, z=0.05i, iz=i % 20, iphi=i % 48,
+                 e=0.001*(50 + i), nblocks=(i % 3) + 1, phscat=isodd(i))
+            push_single!(buf, i, (i % 2) + 1, s, (0.01i, -0.02i, 0.03i))
+        end
+        @test length(buf) == 200
+
+        # Binary part round-trip (the thread-safe intermediate).
+        io = IOBuffer(); write_part(io, buf); seekstart(io)
+        rb = read_part(io, 200)
+        for ((_, va), (_, vb)) in zip(singles_columns(buf), singles_columns(rb))
+            @test va == vb
+        end
+
+        # part-file → HDF5 pack → stream-read round-trip (multiple slices via small batch).
+        dir = mktempdir()
+        part = joinpath(dir, "p1.bin"); open(o -> write_part(o, buf), part, "w")
+        h5 = joinpath(dir, "s.h5")
+        @test pack_singles_hdf5(h5, [part], [200], Dict("seed" => 7)) == 200
+        @test !isfile(part)                              # part consumed by the packer
+        got = SinglesBuffer()
+        foreach_singles_hdf5(h5; batch=64) do b
+            for ((_, dst), (_, srcv)) in zip(singles_columns(got), singles_columns(b))
+                append!(dst, srcv)
+            end
+        end
+        @test length(got) == 200
+        for ((_, va), (_, vb)) in zip(singles_columns(buf), singles_columns(got))
+            @test va == vb
+        end
+        rm(dir; recursive=true)
+    end
+
     @testset "uniform volume sampling" begin
         rng = MersenneTwister(7)
 

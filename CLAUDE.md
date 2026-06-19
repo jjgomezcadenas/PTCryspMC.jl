@@ -99,9 +99,18 @@ The photon transport and geometry are photon-only:
   loop `propagate_photon` (through a `PhysicalVolume`); only the photon path is followed,
   with local energy deposition.
 
-Other dirs: `geometry/` (JSON world), `data/` (materials + XCOM), `scripts/` (Julia
-drivers), `py/` (Python plotters), `runs/` (TOML run configs, tracked), `output/` (per-run
+Other dirs: `geometry/` (JSON world), `data/` (materials + XCOM), `scripts/` (Julia physics
+drivers; `scripts/tests/` = QA/benchmark/experiment scripts, `scripts/run/` = parallel
+launchers), `py/` (Python plotters), `runs/` (TOML run configs, tracked), `output/` (per-run
 `output/<tag>/` results, gitignored), `test/`.
+
+The production singles path is `scripts/simulate_source_mt.jl` (multi-threaded, singles-only:
+one row per detected photon via the allocation-free `navigate_single_photons`), writing
+`output/<tag>/singles.{csv,h5}` (`[output].format`). HDF5 stores quantized Int16 columns
+(0.1 mm / 0.1 keV — lossless at detector resolution), chunked + shuffle+deflate, ~6× smaller
+than float CSV and read-fast; the singles list is consumed by the LOR builder and the randoms
+pass. `scripts/tests/check_singles.jl` validates a stack (either format); `diff_singles.jl`
+compares two.
 
 The LOR-generation pipeline (`simulate_phantom.jl` → `build_coincidences.jl` →
 `plot_coincidences.py`) is **TOML-config driven**: a `runs/<tag>.toml` (sections
@@ -121,7 +130,9 @@ formation + selection, the randoms pass.
   large stacks a full run produces (this is why it is Julia, not Python — see the note
   below).
 - **Python** — read a scenario, the control plots, and lighter downstream analysis.
-- **CSV** in and out.
+- **CSV and HDF5** in and out (CSV for dev/inspection; HDF5 — quantized Int16, compressed —
+  for the production singles stack: ~6× smaller, typed/partial fast reads for the write-once,
+  read-many singles list).
 
 Originally the selection/coincidence step was slated for Python; it was moved to a Julia
 streaming reader for the memory/throughput on large stacks. Hit formation, the energy

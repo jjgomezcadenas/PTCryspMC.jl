@@ -2,18 +2,18 @@
 # Generate the LOR data (simulate_phantom -> build_coincidences) for one or more run
 # configs, IN PARALLEL — one background job per config. Each config is independent (its
 # own output/<tag>/ dir), so they fan out across the machine's cores. Plotting is a
-# separate step: run scripts/plot_all.sh afterward (so you can re-plot without re-running
+# separate step: run scripts/run/plot_all.sh afterward (so you can re-plot without re-running
 # the transport).
 #
 # Usage (from anywhere):
-#   scripts/run_matrix.sh                                  # every runs/*.toml
-#   scripts/run_matrix.sh sphere_water_csi cylinder_water_bgo   # named configs
-#   scripts/run_matrix.sh runs/sphere_water_csi.toml            # paths also work
+#   scripts/run/run_matrix.sh                                  # every runs/*.toml
+#   scripts/run/run_matrix.sh sphere_water_csi cylinder_water_bgo   # named configs
+#   scripts/run/run_matrix.sh runs/sphere_water_csi.toml            # paths also work
 #
 # Logs: /tmp/ptc_<tag>.log per config. Data: output/<tag>/{stack.csv, coincidences_*.csv}.
 
 set -u
-cd ${0:A:h:h}                       # repo root (this script lives in scripts/)
+cd ${0:A:h:h:h}                       # repo root (in scripts/run/)
 
 # Collect configs: the args (name, name.toml or runs/name.toml all accepted), else all.
 if (( $# )); then
