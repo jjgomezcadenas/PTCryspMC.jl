@@ -701,10 +701,13 @@ end
         feq(a, b) = a.reached == b.reached && (!a.reached || (
                     a.x == b.x && a.y == b.y && a.z == b.z && a.iz == b.iz && a.iphi == b.iphi &&
                     a.overspill == b.overspill && a.phscat == b.phscat && isapprox(a.e, b.e; rtol=1e-9)))
-        # A LOR tuple: all fields exact except the two (smeared) energies (indices 5, 12), which
-        # inherit the ~1e-9 energy difference.
-        ceq(p, q) = all(j -> p[j] == q[j], (1, 2, 3, 4, 6, 7, 8, 9, 10, 11, 13, 14, 15, 16, 17, 18, 19)) &&
-                    isapprox(p[5], q[5]; rtol=1e-9) && isapprox(p[12], q[12]; rtol=1e-9)
+        # A LOR tuple (20 fields: …,iz2(15),dt(16),x0(17),y0,z0,truth(20)). Discrete fields and the
+        # exact LOR point match; energies (5,12), timestamps (6,13) and the residual dt (16) inherit
+        # the ~1e-9 energy difference (the timestamps via the jitter's N_det = yield·E·pde).
+        ceq(p, q) = all(j -> p[j] == q[j], (1, 2, 3, 4, 7, 8, 9, 10, 11, 14, 15, 17, 18, 19, 20)) &&
+                    isapprox(p[5], q[5]; rtol=1e-9) && isapprox(p[12], q[12]; rtol=1e-9) &&
+                    isapprox(p[6], q[6]; rtol=1e-9) && isapprox(p[13], q[13]; rtol=1e-9) &&
+                    isapprox(p[16], q[16]; atol=1e-6)
 
         # The singles fill (from navigate_single_photons) must produce the SAME GammaAcc as the
         # full-stack fill (from navigate_photon) — discrete fields exact, energy to float
@@ -713,6 +716,7 @@ end
         # (a det-mode energy cut could flip acceptance for an event whose energy sits within the
         # ~1e-9 difference of the cut — the smear/window path is shared and tested elsewhere).
         resp = Response(0.0, 0.0, 0.0, false, 0.0)
+        timing = EventTiming(ActivityModel(; seed=1), mats["CsI"])   # same context for both paths
         emit_full = Any[]; emit_sing = Any[]
         nacc_mismatch = 0
         for ev in 1:3000
@@ -725,8 +729,8 @@ end
                 feq(gf2, gs2) || (nacc_mismatch += 1)
                 push!(af, gf2); push!(as, gs2)
             end
-            finish_event!((a...) -> push!(emit_full, a), ev, af[1], af[2], pos[1], pos[2], pos[3], resp, MersenneTwister(ev))
-            finish_event!((a...) -> push!(emit_sing, a), ev, as[1], as[2], pos[1], pos[2], pos[3], resp, MersenneTwister(ev))
+            finish_event!((a...) -> push!(emit_full, a), ev, af[1], af[2], pos[1], pos[2], pos[3], resp, MersenneTwister(ev), timing)
+            finish_event!((a...) -> push!(emit_sing, a), ev, as[1], as[2], pos[1], pos[2], pos[3], resp, MersenneTwister(ev), timing)
         end
         @test nacc_mismatch == 0             # GammaAcc identical (discrete exact, energy to rtol)
         @test !isempty(emit_full)
@@ -741,7 +745,7 @@ end
         for ev in 1:150
             args = (ev, 100.0 + ev, -50.0, 30.0, 511.0, 0.0, ev % 20, ev % 48,
                     -200.0, 40.0, -30.0, 480.0, 0.0, (ev + 3) % 20, (ev + 5) % 48,
-                    1.0, 2.0, 3.0, Int8(ev % 2))
+                    0.25 * ev, 1.0, 2.0, 3.0, Int8(ev % 2))   # dt_ns at index 16, then x0,y0,z0,truth
             push_coincidence!(w, args...); push!(ref, args)
         end
         @test close(w) == 150
@@ -749,16 +753,18 @@ end
         foreach_coincidences_hdf5(p; batch=32) do b
             for i in 1:length(b)
                 push!(got, (Int(b.event[i]), decode_xyz(b.x1[i]), decode_e(b.e1[i]),
-                            Int(b.iz1[i]), Int(b.iphi1[i]), Int(b.iz2[i]), Int(b.iphi2[i]), Int8(b.truth[i])))
+                            Int(b.iz1[i]), Int(b.iphi1[i]), Int(b.iz2[i]), Int(b.iphi2[i]),
+                            Int8(b.truth[i]), Float64(b.dt[i])))
             end
         end
         @test length(got) == 150
         ok = true
         for (r, g) in zip(ref, got)
-            ok &= g[1] == r[1] && g[end] == r[19]                       # event, truth exact
+            ok &= g[1] == r[1] && g[8] == r[20]                        # event, truth exact
             ok &= g[4] == r[7] && g[5] == r[8] && g[6] == r[14] && g[7] == r[15]  # blocks exact
             ok &= abs(g[2] - r[2]) <= XYZ_SCALE_MM/2 + 1e-6             # x1 within ½ step
             ok &= abs(g[3] - r[5]) <= E_SCALE_KEV/2 + 1e-6             # e1 within ½ step
+            ok &= abs(g[9] - r[16]) <= 1e-3                            # dt_ns round-trips (Float32)
         end
         @test ok
         rm(dir; recursive=true)

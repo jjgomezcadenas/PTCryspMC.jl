@@ -1,5 +1,5 @@
 #!/usr/bin/env julia
-# Validate a LOR (coincidence) HDF5 file (build_coincidences_from_singles.jl output). Streams it
+# Validate a LOR (coincidence) HDF5 file (build_true_coincidences_from_singles.jl output). Streams it
 # in row-slices, asserts the STRUCTURAL invariants and reports the physics DISTRIBUTIONS, then
 # exits nonzero on any hard-invariant violation so a run can be gated.
 #
@@ -9,7 +9,7 @@
 # Reported: rows, acceptance %, truth split (true/scatter/random), hit energies, and the block
 # OPPOSITION (a coincidence should join two roughly opposite crystals — Δφ ≈ n_phi/2).
 #
-# TOML-config driven (reads prod/<tag>/lors_{truth|det}.h5, mode from [detector]):
+# TOML-config driven (reads prod/<tag>/lors_truth.h5; --lors to point at another LOR file):
 #   julia --project=. scripts/tests/check_lors.jl --config runs/sphere_water_csi.toml
 #   julia --project=. scripts/tests/check_lors.jl --config runs/sphere_water_csi.toml --lors path.h5
 
@@ -22,7 +22,7 @@ function parse_cli()
     s = ArgParseSettings(description="Validate a LOR HDF5 file: structure + distributions.")
     @add_arg_table! s begin
         "--config"; help = "run config TOML"; required = true
-        "--lors";   help = "override the LOR path (default prod/<tag>/lors_{truth|det}.h5)"; default = ""
+        "--lors";   help = "override the LOR path (default prod/<tag>/lors_truth.h5)"; default = ""
     end
     parse_args(s)
 end
@@ -59,13 +59,8 @@ function main()
     cfg = read_config(a["config"])
     tag = run_tag(cfg, a["config"])
     outdir = joinpath(rp(prod_base(cfg)), tag)
-    sigma_xyz = Float64(cfg_get(cfg, "detector", "sigma_xyz_mm", 0.0))
-    eres   = Float64(cfg_get(cfg, "detector", "eres", 0.0))
-    emin   = Float64(cfg_get(cfg, "detector", "emin_keV", 0.0))
-    window = Float64(cfg_get(cfg, "detector", "window_fwhm", 0.0))
-    mode = (sigma_xyz > 0.0 || eres > 0.0 || window > 0.0 || emin > 0.0) ? "det" : "truth"
-    lors = isempty(a["lors"]) ? joinpath(outdir, "lors_$mode.h5") : rp(a["lors"])
-    isfile(lors) || error("LOR file '$lors' not found (run build_coincidences_from_singles.jl first)")
+    lors = isempty(a["lors"]) ? joinpath(outdir, "lors_truth.h5") : rp(a["lors"])
+    isfile(lors) || error("LOR file '$lors' not found (run build_true_coincidences_from_singles.jl first)")
 
     datadir  = rp(cfg_get(cfg, "paths", "data", "data"))
     geomfile = rp(cfg_get(cfg, "geometry", "file", "geometry/geometry.json"))
@@ -75,6 +70,7 @@ function main()
 
     nevents     = Int(singles_hdf5_attr(lors, "nevents", 0))
     has_randoms = Bool(singles_hdf5_attr(lors, "has_randoms", false))
+    mode        = String(singles_hdf5_attr(lors, "mode", "truth"))
 
     st = Stats()
     foreach_coincidences_hdf5(lors) do b

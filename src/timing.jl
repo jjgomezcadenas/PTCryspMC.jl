@@ -50,3 +50,15 @@ columns — are uniformly nanoseconds.
                                   mat::Material, rng::AbstractRNG)::Float64
     t_annih_s * 1.0e9 + tof_ns(emit, hit) + first_photon_jitter(mat, E_MeV, rng)
 end
+
+"""
+    EventTiming(act, mat)
+
+The per-run timing context the LOR builders pass to `finish_event!`: the activity model `act`
+(event number → annihilation time) and the crystal `mat` (its light yield / decay mixture / PDE
+set the scintillation jitter). Together they turn a selected pair into timestamped LOR.
+"""
+struct EventTiming
+    act::ActivityModel
+    mat::Material
+end

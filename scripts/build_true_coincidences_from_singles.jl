@@ -1,19 +1,21 @@
 #!/usr/bin/env julia
-# Build the list-mode LOR file from a SINGLES stack (scripts/simulate_source_mt.jl output) —
-# the production coincidence builder. One record per accepted coincidence = one LOR. The singles
-# row already IS the formed per-gamma hit, so this fills `GammaAcc` directly (vs the full-stack
-# accumulation in build_coincidences.jl) and runs the SAME selection core (src/coincidences.jl).
+# Build the TRUE list-mode LOR file from a SINGLES stack (scripts/simulate_source_mt.jl output) —
+# the same-annihilation coincidences (true + scatter), with NO detector smearing and NO energy
+# cut: ground-truth positions / energies, plus the per-gamma timestamps `t1,t2` and the residual
+# `dt = |Δt0| − TOF_diff`. One record per accepted coincidence = one LOR. The singles row already
+# IS the formed per-gamma hit, so this fills `GammaAcc` directly and runs the shared selection
+# core (src/coincidences.jl).
+#
+# This is the clean input to the DT study: examine the `t1,t2,dt` distribution (examine_dt.jl) to
+# choose the coincidence window τ. Detector smearing, the DT cut and the randoms come AFTER τ is
+# chosen, in the reco stage → lors_det.h5 (not produced here).
 #
 # Input: singles in either format (default prod/<tag>/singles.{h5,csv} by [output].format;
-# --singles override; format by extension). Output: prod/<tag>/lors_{truth|det}.h5 — quantized
-# Int16 columns, chunked + shuffle+deflate, with truth ∈ {true=0, scatter=1} (random=2 reserved
-# for Step 5) and a `has_randoms=false` attribute (this is the LOR list MINUS randoms; the
-# complete, time-ordered measurement = these ∪ the Step-5 random LORs, merged once times exist).
-#
-# Detector response comes from [detector] (all OFF → truth mode), identical to build_coincidences.
+# --singles override; format by extension). Output: prod/<tag>/lors_truth.h5 — quantized Int16
+# columns, chunked + shuffle+deflate, truth ∈ {true=0, scatter=1}, `has_randoms=false`.
 #
 # Run from the repo root:
-#   julia --project=. scripts/build_coincidences_from_singles.jl --config runs/sphere_water_csi.toml
+#   julia --project=. scripts/build_true_coincidences_from_singles.jl --config runs/sphere_water_csi.toml
 
 using PTCryspMC
 using ArgParse
@@ -39,13 +41,13 @@ LorState() = LorState(-1, 0, 0.0, 0.0, 0.0, 0, 0)
 
 # Feed one singles row: close the previous event at a boundary (finish_event! → writer), then
 # fill the gamma's accumulator directly. `g` = (GammaAcc, GammaAcc).
-function feed_row!(st::LorState, g, w, resp, rng, ev::Int, gi::Int,
+function feed_row!(st::LorState, g, w, resp, rng, timing, ev::Int, gi::Int,
                    x::Float64, y::Float64, z::Float64, e::Float64, iz::Int, iphi::Int,
                    nblocks::Int, phscat::Bool, x0::Float64, y0::Float64, z0::Float64)
     if ev != st.cur_ev
         if st.cur_ev != -1
             emitted, is_true = finish_event!((a...) -> push_coincidence!(w, a...),
-                                             st.cur_ev, g[1], g[2], st.ev_x0, st.ev_y0, st.ev_z0, resp, rng)
+                                             st.cur_ev, g[1], g[2], st.ev_x0, st.ev_y0, st.ev_z0, resp, rng, timing)
             st.n_pair += emitted; st.n_true += (emitted && is_true)
         end
         reset!(g[1]); reset!(g[2]); st.cur_ev = ev
@@ -57,7 +59,7 @@ function feed_row!(st::LorState, g, w, resp, rng, ev::Int, gi::Int,
     return
 end
 
-function feed_singles_csv!(st, g, w, resp, rng, path)
+function feed_singles_csv!(st, g, w, resp, rng, timing, path)
     open(path, "r") do io
         header = split(strip(readline(io)), ',')
         col = Dict(String(h) => i for (i, h) in enumerate(header))
@@ -71,7 +73,7 @@ function feed_singles_csv!(st, g, w, resp, rng, path)
         for line in eachline(io)
             isempty(line) && continue
             f = split(line, ',')
-            feed_row!(st, g, w, resp, rng, parse(Int, f[ie]), parse(Int, f[ig]),
+            feed_row!(st, g, w, resp, rng, timing, parse(Int, f[ie]), parse(Int, f[ig]),
                       parse(Float64, f[ix]), parse(Float64, f[iy]), parse(Float64, f[iz]),
                       parse(Float64, f[iee]), parse(Int, f[iiz]), parse(Int, f[iip]),
                       parse(Int, f[inb]), f[iph] == "1",
@@ -80,10 +82,10 @@ function feed_singles_csv!(st, g, w, resp, rng, path)
     end
 end
 
-function feed_singles_hdf5!(st, g, w, resp, rng, path)
+function feed_singles_hdf5!(st, g, w, resp, rng, timing, path)
     foreach_singles_hdf5(path) do b
         for i in 1:length(b)
-            feed_row!(st, g, w, resp, rng, Int(b.event[i]), Int(b.gamma[i]),
+            feed_row!(st, g, w, resp, rng, timing, Int(b.event[i]), Int(b.gamma[i]),
                       decode_xyz(b.x[i]), decode_xyz(b.y[i]), decode_xyz(b.z[i]), decode_e(b.e[i]),
                       Int(b.iz[i]), Int(b.iphi[i]), Int(b.nblocks[i]), b.phantom_scatter[i] == 1,
                       decode_xyz(b.x0[i]), decode_xyz(b.y0[i]), decode_xyz(b.z0[i]))
@@ -100,45 +102,41 @@ function main()
     tag = run_tag(cfg, a["config"])
     outdir = joinpath(rp(prod_base(cfg)), tag)
 
-    sigma_xyz = Float64(cfg_get(cfg, "detector", "sigma_xyz_mm", 0.0))
-    eres      = Float64(cfg_get(cfg, "detector", "eres", 0.0))
-    emin      = Float64(cfg_get(cfg, "detector", "emin_keV", 0.0))
-    window    = Float64(cfg_get(cfg, "detector", "window_fwhm", 0.0))
-    seed      = Int(cfg_get(cfg, "detector", "seed", 1234))
-    window > 0.0 && eres <= 0.0 &&
-        error("[detector].window_fwhm requires eres > 0 (the window width scales with the resolution)")
-    resp = Response(sigma_xyz, eres, emin, window > 0.0, window * energy_fwhm(511.0, eres))
-    mode = (sigma_xyz > 0.0 || eres > 0.0 || window > 0.0 || emin > 0.0) ? "det" : "truth"
+    # Timing context: the crystal carries its scintillation jitter (light yield / decay / pde); the
+    # activity model gives each event its annihilation time. Naming the crystal pulls these.
+    crystal = String(cfg_get(cfg, "transport", "crystal_material", "CsI"))
+    mat     = load_material(joinpath(REPO, "data"), crystal)
+    timing  = EventTiming(ActivityModel(cfg), mat)
+
+    # Truth coincidences: no smearing, no energy cut. The rng only feeds the scintillation jitter
+    # in finish_event! (seed from [transport], the physics-randomness seed).
+    seed = Int(cfg_get(cfg, "transport", "seed", 1234))
+    resp = Response(0.0, 0.0, 0.0, false, 0.0)
 
     fmt = String(cfg_get(cfg, "output", "format", "csv"))
     default_in = joinpath(outdir, fmt == "hdf5" ? "singles.h5" : "singles.csv")
     singles = isempty(a["singles"]) ? default_in : rp(a["singles"])
     isfile(singles) || error("singles file '$singles' not found (run simulate_source_mt.jl first)")
     ishdf5 = endswith(singles, ".h5")
-    out = isempty(a["out"]) ? joinpath(outdir, "lors_$mode.h5") : rp(a["out"])
+    out = isempty(a["out"]) ? joinpath(outdir, "lors_truth.h5") : rp(a["out"])
 
-    if mode == "det"
-        ecut = window > 0.0 ? "window ±$(round(resp.win_half,digits=1)) keV" :
-               (emin > 0.0 ? "Emin $(round(emin,digits=0)) keV" : "no energy cut")
-        println("run '$tag' [det]: σ_xyz=$sigma_xyz mm, eres=$(round(100*eres,digits=1))% @511 keV, $ecut (seed $seed)")
-    else
-        println("run '$tag' [truth]: no smearing, no energy cut")
-    end
-    println("  singles ($(ishdf5 ? "hdf5" : "csv")): $singles")
+    println("run '$tag' [truth]: same-annihilation coincidences, no smearing/cut (jitter seed $seed)")
+    println("  crystal: $crystal  |  singles ($(ishdf5 ? "hdf5" : "csv")): $singles")
 
-    meta = Dict{String,Any}("scenario_tag" => tag, "mode" => mode, "has_randoms" => false,
-        "sigma_xyz_mm" => sigma_xyz, "eres" => eres, "emin_keV" => emin, "window_fwhm" => window,
-        "seed" => seed)
+    meta = Dict{String,Any}("scenario_tag" => tag, "mode" => "truth", "has_randoms" => false,
+        "crystal" => crystal, "seed" => seed,
+        "t0_s" => timing.act.t0, "t1_s" => timing.act.t1,
+        "half_life_s" => log(2.0) / timing.act.λ, "time_seed" => Int(timing.act.seed))
     w = CoincidenceWriter(out, meta)
     st = LorState()
     g = (GammaAcc(), GammaAcc())
     rng = MersenneTwister(seed)
 
-    ishdf5 ? feed_singles_hdf5!(st, g, w, resp, rng, singles) :
-             feed_singles_csv!(st, g, w, resp, rng, singles)
+    ishdf5 ? feed_singles_hdf5!(st, g, w, resp, rng, timing, singles) :
+             feed_singles_csv!(st, g, w, resp, rng, timing, singles)
     if st.cur_ev != -1                                   # the final event
         emitted, is_true = finish_event!((a...) -> push_coincidence!(w, a...),
-                                         st.cur_ev, g[1], g[2], st.ev_x0, st.ev_y0, st.ev_z0, resp, rng)
+                                         st.cur_ev, g[1], g[2], st.ev_x0, st.ev_y0, st.ev_z0, resp, rng, timing)
         st.n_pair += emitted; st.n_true += (emitted && is_true)
     end
     # Total annihilations for the acceptance denominator (the singles stack has no rows for

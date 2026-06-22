@@ -17,11 +17,12 @@ struct CoincidenceBuffer
     t1::Vector{Float32}; iz1::Vector{Int16}; iphi1::Vector{Int16}
     x2::Vector{Int16}; y2::Vector{Int16}; z2::Vector{Int16}; e2::Vector{Int16}
     t2::Vector{Float32}; iz2::Vector{Int16}; iphi2::Vector{Int16}
+    dt::Vector{Float32}                       # per-pair timing residual DT = |Δt0| − TOF_diff [ns]
     x0::Vector{Int16}; y0::Vector{Int16}; z0::Vector{Int16}
 end
 CoincidenceBuffer() = CoincidenceBuffer(Int32[], Int8[], Int16[], Int16[], Int16[], Int16[],
     Float32[], Int16[], Int16[], Int16[], Int16[], Int16[], Int16[], Float32[], Int16[], Int16[],
-    Int16[], Int16[], Int16[])
+    Float32[], Int16[], Int16[], Int16[])
 Base.length(b::CoincidenceBuffer) = length(b.event)
 
 "The LOR columns in canonical order (name, vector) — the schema + dataset/IO ordering."
@@ -29,18 +30,20 @@ coinc_columns(b::CoincidenceBuffer) = (
     ("event", b.event), ("truth", b.truth),
     ("x1_mm", b.x1), ("y1_mm", b.y1), ("z1_mm", b.z1), ("e1_keV", b.e1), ("t1_ns", b.t1), ("iz1", b.iz1), ("iphi1", b.iphi1),
     ("x2_mm", b.x2), ("y2_mm", b.y2), ("z2_mm", b.z2), ("e2_keV", b.e2), ("t2_ns", b.t2), ("iz2", b.iz2), ("iphi2", b.iphi2),
+    ("dt_ns", b.dt),
     ("x0_mm", b.x0), ("y0_mm", b.y0), ("z0_mm", b.z0))
 
 Base.empty!(b::CoincidenceBuffer) = (foreach(c -> empty!(c[2]), coinc_columns(b)); b)
 
 "Append one accepted LOR (the `finish_event!` emit args), quantized."
 function push_coincidence!(b::CoincidenceBuffer, ev, x1, y1, z1, e1, t1, iz1, iphi1,
-                           x2, y2, z2, e2, t2, iz2, iphi2, x0, y0, z0, truth)
+                           x2, y2, z2, e2, t2, iz2, iphi2, dt, x0, y0, z0, truth)
     push!(b.event, Int32(ev)); push!(b.truth, Int8(truth))
     push!(b.x1, _enc_xyz_c(x1)); push!(b.y1, _enc_xyz_c(y1)); push!(b.z1, _enc_xyz_c(z1))
     push!(b.e1, _enc_e_c(e1)); push!(b.t1, Float32(t1)); push!(b.iz1, Int16(iz1)); push!(b.iphi1, Int16(iphi1))
     push!(b.x2, _enc_xyz_c(x2)); push!(b.y2, _enc_xyz_c(y2)); push!(b.z2, _enc_xyz_c(z2))
     push!(b.e2, _enc_e_c(e2)); push!(b.t2, Float32(t2)); push!(b.iz2, Int16(iz2)); push!(b.iphi2, Int16(iphi2))
+    push!(b.dt, Float32(dt))
     push!(b.x0, _enc_xyz_c(x0)); push!(b.y0, _enc_xyz_c(y0)); push!(b.z0, _enc_xyz_c(z0))
     b
 end
@@ -123,6 +126,7 @@ function foreach_coincidences_hdf5(f, path::AbstractString; batch::Int = 1 << 20
             b = CoincidenceBuffer(rd("event"), rd("truth"),
                 rd("x1_mm"), rd("y1_mm"), rd("z1_mm"), rd("e1_keV"), rd("t1_ns"), rd("iz1"), rd("iphi1"),
                 rd("x2_mm"), rd("y2_mm"), rd("z2_mm"), rd("e2_keV"), rd("t2_ns"), rd("iz2"), rd("iphi2"),
+                rd("dt_ns"),
                 rd("x0_mm"), rd("y0_mm"), rd("z0_mm"))
             f(b)
             lo = hi + 1

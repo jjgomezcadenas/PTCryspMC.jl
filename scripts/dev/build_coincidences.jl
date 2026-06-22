@@ -45,15 +45,17 @@ function parse_cli()
 end
 
 # The LOR selection core — Response, GammaAcc, pass_energy, contained_one, fill_full!,
-# finish_event! — now lives in src/coincidences.jl, shared with build_coincidences_from_singles.jl.
-# Here we only supply the CSV-row sink that `finish_event!` emits into; the output schema and
-# values are unchanged (the truth Int8 code is mapped back to the "true"/"scatter" strings).
+# finish_event! — now lives in src/coincidences.jl, shared with build_true_coincidences_from_singles.jl.
+# Here we only supply the CSV-row sink that `finish_event!` emits into (the truth Int8 code is
+# mapped back to the "true"/"scatter" strings). The timestamps `t1,t2` [ns] and the per-pair
+# residual `dt` = |Δt0| − TOF_diff are now real (an `EventTiming` is passed to finish_event!).
 function write_lor_row(io, ev, x1, y1, z1, e1, t1, iz1, iphi1,
-                       x2, y2, z2, e2, t2, iz2, iphi2, x0, y0, z0, truth)
+                       x2, y2, z2, e2, t2, iz2, iphi2, dt, x0, y0, z0, truth)
     ts = truth == TRUTH_TRUE ? "true" : "scatter"
     println(io, join((ev,
-        round(x1, digits=4), round(y1, digits=4), round(z1, digits=4), round(e1, digits=4), 0.0, iz1, iphi1,
-        round(x2, digits=4), round(y2, digits=4), round(z2, digits=4), round(e2, digits=4), 0.0, iz2, iphi2,
+        round(x1, digits=4), round(y1, digits=4), round(z1, digits=4), round(e1, digits=4), round(t1, digits=4), iz1, iphi1,
+        round(x2, digits=4), round(y2, digits=4), round(z2, digits=4), round(e2, digits=4), round(t2, digits=4), iz2, iphi2,
+        round(dt, digits=6),
         round(x0, digits=4), round(y0, digits=4), round(z0, digits=4), ts), ","))
 end
 
@@ -83,6 +85,9 @@ function main()
 
     resp = Response(sigma_xyz, eres, emin, window > 0.0, window * energy_fwhm(511.0, eres))
     rng  = MersenneTwister(seed)
+    # Timing context: the crystal (scintillation jitter) + the activity model (annihilation time).
+    crystal = String(cfg_get(cfg, "transport", "crystal_material", "CsI"))
+    timing  = EventTiming(ActivityModel(cfg), load_material(joinpath(REPO, "data"), crystal))
 
     if mode == "det"
         ecut = resp.apply_window ? "window ±$(round(resp.win_half,digits=1)) keV" :
@@ -113,7 +118,7 @@ function main()
         mkpath(dirname(out))
         open(out, "w") do io
             println(io, "event,x1_mm,y1_mm,z1_mm,e1_keV,t1_ns,iz1,iphi1," *
-                        "x2_mm,y2_mm,z2_mm,e2_keV,t2_ns,iz2,iphi2,x0_mm,y0_mm,z0_mm,truth")
+                        "x2_mm,y2_mm,z2_mm,e2_keV,t2_ns,iz2,iphi2,dt_ns,x0_mm,y0_mm,z0_mm,truth")
             for line in eachline(fin)
                 isempty(line) && continue
                 f = split(line, ',')
@@ -122,7 +127,7 @@ function main()
                     if cur_ev != -1
                         n_ev += 1
                         emitted, is_true = finish_event!((a...) -> write_lor_row(io, a...),
-                                                         cur_ev, g[1], g[2], ev_x0, ev_y0, ev_z0, resp, rng)
+                                                         cur_ev, g[1], g[2], ev_x0, ev_y0, ev_z0, resp, rng, timing)
                         n_pair += emitted; n_true += (emitted && is_true)
                     end
                     reset!(g[1]); reset!(g[2]); cur_ev = ev
@@ -142,7 +147,7 @@ function main()
             if cur_ev != -1                              # the final event
                 n_ev += 1
                 emitted, is_true = finish_event!((a...) -> write_lor_row(io, a...),
-                                                 cur_ev, g[1], g[2], ev_x0, ev_y0, ev_z0, resp, rng)
+                                                 cur_ev, g[1], g[2], ev_x0, ev_y0, ev_z0, resp, rng, timing)
                 n_pair += emitted; n_true += (emitted && is_true)
             end
         end

@@ -1,6 +1,6 @@
 # Coincidence (LOR) selection: pair the two photons of an annihilation into a line of response.
 # The shared core behind both LOR builders — build_coincidences.jl (full stack → CSV) and
-# build_coincidences_from_singles.jl (singles → LOR HDF5). Sink-agnostic: `finish_event!` emits
+# build_true_coincidences_from_singles.jl (singles → LOR HDF5). Sink-agnostic: `finish_event!` emits
 # each accepted LOR via a callback (a CSV/HDF5 row in the drivers, a vector push in the tests),
 # so the selection physics lives in one place.
 #
@@ -81,16 +81,22 @@ const TRUTH_SCATTER = Int8(1)
 const TRUTH_RANDOM  = Int8(2)     # reserved for the Step-5 randoms pass
 
 """
-    finish_event!(emit, ev, g1, g2, x0, y0, z0, resp, rng) -> (emitted, is_true)
+    finish_event!(emit, ev, g1, g2, x0, y0, z0, resp, rng, timing) -> (emitted, is_true)
 
 Finalise one annihilation's two gammas into a LOR: require both contained in one block, smear
-energy + position, apply the energy selection, and on acceptance call
-`emit(ev, x1,y1,z1,e1,t1,iz1,iphi1, x2,y2,z2,e2,t2,iz2,iphi2, x0,y0,z0, truth)` — `t` is a dummy
-`0.0` (no timing until Step 5), `truth` is `TRUTH_TRUE`/`TRUTH_SCATTER`. Smearing does not change
-the truth tag. Returns whether a LOR was emitted and whether it is a true coincidence.
+energy + position, apply the energy selection, time-stamp each gamma, and on acceptance call
+`emit(ev, x1,y1,z1,e1,t1,iz1,iphi1, x2,y2,z2,e2,t2,iz2,iphi2, dt, x0,y0,z0, truth)`,
+`truth` ∈ `TRUTH_TRUE`/`TRUTH_SCATTER` (smearing does not change the tag).
+
+`timing::EventTiming` supplies the annihilation time (from `ev`) and the crystal (its
+scintillation jitter). Timestamps `t1,t2` and the residual `dt = |t1−t2| − TOF_diff` use the
+**true** hit positions and **true** deposited energies (not the smeared measurement); `TOF_diff`
+is the geometric time-of-flight difference from the common emission point. Returns whether a LOR
+was emitted and whether it is a true coincidence.
 """
 function finish_event!(emit, ev::Int, g1::GammaAcc, g2::GammaAcc,
-                       x0::Float64, y0::Float64, z0::Float64, resp::Response, rng)
+                       x0::Float64, y0::Float64, z0::Float64, resp::Response, rng,
+                       timing)   # an EventTiming (untyped: this file is included before timing.jl)
     (contained_one(g1) && contained_one(g2)) || return (false, false)
     e1 = smear_energy(g1.e, resp.eres, rng)
     e2 = smear_energy(g2.e, resp.eres, rng)
@@ -99,7 +105,17 @@ function finish_event!(emit, ev::Int, g1::GammaAcc, g2::GammaAcc,
     x2, y2, z2 = smear_position((g2.x, g2.y, g2.z), resp.sigma_xyz, rng)
     is_true = !(g1.phscat || g2.phscat)
     truth = is_true ? TRUTH_TRUE : TRUTH_SCATTER
-    emit(ev, x1, y1, z1, e1, 0.0, g1.iz, g1.iphi,
-             x2, y2, z2, e2, 0.0, g2.iz, g2.iphi, x0, y0, z0, truth)
+
+    # Timestamps from true hits / true deposited energy (keV → MeV); DT subtracts the geometric
+    # time-of-flight difference so it is the pure timing-resolution residual.
+    emit_pt = (x0, y0, z0)
+    t_annih = event_time(timing.act, ev)
+    t1 = photon_timestamp(t_annih, emit_pt, (g1.x, g1.y, g1.z), g1.e * 1e-3, timing.mat, rng)
+    t2 = photon_timestamp(t_annih, emit_pt, (g2.x, g2.y, g2.z), g2.e * 1e-3, timing.mat, rng)
+    tof_diff = tof_ns(emit_pt, (g1.x, g1.y, g1.z)) - tof_ns(emit_pt, (g2.x, g2.y, g2.z))
+    dt = abs(t1 - t2) - tof_diff
+
+    emit(ev, x1, y1, z1, e1, t1, g1.iz, g1.iphi,
+             x2, y2, z2, e2, t2, g2.iz, g2.iphi, dt, x0, y0, z0, truth)
     (true, is_true)
 end

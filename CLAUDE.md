@@ -100,7 +100,7 @@ The photon transport and geometry are photon-only:
   with local energy deposition.
 
 Other dirs: `geometry/` (JSON world), `data/` (materials + XCOM), `scripts/` (the **production
-chain** — `simulate_source_mt.jl`, `build_coincidences_from_singles.jl`; subdirs `scripts/dev/`
+chain** — `simulate_source_mt.jl`, `build_true_coincidences_from_singles.jl`; subdirs `scripts/dev/`
 = the full-stack dev chain `simulate_phantom.jl` + `build_coincidences.jl`, `scripts/studies/`
 = one-off explorations, `scripts/tests/` = QA/benchmark scripts, `scripts/run/` = parallel
 launchers), `py/` (Python plotters), `runs/` (TOML run configs, tracked), `test/`. Three
@@ -112,12 +112,15 @@ singles + LORs), `studies/` (`scripts/studies/` outputs, by topic: `lifetime/`, 
 The **production chain** writes under **`prod/<tag>/`** (separate from the dev `output/<tag>/`;
 base from `[output].prod_dir`, default `prod`): `scripts/simulate_source_mt.jl` (multi-threaded,
 singles-only via the allocation-free `navigate_single_photons`) → `prod/<tag>/singles.{csv,h5}`,
-then `scripts/build_coincidences_from_singles.jl` (reads singles either-format, fills `GammaAcc`
-directly via the shared `src/coincidences.jl`) → `prod/<tag>/lors_{truth,det}.h5`. HDF5 stores
-quantized Int16 columns (0.1 mm / 0.1 keV — lossless at detector resolution), chunked +
-shuffle+deflate (~6× smaller than float CSV, typed/partial fast reads). The LOR list is the
-list-mode deliverable (truth ∈ {true,scatter}; random=2 + a time-ordered merge are Step 5,
-`has_randoms=false` until then). `scripts/tests/check_singles.jl` / `check_lors.jl` validate the
+then `scripts/build_true_coincidences_from_singles.jl` (reads singles either-format, fills `GammaAcc`
+directly via the shared `src/coincidences.jl`) → `prod/<tag>/lors_truth.h5` — the same-annihilation
+coincidences (true + scatter), **truth-only**: no detector smearing, no energy cut, but carrying the
+per-gamma timestamps `t1,t2` and the residual `dt = |Δt0| − TOF_diff`. HDF5 stores quantized Int16
+columns (0.1 mm / 0.1 keV — lossless at detector resolution), chunked + shuffle+deflate (~6× smaller
+than float CSV, typed/partial fast reads). `lors_truth.h5` is the clean input to the DT study
+(`examine_dt.jl`) that picks the coincidence window τ; detector smearing, the DT cut and the randoms
+come AFTER τ, in the reco stage → `lors_det.h5` (truth ∈ {true,scatter,random}, `has_randoms=true` —
+Step 5, not built yet). `scripts/tests/check_singles.jl` / `check_lors.jl` validate the
 stacks; `diff_singles.jl` compares two.
 
 The LOR-generation pipeline (`simulate_phantom.jl` → `build_coincidences.jl` →
