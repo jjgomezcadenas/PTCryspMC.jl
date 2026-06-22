@@ -100,7 +100,8 @@ The photon transport and geometry are photon-only:
   with local energy deposition.
 
 Other dirs: `geometry/` (JSON world), `data/` (materials + XCOM), `scripts/` (the **production
-chain** — `simulate_source_mt.jl`, `build_true_coincidences_from_singles.jl`; subdirs `scripts/dev/`
+chain** — `simulate_source_mt.jl`, `build_true_coincidences_from_singles.jl`,
+`build_randoms_from_singles.jl`, `reco_lors.jl`; subdirs `scripts/dev/`
 = the full-stack dev chain `simulate_phantom.jl` + `build_coincidences.jl`, `scripts/studies/`
 = one-off explorations, `scripts/tests/` = QA/benchmark scripts, `scripts/run/` = parallel
 launchers), `py/` (Python plotters), `runs/` (TOML run configs, tracked), `test/`. Three
@@ -118,10 +119,17 @@ coincidences (true + scatter), **truth-only**: no detector smearing, no energy c
 per-gamma timestamps `t1,t2` and the residual `dt = |Δt0| − TOF_diff`. HDF5 stores quantized Int16
 columns (0.1 mm / 0.1 keV — lossless at detector resolution), chunked + shuffle+deflate (~6× smaller
 than float CSV, typed/partial fast reads). `lors_truth.h5` is the clean input to the DT study
-(`examine_dt.jl`) that picks the coincidence window τ; detector smearing, the DT cut and the randoms
-come AFTER τ, in the reco stage → `lors_det.h5` (truth ∈ {true,scatter,random}, `has_randoms=true` —
-Step 5, not built yet). `scripts/tests/check_singles.jl` / `check_lors.jl` validate the
-stacks; `diff_singles.jl` compares two.
+(`examine_dt.jl` → `studies/dt/<tag>_dt.csv`, `py/plot_dt.py`) that picks the coincidence window τ
+(set in `[timing].tau_ns`; τ=3 ns for CsI & BGO — the dT tail is TOF/geometry-set, crystal-independent).
+The singles carry `t_rel` (TOF + scintillation jitter, decay-relative, stamped ONCE in
+`simulate_source_mt`); both LOR builders reuse it (no jitter recomputed). Then:
+`build_randoms_from_singles.jl` → `randoms.h5` (truth=2): restore the absolute clock per single
+(`event_time(ev)·1e9 + t_rel`, in memory only), sort, pair cross-decay singles within τ
+(`src/randoms.jl pair_randoms`); and `reco_lors.jl` → **`lors_det.h5`** (`mode=det`,
+`has_randoms=true`): stream truth ∪ randoms through smear (σ_xyz, eres-from-crystal) + energy-select
++ DT cut (`|t1−t2|≤τ`) + the truth flag (true/scatter/random) — a streaming concat, NOT time-sorted
+(order-independent for recon; a chronological stream is recomputable from `(event,t1)` on demand).
+`scripts/tests/check_singles.jl` / `check_lors.jl` validate the stacks; `diff_singles.jl` compares two.
 
 The LOR-generation pipeline (`simulate_phantom.jl` → `build_coincidences.jl` →
 `plot_coincidences.py`) is **TOML-config driven**: a `runs/<tag>.toml` (sections
@@ -166,13 +174,16 @@ cross sections, and the photon physics core (`propagate_photon`) — plus the fi
 511 keV photons transported through the water phantom to a photon stack, reproducing
 Beer–Lambert (unscattered fraction 0.215 vs 0.216). `Pkg.test` passes.
 
-**Remaining build order:**
+**Done (1–5):** scenario injection, phantom + block/wheel ring, transport → singles +
+same-annihilation coincidences, hit formation + smear + energy window + two-block selection,
+**and the randoms pass** — the full list-mode chain `singles → lors_truth + randoms → lors_det`
+(per-photon time `t_rel` stamped once in the singles; trues reuse it, randoms restore the absolute
+clock to pair cross-decay singles within τ; reco merges + smears + cuts + flags). See the chain
+description above and `dev/randoms_plan.md`.
 
-1. Read a scenario; inject the back-to-back 511 keV pairs.
-2. Phantom + block/wheel ring geometry (`CylShell` + the structured grid).
-3. Transport → singles + same-annihilation coincidences (multi-volume navigator).
-4. Hit formation (first interaction, smear, energy window) and the two-block selection.
-5. The randoms pass.
-6. The monolithic detector configs.
+**Remaining:**
+
+6. The monolithic detector configs (CsI/CsI(Tl)/BGO sweep) + benchmark/MT for the 10⁸ production
+   (external sort / τ-bin streaming where the in-memory passes don't scale).
 
 Downstream (separate, deferred): range precision and detector comparison; reconstruction.
