@@ -26,5 +26,6 @@ docs/*.pdf
 # Python bytecode cache
 __pycache__/
 *.pyc
-prod/
-studies/
+# Generated output trees (anchored to root so scripts/studies/ stays tracked)
+/prod/
+/studies/

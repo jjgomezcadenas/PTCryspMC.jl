@@ -124,7 +124,7 @@ function main()
     println("  crystal: $crystal  |  singles ($(ishdf5 ? "hdf5" : "csv")): $singles")
 
     meta = Dict{String,Any}("scenario_tag" => tag, "mode" => "truth", "has_randoms" => false,
-        "crystal" => crystal, "seed" => seed,
+        "crystal" => crystal, "seed" => seed, "t_relative_to_decay" => true,
         "t0_s" => timing.act.t0, "t1_s" => timing.act.t1,
         "half_life_s" => log(2.0) / timing.act.λ, "time_seed" => Int(timing.act.seed))
     w = CoincidenceWriter(out, meta)

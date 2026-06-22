@@ -88,11 +88,12 @@ energy + position, apply the energy selection, time-stamp each gamma, and on acc
 `emit(ev, x1,y1,z1,e1,t1,iz1,iphi1, x2,y2,z2,e2,t2,iz2,iphi2, dt, x0,y0,z0, truth)`,
 `truth` ∈ `TRUTH_TRUE`/`TRUTH_SCATTER` (smearing does not change the tag).
 
-`timing::EventTiming` supplies the annihilation time (from `ev`) and the crystal (its
-scintillation jitter). Timestamps `t1,t2` and the residual `dt = |t1−t2| − TOF_diff` use the
-**true** hit positions and **true** deposited energies (not the smeared measurement); `TOF_diff`
-is the geometric time-of-flight difference from the common emission point. Returns whether a LOR
-was emitted and whether it is a true coincidence.
+`timing::EventTiming` supplies the crystal (its scintillation jitter). Timestamps `t1,t2` are
+**relative to the decay** — `TOF + jitter`, from the **true** hit positions and **true** deposited
+energies (the shared annihilation time cancels in a same-pair difference, so it is dropped;
+absolute = `event_time(timing.act, ev) + t`). The residual `dt = |t1−t2| − TOF_diff` is the
+timing-resolution residual (`TOF_diff` = geometric time-of-flight difference). Returns whether a
+LOR was emitted and whether it is a true coincidence.
 """
 function finish_event!(emit, ev::Int, g1::GammaAcc, g2::GammaAcc,
                        x0::Float64, y0::Float64, z0::Float64, resp::Response, rng,
@@ -106,14 +107,17 @@ function finish_event!(emit, ev::Int, g1::GammaAcc, g2::GammaAcc,
     is_true = !(g1.phscat || g2.phscat)
     truth = is_true ? TRUTH_TRUE : TRUTH_SCATTER
 
-    # Timestamps from true hits / true deposited energy (keV → MeV); DT subtracts the geometric
-    # time-of-flight difference so it is the pure timing-resolution residual.
+    # Per-gamma timestamp RELATIVE to the decay: TOF (true hit ← emit) + scintillation jitter (from
+    # true deposited energy, keV→MeV). The annihilation time t_annih is common to both photons of a
+    # pair, so it cancels in any same-pair difference and is dropped here — keeping t1,t2 at the ns
+    # scale (Float32-exact). Absolute time = event_time(timing.act, ev) + t_rel, recomputable from
+    # the stored event_number. DT subtracts the geometric TOF difference → the timing-res residual.
     emit_pt = (x0, y0, z0)
-    t_annih = event_time(timing.act, ev)
-    t1 = photon_timestamp(t_annih, emit_pt, (g1.x, g1.y, g1.z), g1.e * 1e-3, timing.mat, rng)
-    t2 = photon_timestamp(t_annih, emit_pt, (g2.x, g2.y, g2.z), g2.e * 1e-3, timing.mat, rng)
-    tof_diff = tof_ns(emit_pt, (g1.x, g1.y, g1.z)) - tof_ns(emit_pt, (g2.x, g2.y, g2.z))
-    dt = abs(t1 - t2) - tof_diff
+    tof1 = tof_ns(emit_pt, (g1.x, g1.y, g1.z))
+    tof2 = tof_ns(emit_pt, (g2.x, g2.y, g2.z))
+    t1 = tof1 + first_photon_jitter(timing.mat, g1.e * 1e-3, rng)
+    t2 = tof2 + first_photon_jitter(timing.mat, g2.e * 1e-3, rng)
+    dt = abs(t1 - t2) - (tof1 - tof2)
 
     emit(ev, x1, y1, z1, e1, t1, g1.iz, g1.iphi,
              x2, y2, z2, e2, t2, g2.iz, g2.iphi, dt, x0, y0, z0, truth)

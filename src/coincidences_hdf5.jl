@@ -3,6 +3,11 @@
 # slice reader. Same quantization as the singles (0.1 mm / 0.1 keV Int16, the scales stored as
 # attributes), shuffle+deflate-4. The LOR values are SMEARED (detector response), so a Gaussian
 # tail can fall out of range — encode with CLAMP (not the bounds-error used for singles truth).
+#
+# Timestamps t1_ns/t2_ns are Float32 and stored RELATIVE TO THE DECAY (= TOF + scintillation
+# jitter, ~ns) — the common annihilation time is dropped so ns differences survive Float32.
+# Absolute time = event_time(activity, event) + t; the activity attrs (t0_s/half_life_s/time_seed)
+# are written alongside. dt_ns is the residual DT = |t1−t2| − TOF_diff (timing resolution).
 
 using HDF5
 
