@@ -1,5 +1,5 @@
 {
-    "_doc": "Materials for PTCryspMC. density [g/cm^3]; components = element mass fractions (informational); xcom = NIST XCOM mass-attenuation table [cm^2/g], path relative to data/. Transport uses incoherent + photoelectric + pair channels: Sigma = (mu/rho) * density. Scintillators also carry, keyed to the crystal name: light_yield_per_MeV [photons/MeV], scint_decay_ns + scint_decay_w (decay-component lifetimes [ns] and weights summing to 1), eres_a (fractional energy-resolution FWHM at 511 keV).",
+    "_doc": "Materials for PTCryspMC. density [g/cm^3]; components = element mass fractions (informational); xcom = NIST XCOM mass-attenuation table [cm^2/g], path relative to data/. Transport uses incoherent + photoelectric + pair channels: Sigma = (mu/rho) * density. Scintillators also carry, keyed to the crystal name: light_yield_per_MeV [photons/MeV], scint_decay_ns + scint_decay_w (decay-component lifetimes [ns] and weights summing to 1), eres_a (fractional energy-resolution FWHM at 511 keV), pde (effective photon-detection efficiency for the crystal emission spectrum).",
 
     "Vacuum": {
         "density": 0.0,
@@ -20,7 +20,8 @@
         "light_yield_per_MeV": 1.0e5,
         "scint_decay_ns": [1000.0],
         "scint_decay_w": [1.0],
-        "eres_a": 0.05
+        "eres_a": 0.05,
+        "pde": 0.45
     },
 
     "BGO": {
@@ -31,7 +32,8 @@
         "light_yield_per_MeV": 2.9e4,
         "scint_decay_ns": [747.0, 2253.0],
         "scint_decay_w": [0.34, 0.66],
-        "eres_a": 0.10
+        "eres_a": 0.10,
+        "pde": 0.45
     },
 
     "Air": {
