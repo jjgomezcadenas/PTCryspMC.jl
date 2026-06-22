@@ -740,6 +740,34 @@ end
         rm(dir; recursive=true)
     end
 
+    @testset "activity model — truncated-exponential event times" begin
+        m = ActivityModel(; t0=0.0, t1=600.0, half_life_s=O15_HALFLIFE_S, seed=7)
+        T = m.t1 - m.t0; λ = m.λ
+        N = 200_000
+        ts = [event_time(m, ev) for ev in 1:N]
+
+        @test all(t -> m.t0 <= t <= m.t1, ts)                      # within the window
+        @test event_time(m, 12345) == event_time(m, 12345)        # deterministic
+        @test event_time(ActivityModel(; seed=7), 99) == event_time(m, 99)   # reproducible per (seed, ev)
+        @test event_time(ActivityModel(; seed=8), 99) != event_time(m, 99)   # seed changes it
+
+        # Sampled mean ≈ the analytic truncated-exponential mean (over [t0,t1], rate λ).
+        mean_analytic = m.t0 + 1/λ - T*exp(-λ*T) / (1 - exp(-λ*T))
+        @test isapprox(sum(ts)/N, mean_analytic; atol=2.0)        # ~3 s of slack over 2e5 draws
+
+        # Front-loaded: the fraction in the first half matches the analytic CDF at the midpoint.
+        cdf_mid = (1 - exp(-λ*T/2)) / (1 - exp(-λ*T))
+        frac_first = count(t -> t <= m.t0 + T/2, ts) / N
+        @test frac_first > 0.5 && isapprox(frac_first, cdf_mid; atol=0.01)
+
+        event_time(m, 1)                                          # compile
+        @test (@allocated event_time(m, 7)) == 0                 # stateless → no heap
+
+        @test ActivityModel(Dict("timing" => Dict("t1_s" => 300.0))).t1 == 300.0
+        @test ActivityModel(Dict{String,Any}()).t1 == 600.0      # default 10 min, ¹⁵O
+        @test_throws ErrorException ActivityModel(; t0=10.0, t1=5.0)
+    end
+
     @testset "uniform volume sampling" begin
         rng = MersenneTwister(7)
 

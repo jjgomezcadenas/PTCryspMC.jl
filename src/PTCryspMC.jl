@@ -21,6 +21,7 @@ include("detector.jl")     # detector response: energy + position smearing
 include("coincidences.jl") # LOR selection core (shared by both coincidence builders)
 include("coincidences_hdf5.jl") # HDF5 container for the LOR list (streaming writer + reader)
 include("config.jl")       # TOML run-config reader (driver scripts)
+include("activity.jl")     # toy activity model: per-event annihilation time (randoms)
 
 export XCOMData, load_xcom,
        Material, load_material, load_materials, sigma_macro, mfp,
@@ -41,6 +42,7 @@ export XCOMData, load_xcom,
        finish_event!, TRUTH_TRUE, TRUTH_SCATTER, TRUTH_RANDOM,
        CoincidenceBuffer, coinc_columns, push_coincidence!, CoincidenceWriter, set_lor_attr!, foreach_coincidences_hdf5,
        energy_fwhm, energy_sigma, smear_energy, smear_position,
-       read_config, cfg_get, run_tag, prod_base
+       read_config, cfg_get, run_tag, prod_base,
+       ActivityModel, event_time, O15_HALFLIFE_S
 
 end # module PTCryspMC
