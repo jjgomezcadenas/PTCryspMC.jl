@@ -19,7 +19,8 @@ seed = 1234
 [detector]
 sigma_xyz_mm = 1.7
 eres = 0.10                     # 10% FWHM at 511 keV (cryogenic BGO)
-emin_keV = 300.0
+emin_keV = 300.0               # spectrum studies: low cut, keeps the Compton shoulder (window off)
+reco_emin_keV = 450.0          # reconstructed LORs: photopeak-region lower cut (~3σ@10%), saves disk
 seed = 1234
 
 [timing]

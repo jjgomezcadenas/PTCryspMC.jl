@@ -16,7 +16,8 @@
 using PTCryspMC
 using ArgParse
 
-const E_HI = 600.0         # energy upper bound [keV] (511 + margin)
+const E_HI = 1000.0        # energy upper bound [keV]: generous so a high-resolution-FWHM crystal's
+                           # photopeak smearing tail (e.g. 10% BGO past 600) isn't flagged as corrupt
 
 function parse_cli()
     s = ArgParseSettings(description="Validate a LOR HDF5 file: structure + distributions.")

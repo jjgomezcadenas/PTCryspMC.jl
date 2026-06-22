@@ -67,7 +67,10 @@ function main()
 
     sigma_xyz = Float64(cfg_get(cfg, "detector", "sigma_xyz_mm", 0.0))
     eres_cfg  = Float64(cfg_get(cfg, "detector", "eres", NaN))         # NaN = absent → crystal default
-    emin      = Float64(cfg_get(cfg, "detector", "emin_keV", 0.0))
+    # The reconstructed LORs use a HIGHER lower energy cut than the spectrum studies (which keep
+    # emin_keV low to see the Compton shoulder): reco_emin_keV selects the photopeak region (~a few σ
+    # below 511 for the worst-resolution crystal) and shrinks the file. Falls back to emin_keV if unset.
+    emin      = Float64(cfg_get(cfg, "detector", "reco_emin_keV", cfg_get(cfg, "detector", "emin_keV", 0.0)))
     window    = Float64(cfg_get(cfg, "detector", "window_fwhm", 0.0))
     seed      = Int(cfg_get(cfg, "detector", "seed", 1234))
     eres      = isnan(eres_cfg) ? mat.eres_a : eres_cfg                # name the crystal → its eres
