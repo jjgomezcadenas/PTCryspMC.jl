@@ -38,8 +38,8 @@ FULL_KEV = 505.0     # Etot above this counts as the full 511 keV (contained)
 def main():
     p = argparse.ArgumentParser(description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--csv", default=os.path.join(REPO, "output", "b2b_csi_stack.csv"))
-    p.add_argument("--out", default=os.path.join(REPO, "output", "control_plots",
+    p.add_argument("--csv", default=os.path.join(REPO, "studies", "b2b", "b2b_csi_stack.csv"))
+    p.add_argument("--out", default=os.path.join(REPO, "studies", "b2b",
                                                  "b2b_csi_summary.png"))
     # CRYSP1M ring geometry (for the DOI / crystal-local frame)
     p.add_argument("--r-inner-mm", type=float, default=387.0)

@@ -43,7 +43,7 @@ def read_csv(path):
 
 def main():
     ap = argparse.ArgumentParser(description="Plot the activity-model event-time distribution.")
-    ap.add_argument("--csv", default="output/o15_lifetime.csv")
+    ap.add_argument("--csv", default="studies/lifetime/o15_lifetime.csv")
     ap.add_argument("--out", default="")
     a = ap.parse_args()
 
@@ -81,6 +81,7 @@ def main():
     fig.suptitle(f"Activity-model event times — ¹⁵O-style T½={half:.1f} s, window [{t0:.0f}, {t1:.0f}] s, "
                  f"N={int(N):,}", fontsize=11)
     fig.tight_layout(rect=(0, 0, 1, 0.95))
+    os.makedirs(os.path.dirname(out), exist_ok=True)
     fig.savefig(out, dpi=120)
     print(f"wrote {out}")
 

@@ -27,3 +27,4 @@ docs/*.pdf
 __pycache__/
 *.pyc
 prod/
+studies/

@@ -46,7 +46,7 @@ function main()
     a = parse_cli()
     mat = load_material(a["data"], a["material"])
     out = isempty(a["out"]) ?
-        joinpath(@__DIR__, "..", "..", "output",
+        joinpath(@__DIR__, "..", "..", "studies", "crystal",
                  "$(lowercase(a["material"]))_crystal_$(a["tag"])_stack.csv") : a["out"]
 
     # Box centred at the origin, placed so the entry (-z) face sits at world z = 0.

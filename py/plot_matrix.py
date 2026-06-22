@@ -54,7 +54,7 @@ def main():
     p = argparse.ArgumentParser(description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("configs", nargs="*", help="run configs (default: all runs/*.toml)")
-    p.add_argument("--out", default=os.path.join(REPO, "output", "matrix_summary.png"))
+    p.add_argument("--out", default=os.path.join(REPO, "output", "control_plots", "matrix_summary.png"))
     args = p.parse_args()
 
     cfgs = [resolve(c) for c in args.configs] if args.configs \

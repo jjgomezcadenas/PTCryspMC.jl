@@ -31,7 +31,7 @@ function main()
     a = parse_cli()
     mat = load_material(a["data"], a["material"])
     out = isempty(a["out"]) ?
-        joinpath(@__DIR__, "..", "..", "output", lowercase(a["material"]) * "_xsections.csv") :
+        joinpath(@__DIR__, "..", "..", "studies", "xsections", lowercase(a["material"]) * "_xsections.csv") :
         a["out"]
 
     emin_MeV, emax_MeV = a["emin"] / 1000.0, a["emax"] / 1000.0

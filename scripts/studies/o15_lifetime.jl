@@ -19,7 +19,7 @@ function parse_cli()
         "--nevents";     help = "events to sample";      arg_type = Int;     default = 1_000_000
         "--nbins";       help = "histogram bins";        arg_type = Int;     default = 60
         "--seed";        help = "activity time seed";    arg_type = Int;     default = 1234
-        "--out";         help = "output CSV";            default = "output/o15_lifetime.csv"
+        "--out";         help = "output CSV";            default = "studies/lifetime/o15_lifetime.csv"
     end
     parse_args(s)
 end

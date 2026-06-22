@@ -40,8 +40,8 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 def main():
     p = argparse.ArgumentParser(description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--csv", default=os.path.join(REPO, "output", "csi_crystal_stack.csv"))
-    p.add_argument("--out", default=os.path.join(REPO, "output", "control_plots",
+    p.add_argument("--csv", default=os.path.join(REPO, "studies", "crystal", "csi_crystal_stack.csv"))
+    p.add_argument("--out", default=os.path.join(REPO, "studies", "crystal",
                                                  "csi_crystal_summary.png"))
     args = p.parse_args()
 

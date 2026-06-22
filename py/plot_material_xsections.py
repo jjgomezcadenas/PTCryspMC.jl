@@ -33,8 +33,8 @@ def main():
     args = p.parse_args()
 
     slug = args.material.lower()
-    csv = args.csv or os.path.join(REPO, "output", f"{slug}_xsections.csv")
-    out = args.out or os.path.join(REPO, "output", "control_plots", f"{slug}_xsections.png")
+    csv = args.csv or os.path.join(REPO, "studies", "xsections", f"{slug}_xsections.csv")
+    out = args.out or os.path.join(REPO, "studies", "xsections", f"{slug}_xsections.png")
     title = args.title or f"{args.material} photon cross sections"
 
     df = pd.read_csv(csv)

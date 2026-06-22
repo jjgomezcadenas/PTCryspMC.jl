@@ -14,7 +14,7 @@ function parse_cli()
     @add_arg_table! s begin
         "--geometry"; help = "geometry JSON"; default = joinpath(@__DIR__, "..", "..", "geometry", "geometry.json")
         "--data";    help = "data dir";      default = joinpath(@__DIR__, "..", "..", "data")
-        "--out";     help = "output CSV";    default = joinpath(@__DIR__, "..", "..", "output", "phantom_stack.csv")
+        "--out";     help = "output CSV";    default = joinpath(@__DIR__, "..", "..", "studies", "phantom", "phantom_stack.csv")
         "--nevents"; help = "n photons";     arg_type = Int;     default = 10000
         "--energy";  help = "energy [keV]";  arg_type = Float64; default = 511.0
         "--seed";    help = "RNG seed";      arg_type = Int;     default = 1234

@@ -72,7 +72,7 @@ function main()
                                  sc0.volume.position), sc0.n_phi, sc0.n_z)
 
     out = isempty(a["out"]) ?
-        joinpath(@__DIR__, "..", "..", "output", "b2b_$(lowercase(a["material"]))_stack.csv") : a["out"]
+        joinpath(@__DIR__, "..", "..", "studies", "b2b", "b2b_$(lowercase(a["material"]))_stack.csv") : a["out"]
     E0       = a["energy"] / 1000.0          # MeV
     cut_MeV  = a["cutoff"] / 1000.0
     radius   = a["source-radius"] / 10.0     # mm -> cm

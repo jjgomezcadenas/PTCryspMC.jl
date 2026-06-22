@@ -78,8 +78,8 @@ def per_event(df):
 def main():
     p = argparse.ArgumentParser(description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--csv", default=os.path.join(REPO, "output", "phantom_stack.csv"))
-    p.add_argument("--out", default=os.path.join(REPO, "output", "control_plots",
+    p.add_argument("--csv", default=os.path.join(REPO, "studies", "phantom", "phantom_stack.csv"))
+    p.add_argument("--out", default=os.path.join(REPO, "studies", "phantom",
                                                  "phantom_stack_summary.png"))
     args = p.parse_args()
 

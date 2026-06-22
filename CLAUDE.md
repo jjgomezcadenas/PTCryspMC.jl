@@ -103,8 +103,11 @@ Other dirs: `geometry/` (JSON world), `data/` (materials + XCOM), `scripts/` (th
 chain** — `simulate_source_mt.jl`, `build_coincidences_from_singles.jl`; subdirs `scripts/dev/`
 = the full-stack dev chain `simulate_phantom.jl` + `build_coincidences.jl`, `scripts/studies/`
 = one-off explorations, `scripts/tests/` = QA/benchmark scripts, `scripts/run/` = parallel
-launchers), `py/` (Python plotters), `runs/` (TOML run configs, tracked), `output/` (per-run
-`output/<tag>/` results, gitignored), `test/`.
+launchers), `py/` (Python plotters), `runs/` (TOML run configs, tracked), `test/`. Three
+gitignored output trees, one per script category (each holding only directories): `output/`
+(dev chain — `<tag>/` run cases + `control_plots/`), `prod/` (production chain — `<tag>/`
+singles + LORs), `studies/` (`scripts/studies/` outputs, by topic: `lifetime/`, `xsections/`,
+`b2b/`, `crystal/`, `phantom/`).
 
 The **production chain** writes under **`prod/<tag>/`** (separate from the dev `output/<tag>/`;
 base from `[output].prod_dir`, default `prod`): `scripts/simulate_source_mt.jl` (multi-threaded,
