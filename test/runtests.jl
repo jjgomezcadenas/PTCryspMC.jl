@@ -792,6 +792,44 @@ end
         @test_throws ErrorException ActivityModel(; t0=10.0, t1=5.0)
     end
 
+    @testset "scintillation timing — first-photon jitter + TOF + stamp" begin
+        csi = load_material(DATA_DIR, "CsI")            # single component, 1000 ns
+        bgo = load_material(DATA_DIR, "BGO")            # two components, 747 / 2253 ns
+        w   = load_material(DATA_DIR, "Water")          # non-scintillator
+        rng = MersenneTwister(2024)
+        E = 0.511                                       # MeV
+
+        # Mean jitter ≈ 1 / (N_det · r0), with r0 = Σ wₖ/τₖ over the decay mixture.
+        N = 200_000
+        for mat in (csi, bgo)
+            r0 = sum(mat.scint_decay_w ./ mat.scint_decay_ns)
+            N_det = mat.light_yield * E * mat.pde
+            mean_analytic = 1.0 / (N_det * r0)
+            js = [first_photon_jitter(mat, E, rng) for _ in 1:N]
+            @test all(>=(0.0), js)
+            @test isapprox(sum(js)/N, mean_analytic; rtol=0.02)
+        end
+        # BGO r0 is the explicit weighted sum (cross-check the mixture handling).
+        @test isapprox(sum(bgo.scint_decay_w ./ bgo.scint_decay_ns),
+                       0.34/747.0 + 0.66/2253.0; rtol=1e-12)
+
+        # Non-scintillator (no yield / PDE) → exactly zero jitter.
+        @test first_photon_jitter(w, E, rng) == 0.0
+
+        # TOF: a known separation over c.
+        @test isapprox(tof_ns((0.0,0.0,0.0), (C_MM_PER_NS,0.0,0.0)), 1.0; rtol=1e-12)
+        @test tof_ns((1.0,2.0,3.0), (1.0,2.0,3.0)) == 0.0
+
+        # Full stamp = t_annih (s→ns) + TOF + jitter; with zero jitter (Water) it's exact.
+        ts = photon_timestamp(2.0, (0.0,0.0,0.0), (C_MM_PER_NS,0.0,0.0), E, w, rng)
+        @test isapprox(ts, 2.0e9 + 1.0; rtol=1e-15)
+
+        # Allocation-free hot path.
+        first_photon_jitter(csi, E, rng); photon_timestamp(0.0, (0.,0.,0.), (1.,0.,0.), E, csi, rng)
+        @test (@allocated first_photon_jitter(csi, E, rng)) == 0
+        @test (@allocated photon_timestamp(0.0, (0.,0.,0.), (1.,0.,0.), E, csi, rng)) == 0
+    end
+
     @testset "uniform volume sampling" begin
         rng = MersenneTwister(7)
 
