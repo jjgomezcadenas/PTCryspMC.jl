@@ -840,6 +840,30 @@ end
         @test (@allocated photon_timestamp(0.0, (0.,0.,0.), (1.,0.,0.), E, csi, rng)) == 0
     end
 
+    @testset "randoms pairing — cross-event window" begin
+        # Singles on the absolute clock [ns]; pair cross-event ones within τ=1.5, skip same-event.
+        t_abs = [0.0, 1.0, 2.0, 100.0, 100.5, 100.8]
+        ev    = Int32[1,   1,   2,   3,     4,     3]      # (1,2) same decay; (4,6) same decay
+        pairs = Tuple{Int,Int,Float64}[]
+        n = pair_randoms((i, j, Δ) -> push!(pairs, (i, j, Δ)), t_abs, ev, 1.5)
+
+        # Expected: (2,3) Δ1.0  [t=1↔2];  (4,5) Δ0.5  [100↔100.5];  (5,6) Δ0.3  [100.5↔100.8].
+        # NOT (1,2): same decay.  NOT (1,3): Δ=2 > τ.  NOT (4,6): same decay (skipped, window continues).
+        @test n == 3
+        @test (2, 3, 1.0) in pairs
+        @test any(p -> p[1]==4 && p[2]==5 && isapprox(p[3], 0.5), pairs)
+        @test any(p -> p[1]==5 && p[2]==6 && isapprox(p[3], 0.3), pairs)
+        @test all(((i,j,_),) -> ev[i] != ev[j], pairs)    # never same-event
+        @test all(((_,_,Δ),) -> 0 < Δ <= 1.5, pairs)      # within the window
+
+        # τ=0 → no pairs; a wide τ pairs every cross-event pair (here all but the 2 same-event ones).
+        @test pair_randoms((i,j,Δ)->nothing, t_abs, ev, 0.0) == 0
+        # Unsorted input is handled (internal sortperm): same result on a shuffled copy.
+        perm = [4, 1, 5, 2, 6, 3]
+        m = pair_randoms((i,j,Δ)->nothing, t_abs[perm], ev[perm], 1.5)
+        @test m == 3
+    end
+
     @testset "uniform volume sampling" begin
         rng = MersenneTwister(7)
 

@@ -80,7 +80,10 @@ function main()
         end
     end
 
-    nbad = st.v_order + st.v_truth + st.v_block + st.v_energy
+    # Event order is an invariant only for the event-ordered truth file; the randoms (and merged
+    # det) files are ABSOLUTE-TIME ordered, so their `event` column is intentionally non-monotonic.
+    ordered = mode == "truth"
+    nbad = st.v_truth + st.v_block + st.v_energy + (ordered ? st.v_order : 0)
     println("lors: $lors  (mode $mode, has_randoms=$has_randoms)")
     println("  LORs: $(st.rows)   events: $nevents   scanner $(n_phi)φ × $(n_z)z")
     if st.rows > 0
@@ -90,7 +93,7 @@ function main()
         println("  hit energy:    mean e1 $(round(st.e1sum/st.rows,digits=1)) keV, e2 $(round(st.e2sum/st.rows,digits=1)) keV")
         println("  opposition:    $(round(100*st.opp/st.rows,digits=1))% of LORs join roughly opposite blocks (Δφ ≈ n_phi/2)")
     end
-    println("invariants: order=$(st.v_order) truth=$(st.v_truth) block=$(st.v_block) energy=$(st.v_energy)")
+    println("invariants: order=$(st.v_order)$(ordered ? "" : " (n/a: time-ordered)") truth=$(st.v_truth) block=$(st.v_block) energy=$(st.v_energy)")
     if nbad == 0
         println("PASS ✓  ($(st.rows) LORs, all invariants hold)")
     else

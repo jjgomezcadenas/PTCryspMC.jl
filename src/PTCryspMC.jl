@@ -23,6 +23,7 @@ include("coincidences_hdf5.jl") # HDF5 container for the LOR list (streaming wri
 include("config.jl")       # TOML run-config reader (driver scripts)
 include("activity.jl")     # toy activity model: per-event annihilation time (randoms)
 include("timing.jl")       # per-gamma timestamp: annihilation time + TOF + scintillation jitter
+include("randoms.jl")      # cross-decay accidental pairing (sort by absolute time + τ-window)
 
 export XCOMData, load_xcom,
        Material, load_material, load_materials, sigma_macro, mfp,
@@ -45,6 +46,7 @@ export XCOMData, load_xcom,
        energy_fwhm, energy_sigma, smear_energy, smear_position,
        read_config, cfg_get, run_tag, prod_base,
        ActivityModel, event_time, O15_HALFLIFE_S,
-       C_MM_PER_NS, first_photon_jitter, tof_ns, photon_timestamp
+       C_MM_PER_NS, first_photon_jitter, tof_ns, photon_timestamp,
+       pair_randoms
 
 end # module PTCryspMC
