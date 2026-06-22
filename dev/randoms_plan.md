@@ -1,85 +1,113 @@
-# Plan — Step 5: randoms (and the timing it needs)
+# Plan — Step 5: randoms (the third LOR category)
 
-Self-contained plan so this can be picked up after a context clear. Status: Steps 1–4 of
-the pipeline are effectively done via the analytic-phantom → LOR track (A–F, see
-`dev/phantom_track_plan.md`) — transport, navigation, hit formation, smearing, the energy
-selection, the list-mode coincidence file (true/scatter), config-driven and parallel.
-**Times are still a dummy `0.0`** everywhere. Randoms is the next major piece.
+Self-contained (pick up after a context clear). Supersedes the pre-singles version of this
+file. State going in: the production chain `simulate_source_mt.jl` (MT) → `prod/<tag>/singles.h5`
+→ `build_coincidences_from_singles.jl` (single-threaded) → `prod/<tag>/lors_{truth,det}.h5` is
+done (trues + scatters; `truth ∈ {0,1}`, `random=2` reserved, `has_randoms=false`). Randoms are
+the **only missing LOR category** and complete the list-mode measurement.
 
 ## What a random is
 
-Two photons from **different** annihilations that happen to arrive within the coincidence
-window τ (a few ns) → a false coincidence with a wrong LOR. Rate ≈ `2·τ·S²` (S = singles
-rate), **front-loaded** (largest at scan start, falls as the activity²), at most a few % of
-the trues for τ ~ a few ns. Method: a **separate pass over the singles, no re-transport**
-(`docs/pet_simulation.tex`): time-tag each single from its isotope's activity, sort in
-time, pair cross-annihilation singles within τ, tag them `random`.
+Two singles from **different** annihilations arriving within the coincidence window τ (~ns) → a
+false LOR with a wrong line of response. Rate ≈ **2·τ·S²** (S = singles rate), **front-loaded**
+(∝ activity²), a few % of trues for τ ~ few ns. Method: time-tag each single from its parent
+annihilation's time, sort by time, pair **cross-annihilation** singles within τ → `truth=2`.
 
-## The blocker: randoms needs real TIMES, which need ISOTOPES
+## The blocker + the path
 
-Each single needs an absolute time drawn from its **parent isotope's activity curve**
-(e.g. ¹⁵O, 122 s half-life; front-loaded). Today:
-- times are dummy `0.0` (no timing in the sim);
-- the source is a **geometric phantom** (`UniformVolumeSource`) with **no isotope** — so
-  there is no activity curve to sample from.
+Randoms need a **real time** per single, from its **parent isotope's activity curve**. Today
+times are dummy and the source is a geometric phantom with **no isotope** — real per-isotope
+timing depends on Step 1 (the scenario source). **Path B (locked):** build the whole randoms
+machinery now on a **toy activity model** (one isotope, single-exponential over an acquisition
+window), wire real per-isotope activity later. Validation is the `2τS²` scaling, which the toy
+model exercises fully.
 
-So real randoms depends on **Step 1 — the scenario source** (read `ptcrysp-scenarios`:
-`emitters.csv` = annihilation points + isotope per emitter, `sampling_budget_*.csv` = N_j
-per isotope, `run_meta.csv` = dose/timing, `isotopes.csv`). That tags each annihilation
-with an isotope → its activity curve → its time.
+## Locked decisions
 
-**Two paths:**
-- **Path A — scenario source first (Step 1), then randoms.** The "correct" order. Step 1 is
-  its own chunk: read the scenario, draw N_j isotope-tagged annihilation points to the
-  budget, emit. Then time-tag from per-isotope activity, then randoms.
-- **Path B — simplified randoms first.** Build the randoms machinery (time-tag → sort →
-  pair-within-τ) on the current phantom source with a **toy activity model** (one isotope,
-  a single exponential `A(t)=A₀e^{-λt}` over the acquisition window, or a flat rate), to
-  develop + test the pass; plug in the real scenario activity later. *(Recommended to start
-  — decouples the randoms algorithm from the scenario I/O.)*
+- **Times are a downstream, deterministic, per-event quantity — NOT in the transport-only singles
+  stack.** A pure function `event_time(model, ev, time_seed) -> Float64` (own seed, cheap
+  per-event RNG e.g. `Xoshiro(hash(time_seed, ev))`), keyed by `event_number`. So: independent of
+  the MT transport's chunking (alignment is by event id), reproducible over `(model, time_seed)`,
+  O(1) memory (no 800 MB times-vector at 10⁸), recomputable identically in any pass.
+- **A new single-purpose script** `scripts/build_randoms_from_singles.jl` (cross-annihilation
+  pairing) — separate from `build_coincidences_from_singles.jl` (same-annihilation). Different
+  algorithm (global time-sort vs event-streaming).
+- **Build single-threaded first**, benchmark on the 10⁷ file, MT only what the numbers justify
+  (see Benchmark below). Both consumers are currently single-threaded.
+- **The complete measurement = trues+scatters ∪ randoms, time-ordered**, in one `lors.h5` with
+  `has_randoms=true`.
 
-## What needs building
+## Pieces (ordered; ST first)
 
-1. **A singles list.** Per *detected photon* (one row per single): position, energy, block,
-   **time**, parent isotope, scatter flag. This is the Phase-G `--singles` reduced stack
-   (`dev/phantom_track_plan.md` Phase G) **plus** an isotope tag and a sampled time. So
-   Step 5 builds on the singles stack — do that part of Phase G alongside.
-2. **Timing.**
-   - **σ_t** (time resolution) → add `smear_time` to `src/detector.jl` (sibling of
-     `smear_energy`/`smear_position`); `[detector].sigma_t_ns` in the config.
-   - **Activity model** → sample each annihilation's time from its isotope's decay curve
-     over the acquisition window (Path B: toy model; Path A: from the scenario).
-3. **The randoms pass** (`scripts/build_randoms.jl`): read the singles, time-tag, and pair.
-   - Pairing needs **time order** — *not* a single streaming pass like coincidences. At 10⁸
-     singles a global sort is heavy; options: (a) in-memory sort if it fits, (b) **time-bin**
-     into τ-width bins and pair within adjacent bins (streaming-friendly). Decide at impl.
-   - For each cross-annihilation pair within |Δt| ≤ τ that passes the energy selection and
-     forms a valid two-block LOR → emit a coincidence tagged `random`.
-4. **Output.** Append randoms (`truth=random`) to the coincidence list, or a separate
-   `randoms_*.csv`. The plotter's truth split then has three categories (true/scatter/random).
+1. **`src/activity.jl`** — the toy activity model + `event_time`.
+   - `event_time(model, ev, seed)`: sample from a truncated exponential `A₀e^{-λt}` over
+     `[0, t_acq]` (λ = ln2/half_life), or flat. The singles rate `S = N_singles/t_acq` sets the
+     randoms fraction → `t_acq` is the knob.
+   - Real (later): per-isotope curves weighted by the scenario budget Nⱼ; `event_time` then reads
+     the single's isotope tag (added by the Step-1 scenario source).
 
-## Design questions to resolve when we start
+2. **`src/detector.jl`** — `smear_time(t, σ_t, rng)` (sibling of `smear_energy`);
+   `[detector].sigma_t_ns`. The window-resolution blur on each single's time.
 
-1. **Path A or B** (scenario source first, or toy-timing randoms first)? — lean **B**.
-2. **Singles list**: build it via the Phase-G `--singles` stack + isotope + time?
-3. **Pairing at scale**: global sort vs τ-bin streaming?
-4. **Output**: randoms appended to the coincidence file, or separate?
-5. **Activity model** location: a small `src/activity.jl` (per-isotope curves, half-lives)?
+3. **`scripts/build_randoms_from_singles.jl`** (single-threaded first) — the randoms pass:
+   - read singles, keep **good** ones (contained-one + pass the energy selection — reuse the
+     shared `Response` / `pass_energy` / `fill_singles!` from `src/coincidences.jl`);
+   - assign each its `event_time(ev)` (+ `σ_t` smear);
+   - **sort by time**; scan the τ-window, pairing **cross-event** singles (same-event pairs are the
+     trues — skip them: both photons of one annihilation share `t_ev`);
+   - emit random LORs (`truth=2`) via `CoincidenceWriter` → `prod/<tag>/randoms_{mode}.h5`.
+   - **Multiples policy** (design decision at impl): standard sorter rejects a window with >2
+     singles; first cut may pair cross-event pairwise — note whichever is chosen.
 
-## Adjacent deferred items (related)
+4. **Real times into the trues/scatters LORs.** Extend `build_coincidences_from_singles.jl` to
+   stamp each LOR's `t1,t2` with `event_time(ev)` (+ σ_t) instead of `0.0`. Cheap — it has `ev`.
 
-- **σ_t time smearing** — only meaningful once times exist (this step).
-- **Phase G remainder** — `--singles` reduced stack + HDF5; the singles list is the natural
-  place these meet.
-- **Step 1 — scenario source** — the prerequisite for real (isotope-based) timing; itself a
-  piece of work (ptcrysp-scenarios I/O), independent of the randoms *algorithm*.
+5. **Merge → the complete `lors.h5`.** Combine trues+scatters + randoms, **sort by coincidence
+   time**, write one file with `has_randoms=true`. A `merge_lors.jl`, or `build_randoms` appends.
+   (At 10⁷ an in-memory concat+sort is fine; at 10⁸ this is another big sort — see MT below.)
 
-## Quick state reference (for resume)
+## The pairing algorithm
 
-Pipeline today (all committed, `main`): `runs/<tag>.toml` → `simulate_phantom.jl`
-(transport → `output/<tag>/stack.csv`, with dummy times) → `build_coincidences.jl`
-(streaming select + smear + energy cut → `coincidences_{truth,det}.csv`, `truth ∈
-{true,scatter}`) → `plot_coincidences.py` / `plot_matrix.py`. Launchers:
-`scripts/run_matrix.sh` (data, parallel), `scripts/plot_all.sh` (plots, parallel).
-`Pkg.test`: 202. Detector physics in `src/detector.jl`; emission in `src/source.jl`;
-config in `src/config.jl`.
+- **Scale:** 10⁷ → ~13.7 M singles. First cut: **in-memory global sort** of the good singles'
+  times (hundreds of MB — fine). For 10⁸: **τ-bin streaming** (bin into τ-width time bins, pair
+  within/adjacent bins) — streaming-friendly and the natural MT partition.
+- **Cross-event only** (same-event = trues). **No opposition filter** (randoms are accidental,
+  any two blocks).
+
+## Benchmark (on the current 10⁷ file) → the MT decision
+
+The two consumers parallelize differently, so benchmark each:
+1. **`build_coincidences_from_singles` (~5 s ST at 10⁷):** split into HDF5 read+decompress vs
+   select+smear vs write (probe: time a read-only column load vs the full run). If
+   **decompress/I/O-bound** → MT buys little (attack via lighter compression / chunked-parallel
+   HDF5, not `@threads`); if **CPU-bound** → MT scales by **event-range chunks** (events
+   independent — reuse the `simulate_source_mt` per-chunk-RNG + part-file ordered-merge pattern;
+   note the smear RNG goes per-chunk → reproducible over `(seed, nchunks)`, not bit-identical to ST).
+2. **`build_randoms` sort+pair:** prototype ST, measure sort + window scan, extrapolate to 10⁸.
+   Sorting is CPU-bound → the likeliest MT win; parallelize by **τ-bins** (chunk by time) or a
+   parallel sort.
+3. **Deciding ratio:** each step's *ST 10⁸* time vs the transport's 10⁸ time (~30–60 s). Under
+   ~10 s → not worth MT; sort-heavy randoms probably is.
+
+## Validation
+
+- **Rate** ≈ analytic `2τS²` (vary τ → linear; vary S via `t_acq` → quadratic).
+- **Front-loaded** — randoms-vs-time ∝ activity² (falls faster than trues ∝ activity).
+- **Magnitude** — a few % of trues for τ ~ few ns.
+- Extend `scripts/tests/check_lors.jl` to report the three-way split (true/scatter/**random**) and
+  expect `has_randoms=true` on the merged file.
+
+## Config additions
+
+```toml
+[timing]   t_acq_s, half_life_s, shape (exp|flat), time_seed, tau_ns
+[detector] sigma_t_ns
+```
+
+## Deferred
+
+- **Real per-isotope activity** — needs Step 1 (scenario source: `emitters.csv` isotope tags +
+  budget). The toy model unblocks everything else now; swapping it in later only changes
+  `event_time` + adds an isotope column to the singles.
+- **MT** for whichever consumer the benchmark justifies.
+- A Julia reader/reducer for the production LOR HDF5 (analysis side).
