@@ -23,6 +23,10 @@ eres = 0.05                     # 5% FWHM at 511 keV (pure CsI)
 emin_keV = 300.0               # minimum gamma energy — keeps the Compton shoulder (window off)
 seed = 1234
 
+[timing]
+tau_ns = 3.0                   # coincidence window (DT study: keeps ~99% of trues; CsI & BGO)
+# activity defaults if omitted: ¹⁵O, t0_s=0, t1_s=600, half_life_s=122.2, time_seed=1234
+
 [output]
 dir = "output"
 format = "csv"
