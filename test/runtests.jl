@@ -82,6 +82,30 @@ end
         @test Ph_above > 2.0 * Ph_below
     end
 
+    @testset "crystal scintillation properties (from the material DB)" begin
+        # The crystal name pulls its intrinsic scintillation/readout properties — no config cards.
+        csi = load_material(DATA_DIR, "CsI")            # cryogenic pure CsI
+        @test csi.light_yield == 1.0e5
+        @test csi.scint_decay_ns == [1000.0] && csi.scint_decay_w == [1.0]
+        @test csi.eres_a == 0.05
+
+        bgo = load_material(DATA_DIR, "BGO")            # cryogenic BGO — two decay components
+        @test bgo.light_yield == 2.9e4
+        @test bgo.scint_decay_ns == [747.0, 2253.0]
+        @test bgo.scint_decay_w == [0.34, 0.66] && isapprox(sum(bgo.scint_decay_w), 1.0)
+        @test bgo.eres_a == 0.10
+
+        # Non-scintillators get zero/empty defaults.
+        w = load_material(DATA_DIR, "Water")
+        @test w.light_yield == 0.0 && isempty(w.scint_decay_ns) && isempty(w.scint_decay_w) && w.eres_a == 0.0
+
+        # Loader validation: decay/weight length mismatch, and weights not summing to 1.
+        @test_throws ErrorException PTCryspMC._build_material(DATA_DIR, "bad",
+            Dict{String,Any}("density" => 1.0, "scint_decay_ns" => [1.0, 2.0], "scint_decay_w" => [1.0]))
+        @test_throws ErrorException PTCryspMC._build_material(DATA_DIR, "bad",
+            Dict{String,Any}("density" => 1.0, "scint_decay_ns" => [1.0, 2.0], "scint_decay_w" => [0.3, 0.3]))
+    end
+
     @testset "BGO crystal material" begin
         bgo = load_material(DATA_DIR, "BGO")             # Bi4Ge3O12
         @test bgo.density == 7.13

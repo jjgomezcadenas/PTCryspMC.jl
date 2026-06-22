@@ -13,6 +13,12 @@ pair = nuclear + electron), with pre-logged grids for fast interpolation. Vacuum
 struct Material
     name::String
     density::Float64                  # g/cm^3
+    # Scintillation / readout properties, keyed to the crystal (0 / empty for non-scintillators
+    # like Water/Air/Vacuum). The crystal name pulls these — no extra config cards.
+    light_yield::Float64              # scintillation photons per MeV
+    scint_decay_ns::Vector{Float64}   # decay-component lifetimes [ns]
+    scint_decay_w::Vector{Float64}    # component weights (sum to 1; one entry = single exponential)
+    eres_a::Float64                   # energy resolution: fractional FWHM at 511 keV (0 = unset)
     E::Vector{Float64}                # nudged energy grid [MeV]
     log_E::Vector{Float64}
     incoherent::Vector{Float64}       # mu/rho [cm^2/g]
@@ -35,20 +41,26 @@ Build one `Material` from its `materials.json` entry `d`. Materials without an
 """
 function _build_material(data_dir::AbstractString, name::AbstractString, d)::Material
     density = Float64(d["density"])
+    yield   = Float64(get(d, "light_yield_per_MeV", 0.0))
+    decay   = Float64.(get(d, "scint_decay_ns", Float64[]))
+    w       = Float64.(get(d, "scint_decay_w", Float64[]))
+    eres_a  = Float64(get(d, "eres_a", 0.0))
+    length(decay) == length(w) ||
+        error("material '$name': scint_decay_ns and scint_decay_w must have equal length")
+    (isempty(w) || isapprox(sum(w), 1.0; atol=1e-6)) ||
+        error("material '$name': scint_decay_w must sum to 1 (got $(sum(w)))")
+
     xf = get(d, "xcom", nothing)
     if xf === nothing
-        return Material(name, density, Float64[], Float64[],
-                        Float64[], Float64[], Float64[],
-                        Float64[], Float64[], Float64[])
+        return Material(name, density, yield, decay, w, eres_a, Float64[], Float64[],
+                        Float64[], Float64[], Float64[], Float64[], Float64[], Float64[])
     end
     xc = load_xcom(joinpath(data_dir, xf))
     E = _prepare_xcom_energy(xc)
     pair = xc.pair_nuclear .+ xc.pair_electron
-    Material(name, density, E, log.(E),
-             xc.incoherent, xc.photoelectric, pair,
-             prelog_data(xc.incoherent),
-             prelog_data(xc.photoelectric),
-             prelog_data(pair))
+    Material(name, density, yield, decay, w, eres_a,
+             E, log.(E), xc.incoherent, xc.photoelectric, pair,
+             prelog_data(xc.incoherent), prelog_data(xc.photoelectric), prelog_data(pair))
 end
 
 """
