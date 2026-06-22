@@ -75,9 +75,16 @@ match the schema convention (`x_mm`, `e_keV`).
 ## Pieces (ordered; ST first)
 
 1. **`src/activity.jl`** — DONE (toy ¹⁵O activity + `event_time`).
-2. **`src/timing.jl`** — `ScintTiming(light_yield, tau_scint_ns, pde)` + `first_photon_jitter(E,
-   rng)`, `tof_ns(emit, hit)`, `photon_timestamp(t_annih, emit, hit, E, rng)`. Pure, tested
-   against the analytic mean jitter `τ_scint/N_det`.
+2. **`src/timing.jl`** — pure functions; the **crystal `Material` already carries** `light_yield`,
+   `scint_decay_ns`, `scint_decay_w` (DONE), so the only extra input is **PDE** (readout, config).
+   - `first_photon_jitter(mat, E_MeV, pde, rng)` [ns]: `N_det = mat.light_yield·E_MeV·pde`; the
+     first of `N_det` photons from the decay mixture. The first photon lands at ~0.1 ns ≪ τ, so
+     it's the min of `N_det` exponentials at the **effective initial rate** `r0 = Σ wₖ/τₖ` →
+     `jitter = −ln(u)/(N_det·r0)` (exact in the early-time limit; handles 1 *or* 2 components
+     uniformly). Mean `1/(N_det·r0)`.
+   - `tof_ns(emit, hit)` = `‖hit−emit‖/c`, `c = 299.792458 mm/ns`.
+   - `photon_timestamp(t_annih, emit, hit, E_MeV, mat, pde, rng)` = sum of the three.
+   Tested: mean jitter ≈ `1/(N_det·r0)` for CsI (single) + BGO (two-component); alloc-free.
 3. **Trues/scatters: stamp `t1,t2,dt` + report the window.** Extend
    `build_coincidences_from_singles.jl`: time-stamp each gamma, compute `TOF_diff`/`DT`, write
    `t1_ns,t2_ns,dt_ns` (+ optional `tof_diff_ns`). Print the trues' `|Δt0|`/`DT` distribution to
@@ -113,17 +120,20 @@ Cross-event only; no opposition filter.
 
 - **Random rate** ≈ analytic `2τS²` (vary τ → linear; vary S via `t_acq` → quadratic).
 - **Front-loaded** — randoms-vs-time ∝ activity² (faster than trues ∝ activity).
-- **DT distribution** = the timing resolution; its width ≈ `√2 · τ_scint/N_det` (two gammas),
-  and scales as expected with yield/PDE/E. An example study + plot (à la `o15_lifetime`).
+- **DT distribution** = the timing resolution; its width ≈ `√2 / (N_det·r0)` (two gammas,
+  `r0 = Σ wₖ/τₖ`), scaling as expected with yield/PDE/E. An example study + plot (à la `o15_lifetime`).
 - Extend `scripts/tests/check_lors.jl` to the three-way split (true/scatter/**random**), the DT
   spread, and `has_randoms=true`.
 
 ## Config additions
 
 ```toml
-[timing]   t0_s, t1_s, half_life_s, time_seed, tau_ns        # activity window + coincidence window
-[detector] light_yield_per_MeV, tau_scint_ns, pde            # the scintillation timing model
+[timing]   t0_s, t1_s, half_life_s, time_seed, tau_ns   # activity window + coincidence window
+[detector] pde                                          # PDE only — light_yield/scint_decay/eres_a
+                                                        # come from the crystal DB (materials.json)
 ```
+(`light_yield_per_MeV`, `scint_decay_ns`/`scint_decay_w`, `eres_a` are keyed to the crystal in
+`data/materials.json` — DONE; not config cards.)
 
 ## Deferred
 
