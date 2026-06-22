@@ -45,6 +45,6 @@ export XCOMData, load_xcom,
        energy_fwhm, energy_sigma, smear_energy, smear_position,
        read_config, cfg_get, run_tag, prod_base,
        ActivityModel, event_time, O15_HALFLIFE_S,
-       C_MM_PER_NS, first_photon_jitter, tof_ns, photon_timestamp, EventTiming
+       C_MM_PER_NS, first_photon_jitter, tof_ns, photon_timestamp
 
 end # module PTCryspMC

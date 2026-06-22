@@ -15,10 +15,11 @@
 # Reproducible over (seed, nchunks, N), independent of thread count / scheduling.
 #
 # Singles schema (one row per photon that deposited in the ring; a miss writes nothing):
-#   event_number, gamma, x_mm, y_mm, z_mm, e_keV, iz, iphi, nblocks, phantom_scatter, x0_mm, y0_mm, z0_mm
+#   event_number, gamma, x_mm, y_mm, z_mm, e_keV, iz, iphi, nblocks, phantom_scatter, x0_mm, y0_mm, z0_mm, t_rel_ns
 # x,y,z / iz,iphi = first crystal interaction (LOR point + block); e_keV = summed block energy
 # (truth, unsmeared — smearing stays in build_coincidences); nblocks = distinct blocks (1 =
-# contained, >1 = overspill). Times are not here yet (Step 5, randoms).
+# contained, >1 = overspill); t_rel_ns = photon time relative to its decay = TOF + scintillation
+# jitter (stamped once here so both LOR builders, trues and randoms, reuse one per-photon time).
 #
 # Run from the repo root (note -t for threads):
 #   julia -t 18 --project=. scripts/simulate_source_mt.jl --config runs/sphere_water_csi.toml
@@ -44,13 +45,14 @@ end
 # Write one chunk's singles to a CSV text part-file via a file sink over `singles_chunk!`:
 # format the row (positions cm→mm, energy MeV→keV) and stream it. Returns the row count.
 function write_chunk_csv(path, geom, src, E0::Float64, cut_MeV::Float64, acol::Float64,
-                         range::UnitRange{Int}, rng::AbstractRNG)
+                         range::UnitRange{Int}, rng::AbstractRNG, mat)
     open(path, "w") do io
-        singles_chunk!(geom, src, E0, cut_MeV, acol, range, rng) do ev, g, s, pos0
+        singles_chunk!(geom, src, E0, cut_MeV, acol, range, rng, mat) do ev, g, s, pos0, t_rel
             println(io, join((ev, g,
                 round(s.x*10, digits=4), round(s.y*10, digits=4), round(s.z*10, digits=4),
                 round(s.e*1000, digits=4), s.iz, s.iphi, s.nblocks, s.phscat ? 1 : 0,
-                round(pos0[1]*10, digits=4), round(pos0[2]*10, digits=4), round(pos0[3]*10, digits=4)), ","))
+                round(pos0[1]*10, digits=4), round(pos0[2]*10, digits=4), round(pos0[3]*10, digits=4),
+                round(t_rel, digits=5)), ","))
         end
     end
 end
@@ -59,10 +61,10 @@ end
 # SinglesBuffer (no HDF5 in the parallel region), then dump it. The serial glue packs the
 # parts into HDF5. Returns the row count.
 function write_chunk_bin(path, geom, src, E0::Float64, cut_MeV::Float64, acol::Float64,
-                         range::UnitRange{Int}, rng::AbstractRNG)
+                         range::UnitRange{Int}, rng::AbstractRNG, mat)
     buf = SinglesBuffer()
-    singles_chunk!(geom, src, E0, cut_MeV, acol, range, rng) do ev, g, s, pos0
-        push_single!(buf, ev, g, s, pos0)
+    singles_chunk!(geom, src, E0, cut_MeV, acol, range, rng, mat) do ev, g, s, pos0, t_rel
+        push_single!(buf, ev, g, s, pos0, t_rel)
     end
     open(io -> write_part(io, buf), path, "w")
     length(buf)
@@ -138,9 +140,10 @@ function main()
             "$nevents events, seed $seed; threads=$nthr, chunks=$nchunks, format=$fmt")
 
     write_chunk = ishdf5 ? write_chunk_bin : write_chunk_csv
+    cryst = material(sc.volume)          # the scanner crystal (jitter source for t_rel)
     t0 = time()
     @threads :dynamic for c in 1:nchunks
-        rows[c] = write_chunk(partfile(c), geom, src, E0, cut_MeV, acol, ranges[c], rngs[c])
+        rows[c] = write_chunk(partfile(c), geom, src, E0, cut_MeV, acol, ranges[c], rngs[c], cryst)
     end
     t_sim = time() - t0
 
@@ -155,7 +158,7 @@ function main()
         pack_singles_hdf5(out, parts, rows, meta)
     else
         open(out, "w") do io
-            println(io, "event_number,gamma,x_mm,y_mm,z_mm,e_keV,iz,iphi,nblocks,phantom_scatter,x0_mm,y0_mm,z0_mm")
+            println(io, "event_number,gamma,x_mm,y_mm,z_mm,e_keV,iz,iphi,nblocks,phantom_scatter,x0_mm,y0_mm,z0_mm,t_rel_ns")
             buf = Vector{UInt8}(undef, 1 << 20)
             for p in parts
                 open(p, "r") do pin

@@ -32,12 +32,13 @@ mutable struct GammaAcc
     e::Float64
     overspill::Bool          # a deposit landed in a second, different block
     phscat::Bool
+    t::Float64               # photon time relative to its decay [ns] = TOF + jitter (stamped per single)
 end
-GammaAcc() = GammaAcc(false, 0.0, 0.0, 0.0, -1, -1, 0.0, false, false)
+GammaAcc() = GammaAcc(false, 0.0, 0.0, 0.0, -1, -1, 0.0, false, false, 0.0)
 
 function reset!(a::GammaAcc)
     a.reached = false; a.x = a.y = a.z = 0.0; a.iz = a.iphi = -1
-    a.e = 0.0; a.overspill = false; a.phscat = false
+    a.e = 0.0; a.overspill = false; a.phscat = false; a.t = 0.0
     a
 end
 
@@ -63,15 +64,16 @@ flag is per-photon and set by the caller from the row, not here.)
 end
 
 """
-    fill_singles!(a, x, y, z, e, iz, iphi, nblocks, phscat)
+    fill_singles!(a, x, y, z, e, iz, iphi, nblocks, phscat, t_rel)
 
 Fill `a` directly from a SINGLES row — the row already is the formed hit (`reached`, LOR point,
-summed energy, `overspill = nblocks > 1`, phantom-scatter flag).
+summed energy, `overspill = nblocks > 1`, phantom-scatter flag, and the per-photon time `t_rel`
+[ns] relative to its decay, stamped at singles generation).
 """
 @inline function fill_singles!(a::GammaAcc, x::Float64, y::Float64, z::Float64, e::Float64,
-                               iz::Int, iphi::Int, nblocks::Int, phscat::Bool)
+                               iz::Int, iphi::Int, nblocks::Int, phscat::Bool, t_rel::Float64)
     a.reached = true; a.x = x; a.y = y; a.z = z; a.iz = iz; a.iphi = iphi; a.e = e
-    a.overspill = nblocks > 1; a.phscat = phscat
+    a.overspill = nblocks > 1; a.phscat = phscat; a.t = t_rel
     a
 end
 
@@ -81,23 +83,21 @@ const TRUTH_SCATTER = Int8(1)
 const TRUTH_RANDOM  = Int8(2)     # reserved for the Step-5 randoms pass
 
 """
-    finish_event!(emit, ev, g1, g2, x0, y0, z0, resp, rng, timing) -> (emitted, is_true)
+    finish_event!(emit, ev, g1, g2, x0, y0, z0, resp, rng) -> (emitted, is_true)
 
 Finalise one annihilation's two gammas into a LOR: require both contained in one block, smear
-energy + position, apply the energy selection, time-stamp each gamma, and on acceptance call
+energy + position, apply the energy selection, and on acceptance call
 `emit(ev, x1,y1,z1,e1,t1,iz1,iphi1, x2,y2,z2,e2,t2,iz2,iphi2, dt, x0,y0,z0, truth)`,
 `truth` ∈ `TRUTH_TRUE`/`TRUTH_SCATTER` (smearing does not change the tag).
 
-`timing::EventTiming` supplies the crystal (its scintillation jitter). Timestamps `t1,t2` are
-**relative to the decay** — `TOF + jitter`, from the **true** hit positions and **true** deposited
-energies (the shared annihilation time cancels in a same-pair difference, so it is dropped;
-absolute = `event_time(timing.act, ev) + t`). The residual `dt = |t1−t2| − TOF_diff` is the
-timing-resolution residual (`TOF_diff` = geometric time-of-flight difference). Returns whether a
-LOR was emitted and whether it is a true coincidence.
+Timing-agnostic: the per-gamma timestamps `t1,t2` are the gammas' `t` (relative to the decay =
+`TOF + jitter`), stamped upstream — at singles generation for the production stack, or by the
+caller for the full stack. `dt = |t1−t2| − TOF_diff` is the timing-resolution residual (`TOF_diff`
+= geometric time-of-flight difference from the common emission point). Returns whether a LOR was
+emitted and whether it is a true coincidence.
 """
 function finish_event!(emit, ev::Int, g1::GammaAcc, g2::GammaAcc,
-                       x0::Float64, y0::Float64, z0::Float64, resp::Response, rng,
-                       timing)   # an EventTiming (untyped: this file is included before timing.jl)
+                       x0::Float64, y0::Float64, z0::Float64, resp::Response, rng)
     (contained_one(g1) && contained_one(g2)) || return (false, false)
     e1 = smear_energy(g1.e, resp.eres, rng)
     e2 = smear_energy(g2.e, resp.eres, rng)
@@ -107,19 +107,13 @@ function finish_event!(emit, ev::Int, g1::GammaAcc, g2::GammaAcc,
     is_true = !(g1.phscat || g2.phscat)
     truth = is_true ? TRUTH_TRUE : TRUTH_SCATTER
 
-    # Per-gamma timestamp RELATIVE to the decay: TOF (true hit ← emit) + scintillation jitter (from
-    # true deposited energy, keV→MeV). The annihilation time t_annih is common to both photons of a
-    # pair, so it cancels in any same-pair difference and is dropped here — keeping t1,t2 at the ns
-    # scale (Float32-exact). Absolute time = event_time(timing.act, ev) + t_rel, recomputable from
-    # the stored event_number. DT subtracts the geometric TOF difference → the timing-res residual.
+    # Timestamps are the per-gamma `t` (relative to the decay), stamped upstream; DT subtracts the
+    # geometric TOF difference → the pure timing-resolution residual.
     emit_pt = (x0, y0, z0)
-    tof1 = tof_ns(emit_pt, (g1.x, g1.y, g1.z))
-    tof2 = tof_ns(emit_pt, (g2.x, g2.y, g2.z))
-    t1 = tof1 + first_photon_jitter(timing.mat, g1.e * 1e-3, rng)
-    t2 = tof2 + first_photon_jitter(timing.mat, g2.e * 1e-3, rng)
-    dt = abs(t1 - t2) - (tof1 - tof2)
+    tof_diff = tof_ns(emit_pt, (g1.x, g1.y, g1.z)) - tof_ns(emit_pt, (g2.x, g2.y, g2.z))
+    dt = abs(g1.t - g2.t) - tof_diff
 
-    emit(ev, x1, y1, z1, e1, t1, g1.iz, g1.iphi,
-             x2, y2, z2, e2, t2, g2.iz, g2.iphi, dt, x0, y0, z0, truth)
+    emit(ev, x1, y1, z1, e1, g1.t, g1.iz, g1.iphi,
+             x2, y2, z2, e2, g2.t, g2.iz, g2.iphi, dt, x0, y0, z0, truth)
     (true, is_true)
 end

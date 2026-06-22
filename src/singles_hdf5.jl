@@ -73,7 +73,8 @@ function foreach_singles_hdf5(f, path::AbstractString; batch::Int = 1 << 20)::In
             rd(name) = h[name][rng]
             buf = SinglesBuffer(rd("event_number"), rd("gamma"), rd("x_mm"), rd("y_mm"),
                                 rd("z_mm"), rd("e_keV"), rd("iz"), rd("iphi"), rd("nblocks"),
-                                rd("phantom_scatter"), rd("x0_mm"), rd("y0_mm"), rd("z0_mm"))
+                                rd("phantom_scatter"), rd("x0_mm"), rd("y0_mm"), rd("z0_mm"),
+                                rd("t_rel_ns"))
             f(buf)
             lo = hi + 1
         end

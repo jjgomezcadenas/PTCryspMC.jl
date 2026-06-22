@@ -85,9 +85,14 @@ function main()
 
     resp = Response(sigma_xyz, eres, emin, window > 0.0, window * energy_fwhm(511.0, eres))
     rng  = MersenneTwister(seed)
-    # Timing context: the crystal (scintillation jitter) + the activity model (annihilation time).
+    # The full stack carries no per-photon time, so (unlike the production singles) we stamp it
+    # here, once each gamma is complete: t = TOF(emit→first hit) + scintillation jitter (needs the
+    # gamma's total deposited energy, known only at the event boundary). `stamp_t!` sets it on each
+    # contained gamma just before finish_event!, which then reads g.t (timing-agnostic).
     crystal = String(cfg_get(cfg, "transport", "crystal_material", "CsI"))
-    timing  = EventTiming(ActivityModel(cfg), load_material(joinpath(REPO, "data"), crystal))
+    cryst   = load_material(joinpath(REPO, "data"), crystal)
+    stamp_t!(acc, ex, ey, ez) = acc.reached &&
+        (acc.t = tof_ns((ex, ey, ez), (acc.x, acc.y, acc.z)) + first_photon_jitter(cryst, acc.e * 1e-3, rng))
 
     if mode == "det"
         ecut = resp.apply_window ? "window ±$(round(resp.win_half,digits=1)) keV" :
@@ -126,8 +131,9 @@ function main()
                 if ev != cur_ev
                     if cur_ev != -1
                         n_ev += 1
+                        stamp_t!(g[1], ev_x0, ev_y0, ev_z0); stamp_t!(g[2], ev_x0, ev_y0, ev_z0)
                         emitted, is_true = finish_event!((a...) -> write_lor_row(io, a...),
-                                                         cur_ev, g[1], g[2], ev_x0, ev_y0, ev_z0, resp, rng, timing)
+                                                         cur_ev, g[1], g[2], ev_x0, ev_y0, ev_z0, resp, rng)
                         n_pair += emitted; n_true += (emitted && is_true)
                     end
                     reset!(g[1]); reset!(g[2]); cur_ev = ev
@@ -146,8 +152,9 @@ function main()
             end
             if cur_ev != -1                              # the final event
                 n_ev += 1
+                stamp_t!(g[1], ev_x0, ev_y0, ev_z0); stamp_t!(g[2], ev_x0, ev_y0, ev_z0)
                 emitted, is_true = finish_event!((a...) -> write_lor_row(io, a...),
-                                                 cur_ev, g[1], g[2], ev_x0, ev_y0, ev_z0, resp, rng, timing)
+                                                 cur_ev, g[1], g[2], ev_x0, ev_y0, ev_z0, resp, rng)
                 n_pair += emitted; n_true += (emitted && is_true)
             end
         end

@@ -37,18 +37,21 @@ mutable struct Stats
     g1::Int; g2::Int; scat::Int; over::Int
     esum::Float64; emin::Float64; emax::Float64
     ehist::Vector{Int}
-    v_order::Int; v_gamma::Int; v_block::Int; v_nblk::Int; v_energy::Int
+    tsum::Float64; tmax::Float64
+    v_order::Int; v_gamma::Int; v_block::Int; v_nblk::Int; v_energy::Int; v_time::Int
 end
-Stats() = Stats(0, 0, 0, 0, 0, 0, 0, 0.0, Inf, -Inf, zeros(Int, NEBIN), 0, 0, 0, 0, 0)
+Stats() = Stats(0, 0, 0, 0, 0, 0, 0, 0.0, Inf, -Inf, zeros(Int, NEBIN), 0.0, -Inf, 0, 0, 0, 0, 0, 0)
 
 @inline function feed!(st::Stats, ev::Int, g::Int, iz::Int, iphi::Int, nb::Int,
-                       e::Float64, ph::Bool, n_phi::Int, n_z::Int)
+                       e::Float64, ph::Bool, t_rel::Float64, n_phi::Int, n_z::Int)
     st.rows += 1
     ev < st.prev                          && (st.v_order  += 1)
     (g == 1 || g == 2)                    || (st.v_gamma  += 1)
     (0 <= iz < n_z && 0 <= iphi < n_phi)  || (st.v_block  += 1)
     nb >= 1                               || (st.v_nblk   += 1)
     (0.0 <= e <= E_HI)                    || (st.v_energy += 1)
+    (isfinite(t_rel) && t_rel >= 0.0)     || (st.v_time   += 1)   # t_rel = TOF + jitter ≥ 0
+    st.tsum += t_rel; t_rel > st.tmax && (st.tmax = t_rel)
     st.prev = ev; ev > st.maxev && (st.maxev = ev)
     g == 1 ? (st.g1 += 1) : g == 2 && (st.g2 += 1)
     ph && (st.scat += 1)
@@ -61,16 +64,16 @@ function feed_csv!(st, path, n_phi, n_z)
     open(path, "r") do io
         header = split(strip(readline(io)), ',')
         col = Dict(String(h) => i for (i, h) in enumerate(header))
-        for c in ("event_number", "gamma", "e_keV", "iz", "iphi", "nblocks", "phantom_scatter")
+        for c in ("event_number", "gamma", "e_keV", "iz", "iphi", "nblocks", "phantom_scatter", "t_rel_ns")
             haskey(col, c) || error("singles stack is missing column '$c'")
         end
         iev = col["event_number"]; ig = col["gamma"]; ie = col["e_keV"]
-        iiz = col["iz"]; iip = col["iphi"]; inb = col["nblocks"]; iph = col["phantom_scatter"]
+        iiz = col["iz"]; iip = col["iphi"]; inb = col["nblocks"]; iph = col["phantom_scatter"]; it = col["t_rel_ns"]
         for line in eachline(io)
             isempty(line) && continue
             f = split(line, ',')
             feed!(st, parse(Int, f[iev]), parse(Int, f[ig]), parse(Int, f[iiz]), parse(Int, f[iip]),
-                  parse(Int, f[inb]), parse(Float64, f[ie]), f[iph] == "1", n_phi, n_z)
+                  parse(Int, f[inb]), parse(Float64, f[ie]), f[iph] == "1", parse(Float64, f[it]), n_phi, n_z)
         end
     end
 end
@@ -79,7 +82,7 @@ function feed_hdf5!(st, path, n_phi, n_z)
     foreach_singles_hdf5(path) do b
         for i in 1:length(b)
             feed!(st, Int(b.event[i]), Int(b.gamma[i]), Int(b.iz[i]), Int(b.iphi[i]),
-                  Int(b.nblocks[i]), decode_e(b.e[i]), b.phantom_scatter[i] == 1, n_phi, n_z)
+                  Int(b.nblocks[i]), decode_e(b.e[i]), b.phantom_scatter[i] == 1, Float64(b.t_rel[i]), n_phi, n_z)
         end
     end
 end
@@ -108,7 +111,7 @@ function main()
     st = Stats()
     ishdf5 ? feed_hdf5!(st, singles, n_phi, n_z) : feed_csv!(st, singles, n_phi, n_z)
 
-    nbad = st.v_order + st.v_gamma + st.v_block + st.v_nblk + st.v_energy
+    nbad = st.v_order + st.v_gamma + st.v_block + st.v_nblk + st.v_energy + st.v_time
     ngamma = 2 * st.maxev      # max event ≈ nevents → total photons (a miss writes no row)
 
     println("singles: $singles  ($(ishdf5 ? "hdf5" : "csv"))")
@@ -119,6 +122,7 @@ function main()
         println("  phantom-scattered:         $(round(100*st.scat/st.rows, digits=1))%")
         println("  overspill (nblocks>1):     $(round(100*st.over/st.rows, digits=1))%")
         println("  energy:  mean $(round(st.esum/st.rows, digits=1)) keV   range [$(round(st.emin,sigdigits=2)), $(round(st.emax,digits=1))] keV  (min ≈ 0: near-zero forward-Compton recoils, quantized)")
+        println("  t_rel (TOF+jitter):        mean $(round(st.tsum/st.rows, digits=3)) ns   max $(round(st.tmax, digits=1)) ns")
         print("  spectrum (keV → %): ")
         for b in 1:NEBIN
             pct = round(100*st.ehist[b]/st.rows, digits=1)
@@ -127,7 +131,7 @@ function main()
         println()
     end
 
-    println("invariants: order=$(st.v_order) gamma=$(st.v_gamma) block=$(st.v_block) nblocks=$(st.v_nblk) energy=$(st.v_energy)")
+    println("invariants: order=$(st.v_order) gamma=$(st.v_gamma) block=$(st.v_block) nblocks=$(st.v_nblk) energy=$(st.v_energy) time=$(st.v_time)")
     if nbad == 0
         println("PASS ✓  ($(st.rows) rows, all invariants hold)")
     else
