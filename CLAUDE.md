@@ -166,8 +166,8 @@ for scenario reading and plotting.
 
 ## Status / next
 
-`dev/dev_steps.md` is the running build log (target, progress, next steps); consult it for
-the current state. In brief:
+**`dev/status.md` is the concise current snapshot + the deferred-work / known-nits register —
+read it first for "where are we."** `dev/dev_steps.md` is the full chronological build log. In brief:
 
 **Built and validated:** the foundations — the Geant4-style geometry, the materials / XCOM
 cross sections, and the photon physics core (`propagate_photon`) — plus the first result:

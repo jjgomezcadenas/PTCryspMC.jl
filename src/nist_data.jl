@@ -17,6 +17,10 @@ end
 
 Read a NIST XCOM table in the standard space-delimited format (2 header lines +
 blank line + data rows of 8 numeric columns). Non-numeric lines are skipped.
+
+Deferred (dev/status.md #3): harden before adding the crystal (CsI/BGO/LYSO) XCOM tables —
+their in-range K-edge rows can carry a label that shifts columns, and empty input throws
+obscurely. Validate the column count per row and error clearly on no data.
 """
 function load_xcom(path::AbstractString)::XCOMData
     rows = Vector{Vector{Float64}}()
