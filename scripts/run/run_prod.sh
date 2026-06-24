@@ -38,7 +38,7 @@ for cfg in $configs; do
   [[ -f $cfg ]] || { print "missing config: $cfg"; exit 1 }
 done
 
-print "prod chain: ${#configs} config(s)  NEV=$NEV NCHUNKS=$NCHUNKS THREADS=$THREADS  -> ${(j: :)${configs:t:r}}"
+print "prod chain: ${#configs} config(s)  NEV=$NEV NCHUNKS=$NCHUNKS THREADS=$THREADS  -> ${(j: :)${(@)configs:t:r}}"
 start=$SECONDS
 
 for cfg in $configs; do

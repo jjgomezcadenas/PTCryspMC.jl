@@ -23,7 +23,7 @@ else
 fi
 (( ${#configs} )) || { print "no configs found in runs/"; exit 1 }
 
-print "plotting ${#configs} config(s) + matrix in parallel: ${(j: :)${configs:t:r}}"
+print "plotting ${#configs} config(s) + matrix in parallel: ${(j: :)${(@)configs:t:r}}"
 start=$SECONDS
 
 for cfg in $configs; do
