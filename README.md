@@ -25,6 +25,9 @@ A shared physics engine (geometry, photon transport, detector response) is drive
 - `CLAUDE.md` — orientation, decisions, and code layout. `dev/status.md` — current status and the
   deferred-work register.
 
+Build the manual PDFs with `python3 py/build_latex.py` (compiles `docs/*.tex` and clears the LaTeX
+aux clutter; figures are regenerated from `py/fig_*.py` with `--figures`).
+
 The production chain (phantom mode): `simulate_source_mt.jl` → `singles.h5` →
 `build_true_coincidences_from_singles.jl` + `build_randoms_from_singles.jl` → `reco_lors.jl` →
 `lors_det.h5` (the list-mode deliverable).
