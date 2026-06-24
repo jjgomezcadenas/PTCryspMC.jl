@@ -26,9 +26,9 @@ return `0.0`. Allocation-free.
         τ > 0.0 && (r0 += mat.scint_decay_w[k] / τ)
     end
     r0 > 0.0 || return 0.0
-    # Deferred (dev/status.md #1): rand() can be exactly 0 (p≈2⁻⁵³) → -log(0) = Inf. Fix is
-    # -log(1-rand), but it changes every jitter value → fold in only when singles are regenerated.
-    -log(rand(rng)) / (N_det * r0)
+    # Exponential draw via inverse-CDF: -log(1-u) with u∈[0,1), so 1-u∈(0,1] never hits log(0)=Inf.
+    # log1p(-u) is the accurate form of log(1-u) near u→0.
+    -log1p(-rand(rng)) / (N_det * r0)
 end
 
 "Time-of-flight [ns] from `emit` to `hit` (3-tuples, mm): ‖hit − emit‖ / c."

@@ -95,8 +95,10 @@ come later.
 ## Output — `lors_det.h5`
 
 Per accepted coincidence (one LOR): two 3-D hit positions (mm), two energies (keV), two times
-(ns), the timing residual, and a truth flag (true / scatter / random). The HDF5 root attributes
-carry the provenance: detector config, geometry, energy and time windows, the run tag, and the seed.
+(ns), per-gamma phantom-scatter counts (`nscat1`, `nscat2`: 0 clean, 1 single, ≥2 multiple — so a
+LOR separates single from multiple scatter), the timing residual, and a truth flag (true / scatter /
+random). The HDF5 root attributes carry the provenance: detector config, geometry, energy and time
+windows, the run tag, and the seed.
 
 ## Code layout (`src/`)
 

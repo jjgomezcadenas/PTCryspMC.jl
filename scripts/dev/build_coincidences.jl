@@ -49,12 +49,12 @@ end
 # Here we only supply the CSV-row sink that `finish_event!` emits into (the truth Int8 code is
 # mapped back to the "true"/"scatter" strings). The timestamps `t1,t2` [ns] and the per-pair
 # residual `dt` = |Δt0| − TOF_diff are now real (an `EventTiming` is passed to finish_event!).
-function write_lor_row(io, ev, x1, y1, z1, e1, t1, iz1, iphi1,
-                       x2, y2, z2, e2, t2, iz2, iphi2, dt, x0, y0, z0, truth)
-    ts = truth == TRUTH_TRUE ? "true" : "scatter"
+function write_lor_row(io, ev, x1, y1, z1, e1, t1, iz1, iphi1, nscat1,
+                       x2, y2, z2, e2, t2, iz2, iphi2, nscat2, dt, x0, y0, z0, truth)
+    ts = truth == TRUTH_TRUE ? "true" : (nscat1 + nscat2 == 1 ? "single" : "multiple")
     println(io, join((ev,
-        round(x1, digits=4), round(y1, digits=4), round(z1, digits=4), round(e1, digits=4), round(t1, digits=4), iz1, iphi1,
-        round(x2, digits=4), round(y2, digits=4), round(z2, digits=4), round(e2, digits=4), round(t2, digits=4), iz2, iphi2,
+        round(x1, digits=4), round(y1, digits=4), round(z1, digits=4), round(e1, digits=4), round(t1, digits=4), iz1, iphi1, nscat1,
+        round(x2, digits=4), round(y2, digits=4), round(z2, digits=4), round(e2, digits=4), round(t2, digits=4), iz2, iphi2, nscat2,
         round(dt, digits=6),
         round(x0, digits=4), round(y0, digits=4), round(z0, digits=4), ts), ","))
 end
@@ -88,7 +88,7 @@ function main()
     # The full stack carries no per-photon time, so (unlike the production singles) we compute it
     # here, once each gamma is complete: t = TOF(emit→first hit) + scintillation jitter (needs the
     # gamma's total deposited energy, known only at the event boundary). `stamp_t` returns it for a
-    # contained gamma; the caller passes it (and the phantom-scatter flag) to finish_event!.
+    # contained gamma; the caller passes it (and the phantom-scatter count) to finish_event!.
     crystal = String(cfg_get(cfg, "transport", "crystal_material", "CsI"))
     cryst   = load_material(joinpath(REPO, "data"), crystal)
     stamp_t(acc, ex, ey, ez) = acc.reached ?
@@ -107,24 +107,24 @@ function main()
         header = split(strip(readline(fin)), ',')
         col = Dict(String(h) => i for (i, h) in enumerate(header))
         for c in ("event_number", "gamma", "x_mm", "y_mm", "z_mm", "e_dep_keV",
-                  "volume", "iz", "iphi", "phantom_scatter", "x0_mm", "y0_mm", "z0_mm")
+                  "volume", "iz", "iphi", "n_scatter", "x0_mm", "y0_mm", "z0_mm")
             haskey(col, c) || error("stack is missing column '$c'")
         end
         iev = col["event_number"]; ig = col["gamma"]
         ix = col["x_mm"]; iy = col["y_mm"]; iz_ = col["z_mm"]; ide = col["e_dep_keV"]
-        ivol = col["volume"]; iiz = col["iz"]; iiphi = col["iphi"]; iph = col["phantom_scatter"]
+        ivol = col["volume"]; iiz = col["iz"]; iiphi = col["iphi"]; iph = col["n_scatter"]
         ix0 = col["x0_mm"]; iy0 = col["y0_mm"]; iz0 = col["z0_mm"]
 
         g = (GammaAcc(), GammaAcc())     # gamma 1, gamma 2
-        gps = [false, false]             # per-gamma phantom-scatter flag (OR-ed over the rows)
+        gps = [0, 0]                     # per-gamma phantom-scatter count (constant per gamma in the stack)
         cur_ev = -1
         ev_x0 = 0.0; ev_y0 = 0.0; ev_z0 = 0.0     # this event's emission point
         n_ev = 0; n_pair = 0; n_true = 0
 
         mkpath(dirname(out))
         open(out, "w") do io
-            println(io, "event,x1_mm,y1_mm,z1_mm,e1_keV,t1_ns,iz1,iphi1," *
-                        "x2_mm,y2_mm,z2_mm,e2_keV,t2_ns,iz2,iphi2,dt_ns,x0_mm,y0_mm,z0_mm,truth")
+            println(io, "event,x1_mm,y1_mm,z1_mm,e1_keV,t1_ns,iz1,iphi1,nscat1," *
+                        "x2_mm,y2_mm,z2_mm,e2_keV,t2_ns,iz2,iphi2,nscat2,dt_ns,x0_mm,y0_mm,z0_mm,truth")
             for line in eachline(fin)
                 isempty(line) && continue
                 f = split(line, ',')
@@ -138,14 +138,14 @@ function main()
                                                          ev_x0, ev_y0, ev_z0, resp, rng)
                         n_pair += emitted; n_true += (emitted && is_true)
                     end
-                    reset!(g[1]); reset!(g[2]); gps[1] = false; gps[2] = false; cur_ev = ev
+                    reset!(g[1]); reset!(g[2]); gps[1] = 0; gps[2] = 0; cur_ev = ev
                 end
                 ev_x0 = parse(Float64, f[ix0]); ev_y0 = parse(Float64, f[iy0]); ev_z0 = parse(Float64, f[iz0])
 
                 gi = parse(Int, f[ig])
                 (gi == 1 || gi == 2) || continue
                 acc = g[gi]
-                gps[gi] |= (f[iph] == "1")
+                gps[gi] = parse(Int, f[iph])     # per-gamma count, repeated on each of the gamma's rows
                 f[ivol] == "scanner" || continue
                 edep = parse(Float64, f[ide])
                 edep > 0.0 || continue                  # skip the scanner :escape row (e_dep=0)

@@ -1,7 +1,7 @@
 #!/usr/bin/env julia
 # Measurement: encode a singles CSV to the quantized-integer schema and write it as HDF5 at
 # several compression settings, to see how much HDF5 saves over float/int CSV. Columnar typed
-# datasets: event Int32, gamma/nblocks/phantom_scatter Int8, iz/iphi/positions/energy Int16
+# datasets: event Int32, gamma/nblocks/n_scatter Int8, iz/iphi/positions/energy Int16
 # (positions in 0.1 mm units, energy in 0.1 keV units; bounds-checked against Int16).
 #
 # Loads all columns into memory (fine for a ~10^7 run; this is an experiment, not the
@@ -53,7 +53,7 @@ function main()
     n = length(ev); println("rows = $n   (encoded, no Int16 overflow)")
 
     cols = [("event_number", ev), ("gamma", ga), ("x_mm", x), ("y_mm", y), ("z_mm", z),
-            ("e_keV", e), ("iz", iz), ("iphi", ip), ("nblocks", nb), ("phantom_scatter", ph),
+            ("e_keV", e), ("iz", iz), ("iphi", ip), ("nblocks", nb), ("n_scatter", ph),
             ("x0_mm", x0), ("y0_mm", y0), ("z0_mm", z0)]
     C = 1 << 16
     variants = (("uncompressed", (; chunk=(C,))),

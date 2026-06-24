@@ -89,7 +89,7 @@ struct SinglesBuffer
     e::Vector{Int16}
     iz::Vector{Int16}; iphi::Vector{Int16}
     nblocks::Vector{Int8}
-    phantom_scatter::Vector{Int8}
+    n_scatter::Vector{Int8}           # phantom-scatter count for this photon (0 clean, 1 single, ≥2 multiple)
     x0::Vector{Int16}; y0::Vector{Int16}; z0::Vector{Int16}
     t_rel::Vector{Float32}            # photon time relative to its decay [ns] = TOF + jitter
 end
@@ -101,7 +101,7 @@ Base.length(b::SinglesBuffer) = length(b.event)
 singles_columns(b::SinglesBuffer) = (
     ("event_number", b.event), ("gamma", b.gamma),
     ("x_mm", b.x), ("y_mm", b.y), ("z_mm", b.z), ("e_keV", b.e),
-    ("iz", b.iz), ("iphi", b.iphi), ("nblocks", b.nblocks), ("phantom_scatter", b.phantom_scatter),
+    ("iz", b.iz), ("iphi", b.iphi), ("nblocks", b.nblocks), ("n_scatter", b.n_scatter),
     ("x0_mm", b.x0), ("y0_mm", b.y0), ("z0_mm", b.z0), ("t_rel_ns", b.t_rel))
 
 "Append one detected photon (the `navigate_single_photons` summary `s` + emission point `pos0`, both cm; `t_rel` [ns]), quantized."
@@ -110,7 +110,7 @@ function push_single!(b::SinglesBuffer, ev::Integer, g::Integer, s, pos0, t_rel:
     push!(b.x, encode_xyz_mm(s.x * 10)); push!(b.y, encode_xyz_mm(s.y * 10)); push!(b.z, encode_xyz_mm(s.z * 10))
     push!(b.e, encode_e_keV(s.e * 1000))
     push!(b.iz, Int16(s.iz)); push!(b.iphi, Int16(s.iphi))
-    push!(b.nblocks, Int8(s.nblocks)); push!(b.phantom_scatter, Int8(s.phscat ? 1 : 0))
+    push!(b.nblocks, Int8(s.nblocks)); push!(b.n_scatter, Int8(min(s.nscat, 127)))
     push!(b.x0, encode_xyz_mm(pos0[1] * 10)); push!(b.y0, encode_xyz_mm(pos0[2] * 10)); push!(b.z0, encode_xyz_mm(pos0[3] * 10))
     push!(b.t_rel, Float32(t_rel))
     b

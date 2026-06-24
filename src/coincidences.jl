@@ -26,7 +26,7 @@ end
 # Per-gamma accumulator, reset at each event boundary. Holds ONLY what the fill_* calls
 # accumulate: the first scanner deposit fixes the LOR point and block; later deposits add energy
 # and, in a different block, flag overspill. The two non-accumulable per-gamma scalars — the
-# phantom-scatter flag and the timestamp `t` (which needs the gamma's *total* energy) — are NOT
+# phantom-scatter count and the timestamp `t` (which needs the gamma's *total* energy) — are NOT
 # stored here; the caller passes them to `finish_event!`. So there is no half-filled state: a
 # `GammaAcc` is valid the moment filling stops.
 mutable struct GammaAcc
@@ -52,7 +52,7 @@ contained_one(a::GammaAcc) = a.reached && !a.overspill
 
 Accumulate one FULL-stack scanner deposit into `a`: the first deposit fixes the LOR point and
 block; a later deposit in a different block flags overspill; energy sums. The phantom-scatter
-flag and the timestamp are NOT set here — the caller tracks them per gamma (phscat OR-ed from the
+count and the timestamp are NOT set here — the caller tracks them per gamma (nscat summed over the
 phantom rows; `t` stamped once the energy is complete) and passes them to `finish_event!`.
 """
 @inline function fill_full!(a::GammaAcc, x::Float64, y::Float64, z::Float64,
@@ -70,7 +70,7 @@ end
     fill_singles!(a, x, y, z, e, iz, iphi, nblocks)
 
 Fill `a` directly from a SINGLES row — the row already is the formed hit (`reached`, LOR point,
-summed energy, `overspill = nblocks > 1`). The per-gamma phantom-scatter flag and timestamp
+summed energy, `overspill = nblocks > 1`). The per-gamma phantom-scatter count and timestamp
 `t_rel` are NOT stored on the accumulator; the caller carries them and passes them to
 `finish_event!`.
 """
@@ -87,22 +87,23 @@ const TRUTH_SCATTER = Int8(1)
 const TRUTH_RANDOM  = Int8(2)     # set by the randoms pass (build_randoms → reco_lors)
 
 """
-    finish_event!(emit, ev, g1, g2, t1, t2, phscat1, phscat2, x0, y0, z0, resp, rng) -> (emitted, is_true)
+    finish_event!(emit, ev, g1, g2, t1, t2, nscat1, nscat2, x0, y0, z0, resp, rng) -> (emitted, is_true)
 
 Finalise one annihilation's two gammas into a LOR: require both contained in one block, smear
 energy + position, apply the energy selection, and on acceptance call
-`emit(ev, x1,y1,z1,e1,t1,iz1,iphi1, x2,y2,z2,e2,t2,iz2,iphi2, dt, x0,y0,z0, truth)`.
+`emit(ev, x1,y1,z1,e1,t1,iz1,iphi1,nscat1, x2,y2,z2,e2,t2,iz2,iphi2,nscat2, dt, x0,y0,z0, truth)`.
 
 The per-gamma timestamps `t1,t2` (relative to the decay = `TOF + jitter`) and phantom-scatter
-flags `phscat1,phscat2` are passed in, NOT carried on the accumulator — `GammaAcc` holds only what
+counts `nscat1,nscat2` are passed in, NOT carried on the accumulator — `GammaAcc` holds only what
 the `fill_*` calls accumulate (geometry + energy + overspill), so there is no half-filled state to
-forget. `truth = TRUTH_TRUE` unless either gamma scattered in the phantom (smearing does not change
-the tag). `dt = (t1−t2) − TOF_diff` is the TOF-corrected timing residual (the signed jitter
+forget. `truth = TRUTH_TRUE` unless either gamma scattered in the phantom (`nscatᵢ > 0`); the counts
+also separate single (`nscat1+nscat2 == 1`) from multiple (`≥ 2`) scatter. Smearing does not change
+the tag. `dt = (t1−t2) − TOF_diff` is the TOF-corrected timing residual (the signed jitter
 difference, centred at 0; `TOF_diff` = the geometric time-of-flight difference from the common
 emission point). Returns whether a LOR was emitted and whether it is a true coincidence.
 """
 function finish_event!(emit, ev::Int, g1::GammaAcc, g2::GammaAcc,
-                       t1::Float64, t2::Float64, phscat1::Bool, phscat2::Bool,
+                       t1::Float64, t2::Float64, nscat1::Int, nscat2::Int,
                        x0::Float64, y0::Float64, z0::Float64, resp::Response, rng)
     (contained_one(g1) && contained_one(g2)) || return (false, false)
     e1 = smear_energy(g1.e, resp.eres, rng)
@@ -110,8 +111,8 @@ function finish_event!(emit, ev::Int, g1::GammaAcc, g2::GammaAcc,
     (pass_energy(e1, resp) && pass_energy(e2, resp)) || return (false, false)
     x1, y1, z1 = smear_position((g1.x, g1.y, g1.z), resp.sigma_xyz, rng)
     x2, y2, z2 = smear_position((g2.x, g2.y, g2.z), resp.sigma_xyz, rng)
-    is_true = !(phscat1 || phscat2)
-    truth = is_true ? TRUTH_TRUE : TRUTH_SCATTER
+    is_true = (nscat1 == 0 && nscat2 == 0)         # true iff neither gamma scattered in the phantom
+    truth = is_true ? TRUTH_TRUE : TRUTH_SCATTER   # nscat1+nscat2: 1 = single, ≥2 = multiple scatter
 
     # The residual subtracts the (signed) geometric TOF difference from the (signed) timestamp
     # difference, so the geometry cancels exactly and dt = (t1−t2) − TOF_diff is the pure jitter
@@ -121,7 +122,7 @@ function finish_event!(emit, ev::Int, g1::GammaAcc, g2::GammaAcc,
     tof_diff = tof_ns(emit_pt, (g1.x, g1.y, g1.z)) - tof_ns(emit_pt, (g2.x, g2.y, g2.z))
     dt = (t1 - t2) - tof_diff
 
-    emit(ev, x1, y1, z1, e1, t1, g1.iz, g1.iphi,
-             x2, y2, z2, e2, t2, g2.iz, g2.iphi, dt, x0, y0, z0, truth)
+    emit(ev, x1, y1, z1, e1, t1, g1.iz, g1.iphi, nscat1,
+             x2, y2, z2, e2, t2, g2.iz, g2.iphi, nscat2, dt, x0, y0, z0, truth)
     (true, is_true)
 end

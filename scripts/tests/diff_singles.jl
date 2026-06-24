@@ -35,7 +35,7 @@ function load_singles(path)
                 push!(ev, b.event[i]); push!(ga, b.gamma[i])
                 push!(x, decode_xyz(b.x[i])); push!(y, decode_xyz(b.y[i])); push!(z, decode_xyz(b.z[i]))
                 push!(e, decode_e(b.e[i]))
-                push!(iz, b.iz[i]); push!(ip, b.iphi[i]); push!(nb, b.nblocks[i]); push!(ph, b.phantom_scatter[i])
+                push!(iz, b.iz[i]); push!(ip, b.iphi[i]); push!(nb, b.nblocks[i]); push!(ph, b.n_scatter[i])
                 push!(x0, decode_xyz(b.x0[i])); push!(y0, decode_xyz(b.y0[i])); push!(z0, decode_xyz(b.z0[i]))
             end
         end
@@ -50,12 +50,12 @@ function load_singles(path)
                 push!(x, parse(Float64, f[c["x_mm"]])); push!(y, parse(Float64, f[c["y_mm"]])); push!(z, parse(Float64, f[c["z_mm"]]))
                 push!(e, parse(Float64, f[c["e_keV"]]))
                 push!(iz, parse(Int, f[c["iz"]])); push!(ip, parse(Int, f[c["iphi"]]))
-                push!(nb, parse(Int, f[c["nblocks"]])); push!(ph, parse(Int, f[c["phantom_scatter"]]))
+                push!(nb, parse(Int, f[c["nblocks"]])); push!(ph, parse(Int, f[c["n_scatter"]]))
                 push!(x0, parse(Float64, f[c["x0_mm"]])); push!(y0, parse(Float64, f[c["y0_mm"]])); push!(z0, parse(Float64, f[c["z0_mm"]]))
             end
         end
     end
-    (event=ev, gamma=ga, x=x, y=y, z=z, e=e, iz=iz, iphi=ip, nblocks=nb, phantom_scatter=ph, x0=x0, y0=y0, z0=z0)
+    (event=ev, gamma=ga, x=x, y=y, z=z, e=e, iz=iz, iphi=ip, nblocks=nb, n_scatter=ph, x0=x0, y0=y0, z0=z0)
 end
 
 function main()
@@ -71,7 +71,7 @@ function main()
         println("DIFFER ✗  (row counts $(length(A.event)) ≠ $(length(B.event)))"); exit(1)
     end
 
-    intcols = (:event, :gamma, :iz, :iphi, :nblocks, :phantom_scatter)
+    intcols = (:event, :gamma, :iz, :iphi, :nblocks, :n_scatter)
     fltcols = (:x, :y, :z, :e, :x0, :y0, :z0)
     nbad = 0
     for col in intcols

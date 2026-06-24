@@ -188,7 +188,10 @@ phantom, the two first-interaction points and the annihilation are collinear, an
 through the annihilation --- a \emph{true} coincidence. When a photon Compton-scatters in the
 phantom, its direction changes before it reaches the ring, so the LOR between the two hits no longer
 points at the annihilation --- a \emph{scatter} coincidence, which mispositions the event. The
-engine carries a per-photon phantom-scatter flag so that the two cases can be told apart downstream.
+engine carries a per-photon phantom-scatter \emph{count} (the number of Compton interactions each
+photon made in the phantom), so a coincidence can be told apart not only as true or scatter but,
+among the scatters, as single ($\texttt{nscat1}+\texttt{nscat2}=1$) or multiple ($\geq 2$) --- the distinction a
+scatter correction such as single-scatter simulation needs downstream.
 
 \begin{figure}[t]
   \centering

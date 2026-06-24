@@ -64,16 +64,16 @@ function feed_csv!(st, path, n_phi, n_z)
     open(path, "r") do io
         header = split(strip(readline(io)), ',')
         col = Dict(String(h) => i for (i, h) in enumerate(header))
-        for c in ("event_number", "gamma", "e_keV", "iz", "iphi", "nblocks", "phantom_scatter", "t_rel_ns")
+        for c in ("event_number", "gamma", "e_keV", "iz", "iphi", "nblocks", "n_scatter", "t_rel_ns")
             haskey(col, c) || error("singles stack is missing column '$c'")
         end
         iev = col["event_number"]; ig = col["gamma"]; ie = col["e_keV"]
-        iiz = col["iz"]; iip = col["iphi"]; inb = col["nblocks"]; iph = col["phantom_scatter"]; it = col["t_rel_ns"]
+        iiz = col["iz"]; iip = col["iphi"]; inb = col["nblocks"]; iph = col["n_scatter"]; it = col["t_rel_ns"]
         for line in eachline(io)
             isempty(line) && continue
             f = split(line, ',')
             feed!(st, parse(Int, f[iev]), parse(Int, f[ig]), parse(Int, f[iiz]), parse(Int, f[iip]),
-                  parse(Int, f[inb]), parse(Float64, f[ie]), f[iph] == "1", parse(Float64, f[it]), n_phi, n_z)
+                  parse(Int, f[inb]), parse(Float64, f[ie]), parse(Int, f[iph]) > 0, parse(Float64, f[it]), n_phi, n_z)
         end
     end
 end
@@ -82,7 +82,7 @@ function feed_hdf5!(st, path, n_phi, n_z)
     foreach_singles_hdf5(path) do b
         for i in 1:length(b)
             feed!(st, Int(b.event[i]), Int(b.gamma[i]), Int(b.iz[i]), Int(b.iphi[i]),
-                  Int(b.nblocks[i]), decode_e(b.e[i]), b.phantom_scatter[i] == 1, Float64(b.t_rel[i]), n_phi, n_z)
+                  Int(b.nblocks[i]), decode_e(b.e[i]), b.n_scatter[i] > 0, Float64(b.t_rel[i]), n_phi, n_z)
         end
     end
 end

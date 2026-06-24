@@ -41,11 +41,11 @@ LorState() = LorState(-1, 0, 0.0, 0.0, 0.0, 0, 0)
 
 # Feed one singles row: close the previous event at a boundary (finish_event! → writer), then
 # fill the gamma's accumulator directly. `g` = (GammaAcc, GammaAcc).
-# `g` = (GammaAcc, GammaAcc); `gt`/`gps` carry the per-gamma timestamp / phantom-scatter flag (not
+# `g` = (GammaAcc, GammaAcc); `gt`/`gps` carry the per-gamma timestamp / phantom-scatter count (not
 # stored on the accumulator) until finish_event! at the event boundary.
 function feed_row!(st::LorState, g, gt, gps, w, resp, rng, ev::Int, gi::Int,
                    x::Float64, y::Float64, z::Float64, e::Float64, iz::Int, iphi::Int,
-                   nblocks::Int, phscat::Bool, t_rel::Float64, x0::Float64, y0::Float64, z0::Float64)
+                   nblocks::Int, nscat::Int, t_rel::Float64, x0::Float64, y0::Float64, z0::Float64)
     if ev != st.cur_ev
         if st.cur_ev != -1
             emitted, is_true = finish_event!((a...) -> push_coincidence!(w, a...),
@@ -53,13 +53,13 @@ function feed_row!(st::LorState, g, gt, gps, w, resp, rng, ev::Int, gi::Int,
                                              st.ev_x0, st.ev_y0, st.ev_z0, resp, rng)
             st.n_pair += emitted; st.n_true += (emitted && is_true)
         end
-        reset!(g[1]); reset!(g[2]); gt[1] = 0.0; gt[2] = 0.0; gps[1] = false; gps[2] = false; st.cur_ev = ev
+        reset!(g[1]); reset!(g[2]); gt[1] = 0.0; gt[2] = 0.0; gps[1] = 0; gps[2] = 0; st.cur_ev = ev
     end
     ev > st.maxev && (st.maxev = ev)
     st.ev_x0 = x0; st.ev_y0 = y0; st.ev_z0 = z0
     (gi == 1 || gi == 2) || return
     fill_singles!(g[gi], x, y, z, e, iz, iphi, nblocks)
-    gt[gi] = t_rel; gps[gi] = phscat
+    gt[gi] = t_rel; gps[gi] = nscat
     return
 end
 
@@ -68,11 +68,11 @@ function feed_singles_csv!(st, g, gt, gps, w, resp, rng, path)
         header = split(strip(readline(io)), ',')
         col = Dict(String(h) => i for (i, h) in enumerate(header))
         for c in ("event_number", "gamma", "x_mm", "y_mm", "z_mm", "e_keV", "iz", "iphi",
-                  "nblocks", "phantom_scatter", "x0_mm", "y0_mm", "z0_mm", "t_rel_ns")
+                  "nblocks", "n_scatter", "x0_mm", "y0_mm", "z0_mm", "t_rel_ns")
             haskey(col, c) || error("singles stack is missing column '$c'")
         end
         ie = col["event_number"]; ig = col["gamma"]; ix = col["x_mm"]; iy = col["y_mm"]; iz = col["z_mm"]
-        iee = col["e_keV"]; iiz = col["iz"]; iip = col["iphi"]; inb = col["nblocks"]; iph = col["phantom_scatter"]
+        iee = col["e_keV"]; iiz = col["iz"]; iip = col["iphi"]; inb = col["nblocks"]; iph = col["n_scatter"]
         ix0 = col["x0_mm"]; iy0 = col["y0_mm"]; iz0 = col["z0_mm"]; it = col["t_rel_ns"]
         for line in eachline(io)
             isempty(line) && continue
@@ -80,7 +80,7 @@ function feed_singles_csv!(st, g, gt, gps, w, resp, rng, path)
             feed_row!(st, g, gt, gps, w, resp, rng, parse(Int, f[ie]), parse(Int, f[ig]),
                       parse(Float64, f[ix]), parse(Float64, f[iy]), parse(Float64, f[iz]),
                       parse(Float64, f[iee]), parse(Int, f[iiz]), parse(Int, f[iip]),
-                      parse(Int, f[inb]), f[iph] == "1", parse(Float64, f[it]),
+                      parse(Int, f[inb]), parse(Int, f[iph]), parse(Float64, f[it]),
                       parse(Float64, f[ix0]), parse(Float64, f[iy0]), parse(Float64, f[iz0]))
         end
     end
@@ -91,7 +91,7 @@ function feed_singles_hdf5!(st, g, gt, gps, w, resp, rng, path)
         for i in 1:length(b)
             feed_row!(st, g, gt, gps, w, resp, rng, Int(b.event[i]), Int(b.gamma[i]),
                       decode_xyz(b.x[i]), decode_xyz(b.y[i]), decode_xyz(b.z[i]), decode_e(b.e[i]),
-                      Int(b.iz[i]), Int(b.iphi[i]), Int(b.nblocks[i]), b.phantom_scatter[i] == 1,
+                      Int(b.iz[i]), Int(b.iphi[i]), Int(b.nblocks[i]), Int(b.n_scatter[i]),
                       Float64(b.t_rel[i]),
                       decode_xyz(b.x0[i]), decode_xyz(b.y0[i]), decode_xyz(b.z0[i]))
         end
@@ -135,7 +135,7 @@ function main()
     w = CoincidenceWriter(out, meta)
     st = LorState()
     g = (GammaAcc(), GammaAcc())
-    gt = [0.0, 0.0]; gps = [false, false]            # per-gamma timestamp / phantom-scatter flag
+    gt = [0.0, 0.0]; gps = [0, 0]                    # per-gamma timestamp / phantom-scatter count
     rng = MersenneTwister(seed)
 
     ishdf5 ? feed_singles_hdf5!(st, g, gt, gps, w, resp, rng, singles) :

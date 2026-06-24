@@ -358,7 +358,7 @@ segmentation into `n_phi` azimuthal blocks × `n_z` axial wheels. A block is one
 docs/PTCryspMC_phys.tex.
 """
 struct Scanner
-    volume::PhysicalVolume{CylShell}   # Deferred (dev/status.md #2): name collides with volume(); rename → pvol/shell
+    volume::PhysicalVolume{CylShell}   # Deferred (dev/status.md #1): name collides with volume(); rename → pvol/shell
     n_phi::Int
     n_z::Int
 end

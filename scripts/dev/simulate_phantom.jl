@@ -34,11 +34,11 @@ end
 
 # Per-photon summary derived from its navigated stack.
 function photon_stats(steps)
-    Escan = 0.0; phscat = false
+    Escan = 0.0; nscat = 0
     blocks = Set{Tuple{Int,Int}}()
     for st in steps
         if st.volume == :phantom && st.hit.process != :escape
-            phscat = true
+            nscat += 1                       # phantom-scatter count (0 clean, 1 single, ≥2 multiple)
         elseif st.volume == :scanner && st.hit.process != :escape
             Escan += st.hit.e_dep
             push!(blocks, (st.iz, st.iphi))
@@ -47,7 +47,7 @@ function photon_stats(steps)
     reached  = !isempty(blocks)
     # TRUTH full-energy: ≥505 keV in one crystal (implies ~unscattered in the phantom).
     full_E   = Escan >= 0.505 && length(blocks) == 1
-    (reached, full_E, phscat, Escan, length(blocks))
+    (reached, full_E, nscat, Escan, length(blocks))
 end
 
 function main()
@@ -114,25 +114,25 @@ function main()
     n_both_fullE = 0; n_both_unscat = 0
     nrows = 0
     open(out, "w") do io
-        println(io, "event_number,gamma,step,x_mm,y_mm,z_mm,e_in_keV,e_dep_keV,process,volume,iz,iphi,phantom_scatter,x0_mm,y0_mm,z0_mm")
+        println(io, "event_number,gamma,step,x_mm,y_mm,z_mm,e_in_keV,e_dep_keV,process,volume,iz,iphi,n_scatter,x0_mm,y0_mm,z0_mm")
         for ev in 1:nevents
             pos0, d1, d2 = emit_pair(src, rng; acol_fwhm_deg=acol)
             x0 = round(pos0[1]*10, digits=4); y0 = round(pos0[2]*10, digits=4); z0 = round(pos0[3]*10, digits=4)
             fe = (false, false); us = (false, false)
             for (g, dir) in ((1, d1), (2, d2))
                 steps = navigate_photon(geom, E0, pos0, dir, rng; egamma_cut=cut_MeV)
-                reached, full_E, phscat, _, _ = photon_stats(steps)
+                reached, full_E, nscat, _, _ = photon_stats(steps)
                 n_reach  += reached
                 n_fullE  += full_E
-                n_phscat += phscat
+                n_phscat += (nscat > 0)
                 fe = g == 1 ? (full_E, fe[2])  : (fe[1], full_E)
-                us = g == 1 ? (!phscat, us[2]) : (us[1], !phscat)
+                us = g == 1 ? (nscat == 0, us[2]) : (us[1], nscat == 0)
                 for (k, st) in enumerate(steps)
                     r = st.hit
                     println(io, join((ev, g, k,
                         round(r.x*10, digits=4), round(r.y*10, digits=4), round(r.z*10, digits=4),
                         round(r.e_in*1000, digits=4), round(r.e_dep*1000, digits=4), r.process,
-                        st.volume, st.iz, st.iphi, phscat ? 1 : 0, x0, y0, z0), ","))
+                        st.volume, st.iz, st.iphi, nscat, x0, y0, z0), ","))
                     nrows += 1
                 end
             end

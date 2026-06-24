@@ -47,8 +47,8 @@ function reco_file!(w, path, resp, tau::Float64, rng, counts::Vector{Int})::Int
             x1, y1, z1 = smear_position((decode_xyz(b.x1[i]), decode_xyz(b.y1[i]), decode_xyz(b.z1[i])), resp.sigma_xyz, rng)
             x2, y2, z2 = smear_position((decode_xyz(b.x2[i]), decode_xyz(b.y2[i]), decode_xyz(b.z2[i])), resp.sigma_xyz, rng)
             tr = Int(b.truth[i])
-            push_coincidence!(w, Int(b.event[i]), x1, y1, z1, e1, t1, Int(b.iz1[i]), Int(b.iphi1[i]),
-                x2, y2, z2, e2, t2, Int(b.iz2[i]), Int(b.iphi2[i]), Float64(b.dt[i]),
+            push_coincidence!(w, Int(b.event[i]), x1, y1, z1, e1, t1, Int(b.iz1[i]), Int(b.iphi1[i]), Int(b.nscat1[i]),
+                x2, y2, z2, e2, t2, Int(b.iz2[i]), Int(b.iphi2[i]), Int(b.nscat2[i]), Float64(b.dt[i]),
                 decode_xyz(b.x0[i]), decode_xyz(b.y0[i]), decode_xyz(b.z0[i]), tr)
             counts[tr + 1] += 1
         end

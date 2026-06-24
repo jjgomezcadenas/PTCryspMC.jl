@@ -16,10 +16,11 @@
 # Reproducible over (seed, nchunks, N), independent of thread count / scheduling.
 #
 # Singles schema (one row per photon that deposited in the ring; a miss writes nothing):
-#   event_number, gamma, x_mm, y_mm, z_mm, e_keV, iz, iphi, nblocks, phantom_scatter, x0_mm, y0_mm, z0_mm, t_rel_ns
+#   event_number, gamma, x_mm, y_mm, z_mm, e_keV, iz, iphi, nblocks, n_scatter, x0_mm, y0_mm, z0_mm, t_rel_ns
 # x,y,z / iz,iphi = first crystal interaction (LOR point + block); e_keV = summed block energy
 # (truth, unsmeared — smearing stays in build_coincidences); nblocks = distinct blocks (1 =
-# contained, >1 = overspill); t_rel_ns = photon time relative to its decay = TOF + scintillation
+# contained, >1 = overspill); n_scatter = phantom-scatter count (0 clean, 1 single, ≥2 multiple);
+# t_rel_ns = photon time relative to its decay = TOF + scintillation
 # jitter (stamped once here so both LOR builders, trues and randoms, reuse one per-photon time).
 #
 # Run from the repo root (note -t for threads):
@@ -51,7 +52,7 @@ function write_chunk_csv(path, geom, src, E0::Float64, cut_MeV::Float64, acol::F
         singles_chunk!(geom, src, E0, cut_MeV, acol, range, rng, mat) do ev, g, s, pos0, t_rel
             println(io, join((ev, g,
                 round(s.x*10, digits=4), round(s.y*10, digits=4), round(s.z*10, digits=4),
-                round(s.e*1000, digits=4), s.iz, s.iphi, s.nblocks, s.phscat ? 1 : 0,
+                round(s.e*1000, digits=4), s.iz, s.iphi, s.nblocks, s.nscat,
                 round(pos0[1]*10, digits=4), round(pos0[2]*10, digits=4), round(pos0[3]*10, digits=4),
                 round(t_rel, digits=5)), ","))
         end
@@ -165,7 +166,7 @@ function main()
         pack_singles_hdf5(out, parts, rows, meta)
     else
         open(out, "w") do io
-            println(io, "event_number,gamma,x_mm,y_mm,z_mm,e_keV,iz,iphi,nblocks,phantom_scatter,x0_mm,y0_mm,z0_mm,t_rel_ns")
+            println(io, "event_number,gamma,x_mm,y_mm,z_mm,e_keV,iz,iphi,nblocks,n_scatter,x0_mm,y0_mm,z0_mm,t_rel_ns")
             buf = Vector{UInt8}(undef, 1 << 20)
             for p in parts
                 open(p, "r") do pin

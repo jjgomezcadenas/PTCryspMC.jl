@@ -38,18 +38,19 @@ struct RandSingles
     ev::Vector{Int32}
     t_abs::Vector{Float64}; t_rel::Vector{Float32}
     x::Vector{Int16}; y::Vector{Int16}; z::Vector{Int16}; e::Vector{Int16}
-    iz::Vector{Int16}; iphi::Vector{Int16}
+    iz::Vector{Int16}; iphi::Vector{Int16}; nscat::Vector{Int8}
     x0::Vector{Int16}; y0::Vector{Int16}; z0::Vector{Int16}
 end
 RandSingles() = RandSingles(Int32[], Float64[], Float32[], Int16[], Int16[], Int16[], Int16[],
-                            Int16[], Int16[], Int16[], Int16[], Int16[])
+                            Int16[], Int16[], Int8[], Int16[], Int16[], Int16[])
 Base.length(r::RandSingles) = length(r.ev)
 
-@inline function push_contained!(r::RandSingles, act, ev, x, y, z, e, iz, iphi, nb, x0, y0, z0, t_rel)
+@inline function push_contained!(r::RandSingles, act, ev, x, y, z, e, iz, iphi, nb, x0, y0, z0, t_rel, nscat)
     nb == 1 || return                                    # contained hits only (same as the trues)
     t_abs = event_time(act, ev) * 1.0e9 + t_rel          # absolute clock [ns] (in memory only)
     push!(r.ev, Int32(ev)); push!(r.t_abs, t_abs); push!(r.t_rel, Float32(t_rel))
     push!(r.x, x); push!(r.y, y); push!(r.z, z); push!(r.e, e); push!(r.iz, iz); push!(r.iphi, iphi)
+    push!(r.nscat, Int8(min(nscat, 127)))
     push!(r.x0, x0); push!(r.y0, y0); push!(r.z0, z0)
 end
 
@@ -58,7 +59,7 @@ function collect_hdf5!(r::RandSingles, act, path)
         for i in 1:length(b)
             push_contained!(r, act, Int(b.event[i]), b.x[i], b.y[i], b.z[i], b.e[i],
                             b.iz[i], b.iphi[i], Int(b.nblocks[i]), b.x0[i], b.y0[i], b.z0[i],
-                            Float64(b.t_rel[i]))
+                            Float64(b.t_rel[i]), Int(b.n_scatter[i]))
         end
     end
 end
@@ -66,11 +67,11 @@ end
 function collect_csv!(r::RandSingles, act, path)
     open(path, "r") do io
         header = split(strip(readline(io)), ','); col = Dict(String(h) => i for (i, h) in enumerate(header))
-        for c in ("event_number","gamma","x_mm","y_mm","z_mm","e_keV","iz","iphi","nblocks","x0_mm","y0_mm","z0_mm","t_rel_ns")
+        for c in ("event_number","gamma","x_mm","y_mm","z_mm","e_keV","iz","iphi","nblocks","n_scatter","x0_mm","y0_mm","z0_mm","t_rel_ns")
             haskey(col, c) || error("singles stack is missing column '$c'")
         end
         ie=col["event_number"]; ix=col["x_mm"]; iy=col["y_mm"]; iz=col["z_mm"]; iee=col["e_keV"]
-        iiz=col["iz"]; iip=col["iphi"]; inb=col["nblocks"]; ix0=col["x0_mm"]; iy0=col["y0_mm"]; iz0=col["z0_mm"]; it=col["t_rel_ns"]
+        iiz=col["iz"]; iip=col["iphi"]; inb=col["nblocks"]; ins=col["n_scatter"]; ix0=col["x0_mm"]; iy0=col["y0_mm"]; iz0=col["z0_mm"]; it=col["t_rel_ns"]
         for line in eachline(io)
             isempty(line) && continue
             f = split(line, ',')
@@ -78,7 +79,7 @@ function collect_csv!(r::RandSingles, act, path)
                 encode_xyz_mm(parse(Float64, f[ix])), encode_xyz_mm(parse(Float64, f[iy])), encode_xyz_mm(parse(Float64, f[iz])),
                 encode_e_keV(parse(Float64, f[iee])), Int16(parse(Int, f[iiz])), Int16(parse(Int, f[iip])), parse(Int, f[inb]),
                 encode_xyz_mm(parse(Float64, f[ix0])), encode_xyz_mm(parse(Float64, f[iy0])), encode_xyz_mm(parse(Float64, f[iz0])),
-                parse(Float64, f[it]))
+                parse(Float64, f[it]), parse(Int, f[ins]))
         end
     end
 end
@@ -133,8 +134,8 @@ function main()
     # Emit one random LOR per cross-event pair (i earlier, j later), referenced to i's decay.
     emit = function (i, j, Δ)
         push_coincidence!(w, r.ev[i],
-            decode_xyz(r.x[i]), decode_xyz(r.y[i]), decode_xyz(r.z[i]), decode_e(r.e[i]), r.t_rel[i], r.iz[i], r.iphi[i],
-            decode_xyz(r.x[j]), decode_xyz(r.y[j]), decode_xyz(r.z[j]), decode_e(r.e[j]), r.t_rel[i] + Δ, r.iz[j], r.iphi[j],
+            decode_xyz(r.x[i]), decode_xyz(r.y[i]), decode_xyz(r.z[i]), decode_e(r.e[i]), r.t_rel[i], r.iz[i], r.iphi[i], Int(r.nscat[i]),
+            decode_xyz(r.x[j]), decode_xyz(r.y[j]), decode_xyz(r.z[j]), decode_e(r.e[j]), r.t_rel[i] + Δ, r.iz[j], r.iphi[j], Int(r.nscat[j]),
             NaN32, decode_xyz(r.x0[i]), decode_xyz(r.y0[i]), decode_xyz(r.z0[i]), TRUTH_RANDOM)
     end
     nrand = pair_randoms(emit, r.t_abs, r.ev, tau)

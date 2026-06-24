@@ -17,11 +17,15 @@ would record. It never runs proton transport.
 ```
 runs/<tag>.toml
    │
-simulate_source_mt.jl  (multi-threaded, alloc-free) ──► prod/<tag>/singles.h5   (+ t_rel)
-   ├─ build_true_coincidences_from_singles.jl ──► lors_truth.h5   (true + scatter; t1,t2,dt)
+simulate_source_mt.jl  (multi-threaded, alloc-free) ──► prod/<tag>/singles.h5   (+ t_rel, n_scatter)
+   ├─ build_true_coincidences_from_singles.jl ──► lors_truth.h5   (true + scatter; t1,t2,dt, nscat1,nscat2)
    ├─ build_randoms_from_singles.jl            ──► randoms.h5      (truth = random)
    └─ reco_lors.jl  (smear + energy + DT cut + flag) ──► lors_det.h5   (the list-mode deliverable)
 ```
+
+- **Scatter multiplicity.** Each photon carries a phantom-scatter **count** `n_scatter` (Compton
+  interactions in the phantom); the LOR carries both as `nscat1`/`nscat2`, so a coincidence separates
+  true (`==0`), single (`nscat1+nscat2==1`) and multiple (`≥2`) scatter for scatter correction.
 
 - **Timing model.** Each single carries `t_rel` = TOF + scintillation first-photon jitter
   (`jitter = −ln u / (N_det·r0)`, `N_det = yield·E·pde`, `r0 = Σ wₖ/τₖ`), stamped **once** at
@@ -58,9 +62,10 @@ the corresponding code site carries a short `Deferred:` marker pointing here.
 
 | # | Where | What | Trigger |
 |---|-------|------|---------|
-| 1 | `src/timing.jl` `first_photon_jitter` | `-log(rand)` → `+Inf` if `rand()==0` (p ≈ 2⁻⁵³); fix `-log(1-rand)`. | Changes every jitter value → **forces a singles regeneration**; fold in next time the singles are regenerated for another reason. |
-| 2 | `src/geometry.jl` `Scanner.volume` | the field named `volume` (a `PhysicalVolume`) collides with the generic `volume()` (cm³); rename → `pvol`/`shell`. | A small rename sweep (`geometry.jl` + `simulate_source_mt.jl`); do it when next touching the Scanner API. |
-| 3 | `src/nist_data.jl` `load_xcom` | the parser assumes 8 clean numeric columns + digit-first data rows; XCOM **K-edge label rows** can shift columns, and empty input throws obscurely. | Adding the **CsI/BGO/LYSO XCOM tables** (which have in-range K-edges) — harden with the real tables to test against. |
+| 1 | `src/geometry.jl` `Scanner.volume` | the field named `volume` (a `PhysicalVolume`) collides with the generic `volume()` (cm³); rename → `pvol`/`shell`. | A small rename sweep (`geometry.jl` + `simulate_source_mt.jl`); do it when next touching the Scanner API. |
+| 2 | `src/nist_data.jl` `load_xcom` | the parser assumes 8 clean numeric columns + digit-first data rows; XCOM **K-edge label rows** can shift columns, and empty input throws obscurely. | Adding the **CsI/BGO/LYSO XCOM tables** (which have in-range K-edges) — harden with the real tables to test against. |
+
+_(The former #1 — the `first_photon_jitter` `-log(1-rand)` guard — is now fixed, folded into the `n_scatter` schema regeneration.)_
 
 ### Minor nits (cosmetic / robustness, no trigger)
 
