@@ -68,16 +68,20 @@ A fast, photon-only Monte Carlo. Full method in `docs/PTCryspMC_phys.tex`; the d
   escapes) come out of the transport.
 - **Hits.** Per block: energy = sum, position = **first interaction point** (not the
   centroid — it is the LOR point and the target a CNN recovers when separating 1- from
-  2-Compton events), time = earliest. Smear by σ_xyz (incl. DOI), σ_t, and an
-  energy-dependent FWHM(E) = a·√(511 keV / E). Keep the per-interaction truth in the singles
-  for later CNN work.
-- **Selection.** Energy window symmetric about 511 keV, half-width ~2 FWHM (tunable; its
-  width scales with the resolution → a sharper detector rejects more scatter). A clean
-  coincidence = exactly two roughly opposite blocks touched; overspill into a third block,
-  an under-energy escape, or a miss fails it.
-- **Randoms.** A separate pass over the singles, no re-transport: time-tag each single from
-  its isotope's activity curve, sort, pair cross-annihilation singles within the coincidence
-  window τ (a few ns). Rate ≈ 2τS², front-loaded, at most a few percent of the trues.
+  2-Compton events), time = earliest. Smear the position by σ_xyz (incl. DOI) and the energy
+  by FWHM(E) = a·√(511 keV / E); the time is the scintillation first-photon arrival (TOF +
+  jitter = −ln u/(N_det·r0)), a physical distribution rather than a Gaussian σ_t. Keep the
+  per-interaction truth in the singles for later CNN work.
+- **Selection.** A lower cut on the (smeared) energy: `emin` for the spectrum studies (low, so
+  the Compton shoulder shows), raised to the photopeak region (`reco_emin_keV`) for the
+  reconstruction. A symmetric window about 511 keV (half-width scaling with the resolution → a
+  sharper detector rejects more scatter) is also available, off by default. A clean coincidence =
+  each gamma contained in one block (no overspill); the two hits emerge roughly opposite (observed,
+  not enforced). Plus the coincidence-window cut |t1 − t2| ≤ τ.
+- **Randoms.** A separate pass over the singles, no re-transport: time-tag each single from the
+  activity model (a single toy isotope, ¹⁵O, in phantom mode; the per-isotope scenario activity in
+  proton-beam mode), restore the absolute clock, sort, pair cross-annihilation singles within the
+  coincidence window τ (a few ns). Rate ≈ 2τS², front-loaded, at most a few percent of the trues.
 - **Run once.** Transport runs once → trues + singles. Randoms, and any re-realization the
   downstream analysis needs, are cheap operations on the singles list.
 
