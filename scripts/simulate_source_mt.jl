@@ -7,7 +7,8 @@
 # free `navigate_single_photons`, so it scales to the ~10⁸-decay production runs. The full per-
 # interaction stack (CNN R&D, detailed plots) stays in simulate_phantom.jl.
 #
-# Parallelism: the N events are split into `nchunks` CONTIGUOUS ranges (default 8·nthreads).
+# Parallelism: the N events are split into `nchunks` CONTIGUOUS ranges (--nchunks, else
+# [transport].nchunks, else 8·nthreads).
 # Each chunk runs on a thread with its OWN pre-allocated RNG (`MersenneTwister(seed + chunk-1)`,
 # chunk 1 = base seed) and streams its rows to its own part-file `singles.part<c>.csv`. After
 # the parallel region the part-files are concatenated IN CHUNK ORDER into `singles.csv`, so the
@@ -36,7 +37,7 @@ function parse_cli()
         "--config";  help = "run config TOML"; required = true
         "--nevents"; help = "override [source].nevents"; arg_type = Int; default = -1
         "--seed";    help = "override [transport].seed"; arg_type = Int; default = -1
-        "--nchunks"; help = "number of event chunks (default 8·nthreads)"; arg_type = Int; default = -1
+        "--nchunks"; help = "number of event chunks (default [transport].nchunks, else 8·nthreads)"; arg_type = Int; default = -1
         "--format";  help = "override [output].format (csv | hdf5)"; default = ""
     end
     parse_args(s)
@@ -124,7 +125,13 @@ function main()
     src = uniform ? UniformVolumeSource(geom.phantom) : PointSource(geom.phantom.position)
 
     nthr    = nthreads()
-    ranges  = chunk_ranges(nevents, a["nchunks"] > 0 ? a["nchunks"] : 8 * nthr)
+    # The chunk count fixes the per-event RNG streams, so it must be reproducible: a CLI override,
+    # else [transport].nchunks (pin it for a fully config-specified, thread-count-independent run),
+    # else 8·nthreads. The value actually used (length(ranges)) is recorded in the singles attrs
+    # below and propagated to the LOR files, so the singles can be regenerated exactly after pruning.
+    nchunks_cfg = Int(cfg_get(cfg, "transport", "nchunks", 0))
+    nchunks_req = a["nchunks"] > 0 ? a["nchunks"] : (nchunks_cfg > 0 ? nchunks_cfg : 8 * nthr)
+    ranges  = chunk_ranges(nevents, nchunks_req)
     nchunks = length(ranges)
 
     # Pre-allocate one RNG per chunk BEFORE the loop (chunk 1 = base seed); the hot loop only

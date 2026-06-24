@@ -99,6 +99,10 @@ function main()
             (tau > 0 ? "τ=$tau ns" : "no DT cut") * " (seed $seed)")
 
     nevents = Int(singles_hdf5_attr(truth, "nevents", 0))
+    # The transport recipe (seed + chunk count), carried from lors_truth so lors_det.h5 alone
+    # suffices to regenerate the pruned singles. Absent (-1/0) when the truth came from CSV singles.
+    transport_seed = Int(singles_hdf5_attr(truth, "transport_seed", -1))
+    nchunks_tr     = Int(singles_hdf5_attr(truth, "nchunks", 0))
     meta = Dict{String,Any}("scenario_tag" => tag, "mode" => "det", "has_randoms" => true,
         "crystal" => crystal, "seed" => seed, "t_relative_to_decay" => true,
         "sigma_xyz_mm" => sigma_xyz, "eres" => eres, "emin_keV" => emin, "window_fwhm" => window,
@@ -110,6 +114,8 @@ function main()
     ntru = reco_file!(w, truth, resp, tau, rng, counts)
     nrnd = reco_file!(w, randoms, resp, tau, rng, counts)
     set_lor_attr!(w, "nevents", nevents)
+    transport_seed >= 0 && set_lor_attr!(w, "transport_seed", transport_seed)
+    nchunks_tr > 0 && set_lor_attr!(w, "nchunks", nchunks_tr)
     nlor = close(w)
 
     println("read $ntru truth + $nrnd random LORs → kept $nlor → $out")

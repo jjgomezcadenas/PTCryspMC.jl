@@ -152,6 +152,13 @@ function main()
     nevents = ishdf5 ? Int(singles_hdf5_attr(singles, "nevents", 0)) : 0
     nevents > 0 || (nevents = st.maxev)
     set_lor_attr!(w, "nevents", nevents)
+    # Transport provenance for exact singles regeneration after pruning: the actual transport seed
+    # and chunk count (with nevents + the config, the full recipe). Carried from the singles attrs;
+    # CSV singles have no metadata, so they stay absent there.
+    if ishdf5
+        set_lor_attr!(w, "transport_seed", Int(singles_hdf5_attr(singles, "seed", seed)))
+        set_lor_attr!(w, "nchunks", Int(singles_hdf5_attr(singles, "nchunks", 0)))
+    end
     nlor = close(w)
 
     println("wrote $nlor LORs -> $out")
