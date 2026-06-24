@@ -30,3 +30,6 @@ __pycache__/
 # Generated output trees (anchored to root so scripts/studies/ stays tracked)
 /prod/
 /studies/
+
+# Reference papers (external material; keep the repo to source + the two manuals)
+/papers/
