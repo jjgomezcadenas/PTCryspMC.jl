@@ -1,8 +1,9 @@
 # Development log
 
 The running record of the build: what the simulation is meant to do, what works
-so far, and what comes next. The *method* lives in `docs/PTCryspMC_phys.tex`; this
-file tracks the *implementation*.
+so far, and what comes next. The *method* lives in `docs/PTCryspMC_phys.tex` (engine) and
+`docs/PTCryspMC_app.tex` (modes); this file tracks the *implementation*. For the concise
+current status + the deferred-work register, see `dev/status.md`.
 
 ---
 
@@ -341,14 +342,16 @@ scripts run.
   the two-crystal clean selection (each gamma one block). The whole **analytic-phantom →
   LOR** track (uniform `Source` + acollinearity, `Sphere` solid, TOML-config pipeline,
   per-config + matrix plots, run in parallel) is in `dev/phantom_track_plan.md` (A–F done).
-- **Step 5 — randoms.** The time-tag-and-pair pass over the singles (needs real times). The
-  singles stack it consumes now exists (`simulate_source_mt.jl`); randoms adds an isotope tag
-  + a sampled time to each singles row.
+- **Step 5 — randoms: done.** The full timing + randoms chain. Each single carries `t_rel` =
+  TOF + scintillation first-photon jitter, stamped once in `simulate_source_mt.jl`;
+  `build_true_coincidences_from_singles.jl` → `lors_truth.h5` (trues + scatters, with `t1,t2,dt`);
+  the coincidence window τ = 3 ns is read off the DT study (`examine_dt.jl`);
+  `build_randoms_from_singles.jl` → `randoms.h5` (cross-decay pairs within τ, validated against
+  2τS²); `reco_lors.jl` merges + smears + cuts + flags → `lors_det.h5`.
 - **Production I/O (Phase G) — done.** Singles stack + multi-threading + quantized-Int16 HDF5
-  (`simulate_source_mt.jl`), and the LOR builder over singles
-  (`build_coincidences_from_singles.jl` → `lors_{truth,det}.h5`) via the shared
-  `src/coincidences.jl`. The full chain `simulate_source_mt → singles → build_coincidences_from_singles`
-  is complete (trues + scatters; randoms are Step 5).
+  (`simulate_source_mt.jl`), and the truth-LOR builder over singles
+  (`build_true_coincidences_from_singles.jl`, originally `build_coincidences_from_singles.jl`, made
+  truth-only in Step C) → `lors_truth.h5` via the shared `src/coincidences.jl`.
 - **Step 6 — detectors.** CsI and BGO done (via the run configs); CsI(Tl), LYSO to add.
 
 Carried-over technical TODOs from the foundations:

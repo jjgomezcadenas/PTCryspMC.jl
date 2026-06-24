@@ -1,5 +1,10 @@
 # Plan — Step 5: randoms (the third LOR category) + the timing model
 
+> **Status: implemented.** Step 5 is done (timing, randoms, reco) — see `dev/status.md` for the
+> current state. Divergences from this plan: the truth builder is `build_true_coincidences_from_singles.jl`
+> (truth-only); `t_rel` is stamped once in the singles, not in the LOR builder; `dt` is the signed
+> `(t1−t2) − TOF_diff`. This file records the original design.
+
 Self-contained (pick up after a context clear). State going in: the production chain
 `simulate_source_mt.jl` (MT) → `prod/<tag>/singles.h5` → `build_coincidences_from_singles.jl`
 → `prod/<tag>/lors_{truth,det}.h5` is done (trues + scatters; `truth ∈ {0,1}`, `random=2`

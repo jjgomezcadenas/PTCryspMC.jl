@@ -1,5 +1,9 @@
 # Plan — `simulate_source_mt.jl` (production singles pipeline)
 
+> **Status: implemented**, since extended: `simulate_source_mt.jl` now also stamps each single's
+> `t_rel` (TOF + scintillation jitter) for the timing/randoms chain; `Pkg.test` is at 812. See
+> `dev/status.md`. This file records the original design.
+
 **STATUS: DONE** (2026-06-19). `navigate_single_photons` (alloc-free, `src/navigator.jl`) +
 `scripts/simulate_source_mt.jl` (MT, singles-only) built and validated: `Pkg.test` 710
 assertions pass (incl. zero-alloc + reduction-match); `-t 1` ≡ `-t 18` byte-identical at fixed

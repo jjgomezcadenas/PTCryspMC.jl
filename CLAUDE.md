@@ -144,23 +144,25 @@ The singles carry `t_rel` (TOF + scintillation jitter, decay-relative, stamped O
 
 The LOR-generation pipeline (`simulate_phantom.jl` → `build_coincidences.jl` →
 `plot_coincidences.py`) is **TOML-config driven**: a `runs/<tag>.toml` (sections
-`[geometry] [source] [transport] [detector] [output]`) is the parameter source of truth
+`[geometry] [source] [transport] [detector] [timing] [output]`) is the parameter source of truth
 and the run's provenance. The `tag` (= config filename, overridable) names the per-run
 output dir `output/<tag>/`, which holds the stack, the coincidence file(s), the plot, and a
 copy of the config. `src/config.jl` reads it (`read_config`, `run_tag`, `cfg_get`).
 
-Still to write: source injection, the block-grid index and plane-crossing distances, hit
-formation + selection, the randoms pass.
+The full chain — source injection, the block/wheel grid, transport, hit formation + selection,
+and the randoms pass — is built and validated in phantom mode. See `dev/status.md` for the current
+state and what remains (the proton-beam scenario source; the Documenter doc-site).
 
 ## Tech stack
 
 - **Julia** — the photon transport and geometry, and the coincidence selection. The
   selection runs as a *streaming* pass over the event-ordered stack
-  (`scripts/dev/build_coincidences.jl`, and `scripts/build_coincidences_from_singles.jl` for
+  (`scripts/dev/build_coincidences.jl`, and `scripts/build_true_coincidences_from_singles.jl` for
   the singles stack): O(1) memory, no whole-file load, so it scales to the
   large stacks a full run produces (this is why it is Julia, not Python — see the note
   below).
-- **Python** — read a scenario, the control plots, and lighter downstream analysis.
+- **Python** — scenario reading (proton-beam mode, to come), the control plots and the
+  documentation figures (`py/fig_*.py`), and lighter downstream analysis.
 - **CSV and HDF5** in and out (CSV for dev/inspection; HDF5 — quantized Int16, compressed —
   for the production singles stack: ~6× smaller, typed/partial fast reads for the write-once,
   read-many singles list).

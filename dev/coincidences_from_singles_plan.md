@@ -1,11 +1,11 @@
 # Plan — coincidence selection core + `build_coincidences_from_singles.jl`
 
-**STATUS: DONE.** `src/coincidences.jl` (shared core) + `src/coincidences_hdf5.jl` (LOR HDF5) +
-`build_coincidences.jl` (minimal edit, byte-identical) + `scripts/build_coincidences_from_singles.jl`
-(singles either-format → `lors_{truth,det}.h5`) + `scripts/tests/check_lors.jl`. `Pkg.test` 770
-(incl. the singles-fill ≡ full-stack-fill equivalence + LOR HDF5 round-trip). Honest result:
-discrete fields exact, energy to float precision (summation order). Deferred: real times + the
-`random` LORs (Step 5); a Julia LOR-HDF5 reader/reducer. See `dev/dev_steps.md`.
+**STATUS: done, then revised.** `src/coincidences.jl` (shared core) + `src/coincidences_hdf5.jl`
+(LOR HDF5) were built here. The driver `build_coincidences_from_singles.jl` was later renamed
+`build_true_coincidences_from_singles.jl` and made **truth-only** (Step C): detector smearing, the
+DT cut and the randoms moved to `reco_lors.jl`, and the once-deferred real times + `random` LORs are
+now implemented (Step 5). `Pkg.test` is at 812. This file records the original design; see
+`dev/status.md` for the current chain.
 
 Self-contained plan (pick up after a context clear). Goal: form LORs from the **singles
 stack** (`simulate_source_mt.jl` output), reusing the existing selection. Structure mirrors the

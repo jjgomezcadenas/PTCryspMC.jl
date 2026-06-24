@@ -1,5 +1,8 @@
 # Plan — Step 3: the multi-volume navigator (+ coincidences)
 
+> **Status: implemented** (Step 3 done). See `dev/status.md` for the current state and
+> `docs/PTCryspMC_phys.tex` (§4) for the navigation method. This file records the original design.
+
 Self-contained plan so this can be picked up in a fresh session. Status at time of
 writing: world (air) + phantom (water) + scanner (CsI `CylShell`) geometry, the
 `(φ,z)` block grid, single-volume transport, and the back-to-back unit test (air →

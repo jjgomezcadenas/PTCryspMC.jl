@@ -1,5 +1,8 @@
 # Plan — analytic-phantom → LOR-list track (Source, acollinearity, smearing, plotter)
 
+> **Status: implemented** (A–F done). This is the validated **phantom mode**; see
+> `docs/PTCryspMC_app.tex` and `dev/status.md`. This file records the original design.
+
 Self-contained plan for the controlled-phantom validation track. Status at time of
 writing: Step 3a (the multi-volume navigator) and a truth-level coincidence builder
 (`scripts/build_coincidences.jl`) are done and committed. This track adds a proper
