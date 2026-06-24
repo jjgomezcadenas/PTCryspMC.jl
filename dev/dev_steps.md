@@ -1,7 +1,7 @@
 # Development log
 
 The running record of the build: what the simulation is meant to do, what works
-so far, and what comes next. The *method* lives in `docs/pet_simulation.tex`; this
+so far, and what comes next. The *method* lives in `docs/PTCryspMC_phys.tex`; this
 file tracks the *implementation*.
 
 ---
@@ -163,7 +163,7 @@ The world model and the detector ring (Step 2 geometry).
   (S = (outer ∩ z-slab) ∖ bore, up to two pieces). The `(φ, z)` block/wheel grid:
   `block_index` / `block_id` (= iz·n_phi + iφ) / `nblocks`. The `scanner` daughter
   is `CRYSP_CSI_1M` (CsI: Ri=38.7, wall=3.7, H=51.2 cm, 48 φ × 20 z = 960 crystals).
-- **`docs/navigation.tex`** documents the ray–cylinder / ray–shell distances and the
+- **`docs/PTCryspMC_phys.tex`** documents the ray–cylinder / ray–shell distances and the
   (φ, z) partition (φ-pitch ≈ 50.6 mm, z-pitch 51.2 mm ≈ the 50 mm crystal).
 
 ### Unit test — back-to-back 511 keV pairs into the ring
@@ -207,7 +207,7 @@ single-volume transporter, not duplicating it — three functions, one physics k
   photons navigated through water → air → ring; CSV tagged with volume, block and a
   per-photon phantom-scatter flag (`--source point|phantom`, `--material`).
 - The navigation algorithm (world model, `locate`, `next_boundary`, the leaf/air walk,
-  bore re-entry) is documented in `docs/navigation.tex` §4.
+  bore re-entry) is documented in `docs/PTCryspMC_phys.tex` §4.
 
 **Validated** (`scripts/phantom_effect_on_coincidences.jl`, 20k back-to-back from the
 phantom centre, CRYSP1M, CsI — same emission directions air vs phantom):

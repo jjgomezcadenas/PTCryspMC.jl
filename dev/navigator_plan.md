@@ -4,7 +4,7 @@ Self-contained plan so this can be picked up in a fresh session. Status at time 
 writing: world (air) + phantom (water) + scanner (CsI `CylShell`) geometry, the
 `(φ,z)` block grid, single-volume transport, and the back-to-back unit test (air →
 ring, no phantom) are all done and committed; 141 tests pass. The ray–solid math is
-in `docs/navigation.tex` (§2–3); the navigation algorithm this plan implements is
+in `docs/PTCryspMC_phys.tex` (§2–3); the navigation algorithm this plan implements is
 documented there too (§4).
 
 ## Goal
@@ -234,7 +234,7 @@ Annihilations now originate **in the phantom**, not a bare point. For Step 3:
 - `test/runtests.jl` — the two air tests (287, 295) → `.recs`; **replace** the
   source→ring test (342, now a subset of `navigate_photon`) with a navigator testset.
 - `scripts/simulate_phantom.jl` (new) — validation/driver.
-- Optional later: a plotter; update `dev_steps.md` + `pet_simulation.tex`.
+- Optional later: a plotter; update `dev_steps.md` + `docs/PTCryspMC_phys.tex`.
 
 ## Validation / tests (reworked, no compat shims)
 
