@@ -119,7 +119,13 @@ end
 "Dump the buffer's columns as raw bytes (canonical order) to a binary part-file."
 write_part(io::IO, b::SinglesBuffer) = foreach(c -> write(io, c[2]), singles_columns(b))
 
-"Read `n` rows from a binary part-file (canonical column order) into a fresh `SinglesBuffer`."
+"""
+    read_part(io, n) -> SinglesBuffer
+
+Read `n` rows from a binary part-file (canonical `singles_columns` order) into a fresh buffer.
+The `rd(T)` calls below MUST stay in column order: argument evaluation is left-to-right, so each
+`rd` consumes the next column's bytes — reordering them would silently misread the part.
+"""
 function read_part(io::IO, n::Int)::SinglesBuffer
     rd(T) = read!(io, Vector{T}(undef, n))
     SinglesBuffer(rd(Int32), rd(Int8), rd(Int16), rd(Int16), rd(Int16), rd(Int16),

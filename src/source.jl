@@ -82,8 +82,10 @@ sample_position(src::PointSource, ::AbstractRNG) = src.position
     # case use sqrt(1-s2) as the z-cosine; fall back to a renormalised tilt if σ is so
     # large that s2 ≥ 1 (never happens for sub-degree acollinearity, but keep it safe).
     local_dir = s2 < 1.0 ? (ax, ay, sqrt(1.0 - s2)) : (ax, ay, 1.0) ./ sqrt(s2 + 1.0)
-    g = rotate_to_global(local_dir, axis)
-    (g[1], g[2], g[3])
+    # The tuple twin returns an NTuple directly — no per-annihilation heap Vector (this runs once
+    # per decay on the production MT loop, so the allocation would otherwise defeat the alloc-free
+    # transport's GC-quiet goal).
+    rotate_to_global_t(local_dir[1], local_dir[2], local_dir[3], axis)
 end
 
 """

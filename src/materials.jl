@@ -99,8 +99,8 @@ end
     sigma_macro(mat, E_MeV) -> (Sigma_C, Sigma_Ph, Sigma_P)
 
 Macroscopic cross sections [cm^-1] for Compton (incoherent), photoelectric, and
-pair: Sigma = (mu/rho)(E) * density. Pair is last as it is zero below threshold
-(<= 511 keV). Vacuum returns zeros.
+pair: Sigma = (mu/rho)(E) * density. Pair is last as it is zero below the 1.022 MeV
+threshold (2·m_e·c²), so it is always zero for the ≤ 511 keV photons here. Vacuum returns zeros.
 """
 function sigma_macro(mat::Material, E_MeV::Float64)::Tuple{Float64,Float64,Float64}
     isempty(mat.E) && return (0.0, 0.0, 0.0)

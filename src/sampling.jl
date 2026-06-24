@@ -48,7 +48,10 @@ function rotate_to_global(local_vec, ref_dir)::Vector{Float64}
     rd = ref_dir ./ n
     # Near-pole: the local frame ≈ the global frame (up to a flip). Build a Vector
     # explicitly so a tuple `local_vec` (e.g. from the acollinearity tilt) still returns
-    # the declared Vector{Float64}, not a tuple.
+    # the declared Vector{Float64}, not a tuple. NB: for s = −1 (ref ≈ −ẑ) this is the
+    # inversion −I, an *improper* rotation (det −1); harmless here because every consumer
+    # (Compton φ, acollinearity transverse) is azimuthally symmetric, but a non-symmetric
+    # use would get a mirrored frame.
     if abs(rd[3]) > 0.99999
         s = sign(rd[3])
         return Float64[local_vec[1]*s, local_vec[2]*s, local_vec[3]*s]

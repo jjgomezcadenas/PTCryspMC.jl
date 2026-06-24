@@ -7,7 +7,7 @@
 # Timestamps t1_ns/t2_ns are Float32 and stored RELATIVE TO THE DECAY (= TOF + scintillation
 # jitter, ~ns) — the common annihilation time is dropped so ns differences survive Float32.
 # Absolute time = event_time(activity, event) + t; the activity attrs (t0_s/half_life_s/time_seed)
-# are written alongside. dt_ns is the residual DT = |t1−t2| − TOF_diff (timing resolution).
+# are written alongside. dt_ns is the residual (t1−t2) − TOF_diff (signed, the timing resolution).
 
 using HDF5
 
@@ -22,7 +22,7 @@ struct CoincidenceBuffer
     t1::Vector{Float32}; iz1::Vector{Int16}; iphi1::Vector{Int16}
     x2::Vector{Int16}; y2::Vector{Int16}; z2::Vector{Int16}; e2::Vector{Int16}
     t2::Vector{Float32}; iz2::Vector{Int16}; iphi2::Vector{Int16}
-    dt::Vector{Float32}                       # per-pair timing residual DT = |Δt0| − TOF_diff [ns]
+    dt::Vector{Float32}                       # per-pair timing residual (t1−t2) − TOF_diff [ns], signed
     x0::Vector{Int16}; y0::Vector{Int16}; z0::Vector{Int16}
 end
 CoincidenceBuffer() = CoincidenceBuffer(Int32[], Int8[], Int16[], Int16[], Int16[], Int16[],

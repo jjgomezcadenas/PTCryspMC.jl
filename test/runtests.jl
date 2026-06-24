@@ -6,14 +6,25 @@ const DATA_DIR = joinpath(@__DIR__, "..", "data")
 const GEOM_JSON = joinpath(@__DIR__, "..", "geometry", "geometry.json")
 
 # Allocation probe for `navigate_single_photons`, kept at top level (a normal method, not a
-# testset-local closure) and fed FIXED pos/dir so the measurement isolates the reducer —
-# `emit_pair` is itself allocating (the acollinearity tilt calls `rotate_to_global`), so it
-# must stay out of the loop. The rng advances each call, varying the histories.
+# testset-local closure) and fed FIXED pos/dir so the measurement isolates the reducer. The rng
+# advances each call, varying the histories. (`emit_pair` is also alloc-free now — its own probe is
+# `_emit_alloc_run` below — but fixed pos/dir still keeps this measurement to just the reducer.)
 function _singles_alloc_run(geom, rng, n)
     acc = 0.0
     pos = (0.0, 0.0, 0.0); dir = (1.0, 0.0, 0.0)   # phantom centre, radially into the ring
     for _ in 1:n
         acc += navigate_single_photons(geom, 0.511, pos, dir, rng).e
+    end
+    acc
+end
+
+# Allocation probe for `emit_pair` (the source path): the acollinearity tilt routes through the
+# tuple twin `rotate_to_global_t`, so the whole annihilation draw is heap-free per call.
+function _emit_alloc_run(src, rng, n)
+    acc = 0.0
+    for _ in 1:n
+        _, d1, d2 = emit_pair(src, rng; acol_fwhm_deg=0.5)
+        acc += d1[1] + d2[3]
     end
     acc
 end
@@ -677,66 +688,65 @@ end
         mats = load_materials(DATA_DIR)
         geom = load_geometry(GEOM_JSON, mats)
 
-        # Reduce a full-stack NavStep history to a GammaAcc the build_coincidences way.
-        # Convert to the pipeline's units as the drivers do: positions cm→mm (×10), energy
-        # MeV→keV (×1000), so the keV energy cut (emin=300) is meaningful.
+        # Reduce a full-stack NavStep history to (GammaAcc, phscat) the build_coincidences way.
+        # `GammaAcc` holds only the accumulated geometry/energy; the phantom-scatter flag is carried
+        # alongside (set by the caller, not the accumulator). Positions cm→mm (×10), energy MeV→keV.
         function full_acc(steps)
-            a = GammaAcc()
+            a = GammaAcc(); ps = false
             for st in steps
                 st.hit.process === :escape && continue
                 if st.volume === :scanner
                     fill_full!(a, st.hit.x*10, st.hit.y*10, st.hit.z*10, st.hit.e_dep*1000, st.iz, st.iphi)
                 elseif st.volume === :phantom
-                    a.phscat = true
+                    ps = true
                 end
             end
-            a
+            (a, ps)
         end
-        sing_acc(s) = (a = GammaAcc(); s.reached && fill_singles!(a, s.x*10, s.y*10, s.z*10, s.e*1000, s.iz, s.iphi, s.nblocks, s.phscat, 0.0); a)
-        # Compared only for REACHED gammas (the only ones that can form a LOR): discrete fields
-        # and the LOR point must be EXACT; the summed energy agrees only to float precision (the
-        # full path sums per-interaction keV, the singles path sums MeV once then ×1000). An
-        # UNREACHED photon writes no singles row, so its phantom-scatter flag is absent there —
-        # irrelevant, since it can never be in a coincidence.
-        feq(a, b) = a.reached == b.reached && (!a.reached || (
-                    a.x == b.x && a.y == b.y && a.z == b.z && a.iz == b.iz && a.iphi == b.iphi &&
-                    a.overspill == b.overspill && a.phscat == b.phscat && isapprox(a.e, b.e; rtol=1e-9)))
+        sing_acc(s) = (a = GammaAcc(); s.reached && fill_singles!(a, s.x*10, s.y*10, s.z*10, s.e*1000, s.iz, s.iphi, s.nblocks); (a, s.phscat))
+        # Compare the (acc, phscat) pairs for REACHED gammas (the only ones that can form a LOR):
+        # discrete fields + LOR point EXACT, phantom-scatter flag equal; the summed energy agrees only
+        # to float precision (full sums per-interaction keV, singles sums MeV once then ×1000).
+        function feq(A, B)
+            (af, aps), (bf, bps) = A, B
+            af.reached == bf.reached && (!af.reached || (
+                af.x == bf.x && af.y == bf.y && af.z == bf.z && af.iz == bf.iz && af.iphi == bf.iphi &&
+                af.overspill == bf.overspill && aps == bps && isapprox(af.e, bf.e; rtol=1e-9)))
+        end
         # A LOR tuple (20 fields: …,iz2(15),dt(16),x0(17),y0,z0,truth(20)). Discrete fields, the LOR
-        # point, AND the timestamps/dt (6,13,16) match exactly — `t` is now stamped per gamma and set
-        # identically on both fills, so finish_event! (timing-agnostic) emits the same t/dt. Only the
-        # summed energies (5,12) differ, at float precision (full sums per-interaction keV, singles
-        # sums MeV once then ×1000).
+        # point, AND the timestamps/dt (6,13,16) match exactly — `t` is computed once and passed
+        # identically to both fills' finish_event!. Only the summed energies (5,12) differ, at float
+        # precision (full sums per-interaction keV, singles sums MeV once then ×1000).
         ceq(p, q) = all(j -> p[j] == q[j], (1, 2, 3, 4, 6, 7, 8, 9, 10, 11, 13, 14, 15, 16, 17, 18, 19, 20)) &&
                     isapprox(p[5], q[5]; rtol=1e-9) && isapprox(p[12], q[12]; rtol=1e-9)
 
         # The singles fill (from navigate_single_photons) must produce the SAME GammaAcc as the
-        # full-stack fill (from navigate_photon) — discrete fields exact, energy to float
-        # precision — and hence the SAME coincidences through the shared finish_event!. The per-gamma
-        # time `t` (TOF+jitter) is computed once and set on both fills (in production it is the stored
-        # singles `t_rel`); finish_event! just reads it. TRUTH mode: no smearing, no energy cut.
+        # full-stack fill (from navigate_photon) — discrete fields exact, energy to float precision —
+        # and hence the SAME coincidences through the shared finish_event!. The per-gamma time `t`
+        # (TOF+jitter) and phantom-scatter flag are passed to finish_event! (not on the accumulator);
+        # one `t` is computed and shared by both paths. TRUTH mode: no smearing, no energy cut.
         resp = Response(0.0, 0.0, 0.0, false, 0.0)
         mat  = mats["CsI"]; trng = MersenneTwister(1)
         emit_full = Any[]; emit_sing = Any[]
         nacc_mismatch = 0
         for ev in 1:3000
             pos, d1, d2 = emit_pair(PointSource(geom.phantom.position), MersenneTwister(5000 + ev))
-            af = GammaAcc[]; as = GammaAcc[]
+            af = GammaAcc[]; as = GammaAcc[]; psf = Bool[]; pss = Bool[]; gt = Float64[]
             for (k, dir) in ((1, d1), (2, d2))
                 seed = 90000 + 2ev + k
                 gf2 = full_acc(navigate_photon(geom, 0.511, pos, dir, MersenneTwister(seed)))
                 gs2 = sing_acc(navigate_single_photons(geom, 0.511, pos, dir, MersenneTwister(seed)))
                 feq(gf2, gs2) || (nacc_mismatch += 1)
-                if gs2.reached                      # one per-gamma time on both fills (the stored t_rel)
-                    t = tof_ns((pos[1]*10, pos[2]*10, pos[3]*10), (gs2.x, gs2.y, gs2.z)) +
-                        first_photon_jitter(mat, gs2.e * 1e-3, trng)
-                    gf2.t = t; gs2.t = t
-                end
-                push!(af, gf2); push!(as, gs2)
+                t = gs2[1].reached ?                 # one per-gamma time, shared by both paths
+                    tof_ns((pos[1]*10, pos[2]*10, pos[3]*10), (gs2[1].x, gs2[1].y, gs2[1].z)) +
+                        first_photon_jitter(mat, gs2[1].e * 1e-3, trng) : 0.0
+                push!(af, gf2[1]); push!(psf, gf2[2])
+                push!(as, gs2[1]); push!(pss, gs2[2]); push!(gt, t)
             end
-            finish_event!((a...) -> push!(emit_full, a), ev, af[1], af[2], pos[1], pos[2], pos[3], resp, MersenneTwister(ev))
-            finish_event!((a...) -> push!(emit_sing, a), ev, as[1], as[2], pos[1], pos[2], pos[3], resp, MersenneTwister(ev))
+            finish_event!((a...) -> push!(emit_full, a), ev, af[1], af[2], gt[1], gt[2], psf[1], psf[2], pos[1], pos[2], pos[3], resp, MersenneTwister(ev))
+            finish_event!((a...) -> push!(emit_sing, a), ev, as[1], as[2], gt[1], gt[2], pss[1], pss[2], pos[1], pos[2], pos[3], resp, MersenneTwister(ev))
         end
-        @test nacc_mismatch == 0             # GammaAcc identical (discrete exact, energy to rtol)
+        @test nacc_mismatch == 0             # GammaAcc + phscat identical (discrete exact, energy to rtol)
         @test !isempty(emit_full)
         @test length(emit_full) == length(emit_sing)
         @test all(((p, q),) -> ceq(p, q), zip(emit_full, emit_sing))   # same LORs through the core
@@ -946,6 +956,14 @@ end
         σ = deg2rad(fwhm) / 2.3548200450309493
         @test isapprox(rms, sqrt(2) * σ; rtol=0.05)        # 2-D Gaussian: <δ²> = 2σ²
         @test isapprox(rsum / N, 0.75 * 8.0; rtol=0.02)    # uniform fill: <r> = 3R/4 = 6.0
+
+        # emit_pair is heap-free per call — the acollinearity tilt routes through the tuple twin
+        # rotate_to_global_t (not the Vector-returning rotate_to_global), so the source draw doesn't
+        # reintroduce GC into the production MT loop. Per-annihilation allocation = the slope = 0.
+        _emit_alloc_run(src, MersenneTwister(9), 10)        # compile
+        b1000 = @allocated _emit_alloc_run(src, MersenneTwister(9), 1000)
+        b2000 = @allocated _emit_alloc_run(src, MersenneTwister(9), 2000)
+        @test (b2000 - b1000) == 0
     end
 
     @testset "detector response (smearing)" begin

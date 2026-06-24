@@ -85,14 +85,14 @@ function main()
 
     resp = Response(sigma_xyz, eres, emin, window > 0.0, window * energy_fwhm(511.0, eres))
     rng  = MersenneTwister(seed)
-    # The full stack carries no per-photon time, so (unlike the production singles) we stamp it
+    # The full stack carries no per-photon time, so (unlike the production singles) we compute it
     # here, once each gamma is complete: t = TOF(emit→first hit) + scintillation jitter (needs the
-    # gamma's total deposited energy, known only at the event boundary). `stamp_t!` sets it on each
-    # contained gamma just before finish_event!, which then reads g.t (timing-agnostic).
+    # gamma's total deposited energy, known only at the event boundary). `stamp_t` returns it for a
+    # contained gamma; the caller passes it (and the phantom-scatter flag) to finish_event!.
     crystal = String(cfg_get(cfg, "transport", "crystal_material", "CsI"))
     cryst   = load_material(joinpath(REPO, "data"), crystal)
-    stamp_t!(acc, ex, ey, ez) = acc.reached &&
-        (acc.t = tof_ns((ex, ey, ez), (acc.x, acc.y, acc.z)) + first_photon_jitter(cryst, acc.e * 1e-3, rng))
+    stamp_t(acc, ex, ey, ez) = acc.reached ?
+        tof_ns((ex, ey, ez), (acc.x, acc.y, acc.z)) + first_photon_jitter(cryst, acc.e * 1e-3, rng) : 0.0
 
     if mode == "det"
         ecut = resp.apply_window ? "window ±$(round(resp.win_half,digits=1)) keV" :
@@ -116,6 +116,7 @@ function main()
         ix0 = col["x0_mm"]; iy0 = col["y0_mm"]; iz0 = col["z0_mm"]
 
         g = (GammaAcc(), GammaAcc())     # gamma 1, gamma 2
+        gps = [false, false]             # per-gamma phantom-scatter flag (OR-ed over the rows)
         cur_ev = -1
         ev_x0 = 0.0; ev_y0 = 0.0; ev_z0 = 0.0     # this event's emission point
         n_ev = 0; n_pair = 0; n_true = 0
@@ -131,19 +132,20 @@ function main()
                 if ev != cur_ev
                     if cur_ev != -1
                         n_ev += 1
-                        stamp_t!(g[1], ev_x0, ev_y0, ev_z0); stamp_t!(g[2], ev_x0, ev_y0, ev_z0)
+                        t1 = stamp_t(g[1], ev_x0, ev_y0, ev_z0); t2 = stamp_t(g[2], ev_x0, ev_y0, ev_z0)
                         emitted, is_true = finish_event!((a...) -> write_lor_row(io, a...),
-                                                         cur_ev, g[1], g[2], ev_x0, ev_y0, ev_z0, resp, rng)
+                                                         cur_ev, g[1], g[2], t1, t2, gps[1], gps[2],
+                                                         ev_x0, ev_y0, ev_z0, resp, rng)
                         n_pair += emitted; n_true += (emitted && is_true)
                     end
-                    reset!(g[1]); reset!(g[2]); cur_ev = ev
+                    reset!(g[1]); reset!(g[2]); gps[1] = false; gps[2] = false; cur_ev = ev
                 end
                 ev_x0 = parse(Float64, f[ix0]); ev_y0 = parse(Float64, f[iy0]); ev_z0 = parse(Float64, f[iz0])
 
                 gi = parse(Int, f[ig])
                 (gi == 1 || gi == 2) || continue
                 acc = g[gi]
-                acc.phscat |= (f[iph] == "1")
+                gps[gi] |= (f[iph] == "1")
                 f[ivol] == "scanner" || continue
                 edep = parse(Float64, f[ide])
                 edep > 0.0 || continue                  # skip the scanner :escape row (e_dep=0)
@@ -152,9 +154,10 @@ function main()
             end
             if cur_ev != -1                              # the final event
                 n_ev += 1
-                stamp_t!(g[1], ev_x0, ev_y0, ev_z0); stamp_t!(g[2], ev_x0, ev_y0, ev_z0)
+                t1 = stamp_t(g[1], ev_x0, ev_y0, ev_z0); t2 = stamp_t(g[2], ev_x0, ev_y0, ev_z0)
                 emitted, is_true = finish_event!((a...) -> write_lor_row(io, a...),
-                                                 cur_ev, g[1], g[2], ev_x0, ev_y0, ev_z0, resp, rng)
+                                                 cur_ev, g[1], g[2], t1, t2, gps[1], gps[2],
+                                                 ev_x0, ev_y0, ev_z0, resp, rng)
                 n_pair += emitted; n_true += (emitted && is_true)
             end
         end

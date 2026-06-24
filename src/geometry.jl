@@ -100,7 +100,7 @@ point; `Inf` if the ray never meets the solid.
 """
 function distance_to_exit(pos, dir, c::Cylinder)::Float64
     _, t_far = _surface_crossings(pos, dir, c)
-    t_far > 0.0 ? t_far : Inf
+    t_far > 0.0 ? t_far : Inf      # t_far is already pre-filtered to > SURFACE_EPS in the helper
 end
 
 """

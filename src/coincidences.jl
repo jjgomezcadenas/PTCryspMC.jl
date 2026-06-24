@@ -23,22 +23,24 @@ end
 @inline pass_energy(e::Float64, r::Response) =
     (r.emin <= 0.0 || e >= r.emin) && (!r.apply_window || abs(e - 511.0) <= r.win_half)
 
-# Per-gamma accumulator, reset at each event boundary. The first scanner deposit fixes the LOR
-# point and block; later deposits add energy and, in a different block, flag overspill.
+# Per-gamma accumulator, reset at each event boundary. Holds ONLY what the fill_* calls
+# accumulate: the first scanner deposit fixes the LOR point and block; later deposits add energy
+# and, in a different block, flag overspill. The two non-accumulable per-gamma scalars — the
+# phantom-scatter flag and the timestamp `t` (which needs the gamma's *total* energy) — are NOT
+# stored here; the caller passes them to `finish_event!`. So there is no half-filled state: a
+# `GammaAcc` is valid the moment filling stops.
 mutable struct GammaAcc
     reached::Bool
     x::Float64; y::Float64; z::Float64
     iz::Int; iphi::Int
     e::Float64
     overspill::Bool          # a deposit landed in a second, different block
-    phscat::Bool
-    t::Float64               # photon time relative to its decay [ns] = TOF + jitter (stamped per single)
 end
-GammaAcc() = GammaAcc(false, 0.0, 0.0, 0.0, -1, -1, 0.0, false, false, 0.0)
+GammaAcc() = GammaAcc(false, 0.0, 0.0, 0.0, -1, -1, 0.0, false)
 
 function reset!(a::GammaAcc)
     a.reached = false; a.x = a.y = a.z = 0.0; a.iz = a.iphi = -1
-    a.e = 0.0; a.overspill = false; a.phscat = false; a.t = 0.0
+    a.e = 0.0; a.overspill = false
     a
 end
 
@@ -49,8 +51,9 @@ contained_one(a::GammaAcc) = a.reached && !a.overspill
     fill_full!(a, x, y, z, e_dep, iz, iphi)
 
 Accumulate one FULL-stack scanner deposit into `a`: the first deposit fixes the LOR point and
-block; a later deposit in a different block flags overspill; energy sums. (The phantom-scatter
-flag is per-photon and set by the caller from the row, not here.)
+block; a later deposit in a different block flags overspill; energy sums. The phantom-scatter
+flag and the timestamp are NOT set here — the caller tracks them per gamma (phscat OR-ed from the
+phantom rows; `t` stamped once the energy is complete) and passes them to `finish_event!`.
 """
 @inline function fill_full!(a::GammaAcc, x::Float64, y::Float64, z::Float64,
                             e_dep::Float64, iz::Int, iphi::Int)
@@ -64,16 +67,17 @@ flag is per-photon and set by the caller from the row, not here.)
 end
 
 """
-    fill_singles!(a, x, y, z, e, iz, iphi, nblocks, phscat, t_rel)
+    fill_singles!(a, x, y, z, e, iz, iphi, nblocks)
 
 Fill `a` directly from a SINGLES row — the row already is the formed hit (`reached`, LOR point,
-summed energy, `overspill = nblocks > 1`, phantom-scatter flag, and the per-photon time `t_rel`
-[ns] relative to its decay, stamped at singles generation).
+summed energy, `overspill = nblocks > 1`). The per-gamma phantom-scatter flag and timestamp
+`t_rel` are NOT stored on the accumulator; the caller carries them and passes them to
+`finish_event!`.
 """
 @inline function fill_singles!(a::GammaAcc, x::Float64, y::Float64, z::Float64, e::Float64,
-                               iz::Int, iphi::Int, nblocks::Int, phscat::Bool, t_rel::Float64)
+                               iz::Int, iphi::Int, nblocks::Int)
     a.reached = true; a.x = x; a.y = y; a.z = z; a.iz = iz; a.iphi = iphi; a.e = e
-    a.overspill = nblocks > 1; a.phscat = phscat; a.t = t_rel
+    a.overspill = nblocks > 1
     a
 end
 
@@ -83,20 +87,22 @@ const TRUTH_SCATTER = Int8(1)
 const TRUTH_RANDOM  = Int8(2)     # reserved for the Step-5 randoms pass
 
 """
-    finish_event!(emit, ev, g1, g2, x0, y0, z0, resp, rng) -> (emitted, is_true)
+    finish_event!(emit, ev, g1, g2, t1, t2, phscat1, phscat2, x0, y0, z0, resp, rng) -> (emitted, is_true)
 
 Finalise one annihilation's two gammas into a LOR: require both contained in one block, smear
 energy + position, apply the energy selection, and on acceptance call
-`emit(ev, x1,y1,z1,e1,t1,iz1,iphi1, x2,y2,z2,e2,t2,iz2,iphi2, dt, x0,y0,z0, truth)`,
-`truth` ∈ `TRUTH_TRUE`/`TRUTH_SCATTER` (smearing does not change the tag).
+`emit(ev, x1,y1,z1,e1,t1,iz1,iphi1, x2,y2,z2,e2,t2,iz2,iphi2, dt, x0,y0,z0, truth)`.
 
-Timing-agnostic: the per-gamma timestamps `t1,t2` are the gammas' `t` (relative to the decay =
-`TOF + jitter`), stamped upstream — at singles generation for the production stack, or by the
-caller for the full stack. `dt = |t1−t2| − TOF_diff` is the timing-resolution residual (`TOF_diff`
-= geometric time-of-flight difference from the common emission point). Returns whether a LOR was
-emitted and whether it is a true coincidence.
+The per-gamma timestamps `t1,t2` (relative to the decay = `TOF + jitter`) and phantom-scatter
+flags `phscat1,phscat2` are passed in, NOT carried on the accumulator — `GammaAcc` holds only what
+the `fill_*` calls accumulate (geometry + energy + overspill), so there is no half-filled state to
+forget. `truth = TRUTH_TRUE` unless either gamma scattered in the phantom (smearing does not change
+the tag). `dt = (t1−t2) − TOF_diff` is the TOF-corrected timing residual (the signed jitter
+difference, centred at 0; `TOF_diff` = the geometric time-of-flight difference from the common
+emission point). Returns whether a LOR was emitted and whether it is a true coincidence.
 """
 function finish_event!(emit, ev::Int, g1::GammaAcc, g2::GammaAcc,
+                       t1::Float64, t2::Float64, phscat1::Bool, phscat2::Bool,
                        x0::Float64, y0::Float64, z0::Float64, resp::Response, rng)
     (contained_one(g1) && contained_one(g2)) || return (false, false)
     e1 = smear_energy(g1.e, resp.eres, rng)
@@ -104,16 +110,18 @@ function finish_event!(emit, ev::Int, g1::GammaAcc, g2::GammaAcc,
     (pass_energy(e1, resp) && pass_energy(e2, resp)) || return (false, false)
     x1, y1, z1 = smear_position((g1.x, g1.y, g1.z), resp.sigma_xyz, rng)
     x2, y2, z2 = smear_position((g2.x, g2.y, g2.z), resp.sigma_xyz, rng)
-    is_true = !(g1.phscat || g2.phscat)
+    is_true = !(phscat1 || phscat2)
     truth = is_true ? TRUTH_TRUE : TRUTH_SCATTER
 
-    # Timestamps are the per-gamma `t` (relative to the decay), stamped upstream; DT subtracts the
-    # geometric TOF difference → the pure timing-resolution residual.
+    # The residual subtracts the (signed) geometric TOF difference from the (signed) timestamp
+    # difference, so the geometry cancels exactly and dt = (t1−t2) − TOF_diff is the pure jitter
+    # difference (signed, centred at 0). The abs must NOT wrap the timestamp difference — that would
+    # leave ~2·TOF_diff of geometry for half the pairs.
     emit_pt = (x0, y0, z0)
     tof_diff = tof_ns(emit_pt, (g1.x, g1.y, g1.z)) - tof_ns(emit_pt, (g2.x, g2.y, g2.z))
-    dt = abs(g1.t - g2.t) - tof_diff
+    dt = (t1 - t2) - tof_diff
 
-    emit(ev, x1, y1, z1, e1, g1.t, g1.iz, g1.iphi,
-             x2, y2, z2, e2, g2.t, g2.iz, g2.iphi, dt, x0, y0, z0, truth)
+    emit(ev, x1, y1, z1, e1, t1, g1.iz, g1.iphi,
+             x2, y2, z2, e2, t2, g2.iz, g2.iphi, dt, x0, y0, z0, truth)
     (true, is_true)
 end

@@ -80,8 +80,10 @@ function collect_csv!(r::RandSingles, act, path)
 end
 
 # Analytic random estimate: for a single rate S(t), expected cross-event pairs within τ ≈
-# τ·∫S²dt ≈ τ·Σ n_k²/Δt over time bins (independent-singles / Poisson expectation — exactly the
-# cross-event randoms, since same-event correlations are not part of S²).
+# τ·∫S²dt ≈ τ·Σ n_k²/Δt over time bins (the uniform-Poisson forward-pair count over all contained
+# singles). The same-event self-pairs it includes enter only at the negligible uniform within-τ
+# weight, not the actual ns-clustered weight the measured pass excludes — so it tracks the measured
+# cross-event randoms (ratio ≈ 1), but as an estimate, not an identity.
 function analytic_randoms(t_abs::Vector{Float64}, tau::Float64; nbins::Int=200)
     lo, hi = extrema(t_abs); span = hi - lo
     span > 0 || return 0.0

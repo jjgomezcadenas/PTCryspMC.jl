@@ -41,25 +41,29 @@ LorState() = LorState(-1, 0, 0.0, 0.0, 0.0, 0, 0)
 
 # Feed one singles row: close the previous event at a boundary (finish_event! → writer), then
 # fill the gamma's accumulator directly. `g` = (GammaAcc, GammaAcc).
-function feed_row!(st::LorState, g, w, resp, rng, ev::Int, gi::Int,
+# `g` = (GammaAcc, GammaAcc); `gt`/`gps` carry the per-gamma timestamp / phantom-scatter flag (not
+# stored on the accumulator) until finish_event! at the event boundary.
+function feed_row!(st::LorState, g, gt, gps, w, resp, rng, ev::Int, gi::Int,
                    x::Float64, y::Float64, z::Float64, e::Float64, iz::Int, iphi::Int,
                    nblocks::Int, phscat::Bool, t_rel::Float64, x0::Float64, y0::Float64, z0::Float64)
     if ev != st.cur_ev
         if st.cur_ev != -1
             emitted, is_true = finish_event!((a...) -> push_coincidence!(w, a...),
-                                             st.cur_ev, g[1], g[2], st.ev_x0, st.ev_y0, st.ev_z0, resp, rng)
+                                             st.cur_ev, g[1], g[2], gt[1], gt[2], gps[1], gps[2],
+                                             st.ev_x0, st.ev_y0, st.ev_z0, resp, rng)
             st.n_pair += emitted; st.n_true += (emitted && is_true)
         end
-        reset!(g[1]); reset!(g[2]); st.cur_ev = ev
+        reset!(g[1]); reset!(g[2]); gt[1] = 0.0; gt[2] = 0.0; gps[1] = false; gps[2] = false; st.cur_ev = ev
     end
     ev > st.maxev && (st.maxev = ev)
     st.ev_x0 = x0; st.ev_y0 = y0; st.ev_z0 = z0
     (gi == 1 || gi == 2) || return
-    fill_singles!(g[gi], x, y, z, e, iz, iphi, nblocks, phscat, t_rel)
+    fill_singles!(g[gi], x, y, z, e, iz, iphi, nblocks)
+    gt[gi] = t_rel; gps[gi] = phscat
     return
 end
 
-function feed_singles_csv!(st, g, w, resp, rng, path)
+function feed_singles_csv!(st, g, gt, gps, w, resp, rng, path)
     open(path, "r") do io
         header = split(strip(readline(io)), ',')
         col = Dict(String(h) => i for (i, h) in enumerate(header))
@@ -73,7 +77,7 @@ function feed_singles_csv!(st, g, w, resp, rng, path)
         for line in eachline(io)
             isempty(line) && continue
             f = split(line, ',')
-            feed_row!(st, g, w, resp, rng, parse(Int, f[ie]), parse(Int, f[ig]),
+            feed_row!(st, g, gt, gps, w, resp, rng, parse(Int, f[ie]), parse(Int, f[ig]),
                       parse(Float64, f[ix]), parse(Float64, f[iy]), parse(Float64, f[iz]),
                       parse(Float64, f[iee]), parse(Int, f[iiz]), parse(Int, f[iip]),
                       parse(Int, f[inb]), f[iph] == "1", parse(Float64, f[it]),
@@ -82,10 +86,10 @@ function feed_singles_csv!(st, g, w, resp, rng, path)
     end
 end
 
-function feed_singles_hdf5!(st, g, w, resp, rng, path)
+function feed_singles_hdf5!(st, g, gt, gps, w, resp, rng, path)
     foreach_singles_hdf5(path) do b
         for i in 1:length(b)
-            feed_row!(st, g, w, resp, rng, Int(b.event[i]), Int(b.gamma[i]),
+            feed_row!(st, g, gt, gps, w, resp, rng, Int(b.event[i]), Int(b.gamma[i]),
                       decode_xyz(b.x[i]), decode_xyz(b.y[i]), decode_xyz(b.z[i]), decode_e(b.e[i]),
                       Int(b.iz[i]), Int(b.iphi[i]), Int(b.nblocks[i]), b.phantom_scatter[i] == 1,
                       Float64(b.t_rel[i]),
@@ -131,13 +135,15 @@ function main()
     w = CoincidenceWriter(out, meta)
     st = LorState()
     g = (GammaAcc(), GammaAcc())
+    gt = [0.0, 0.0]; gps = [false, false]            # per-gamma timestamp / phantom-scatter flag
     rng = MersenneTwister(seed)
 
-    ishdf5 ? feed_singles_hdf5!(st, g, w, resp, rng, singles) :
-             feed_singles_csv!(st, g, w, resp, rng, singles)
+    ishdf5 ? feed_singles_hdf5!(st, g, gt, gps, w, resp, rng, singles) :
+             feed_singles_csv!(st, g, gt, gps, w, resp, rng, singles)
     if st.cur_ev != -1                                   # the final event
         emitted, is_true = finish_event!((a...) -> push_coincidence!(w, a...),
-                                         st.cur_ev, g[1], g[2], st.ev_x0, st.ev_y0, st.ev_z0, resp, rng)
+                                         st.cur_ev, g[1], g[2], gt[1], gt[2], gps[1], gps[2],
+                                         st.ev_x0, st.ev_y0, st.ev_z0, resp, rng)
         st.n_pair += emitted; st.n_true += (emitted && is_true)
     end
     # Total annihilations for the acceptance denominator (the singles stack has no rows for

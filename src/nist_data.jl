@@ -58,9 +58,8 @@ function interp_loglog_prelogged(lx::Float64, log_xp::Vector{Float64},
     hi = lo + 1
     @inbounds fp_lo = fp[lo]
     @inbounds fp_hi = fp[hi]
-    (fp_lo <= 0.0 && fp_hi <= 0.0) && return 0.0
-    fp_lo <= 0.0 && return 0.0
-    fp_hi <= 0.0 && return fp_lo
+    fp_lo <= 0.0 && return 0.0                 # below-edge zero (also covers the both-zero case)
+    fp_hi <= 0.0 && return fp_lo               # above-edge zero (e.g. pair below threshold) → flat
     @inbounds begin
         t = (lx - log_xp[lo]) / (log_xp[hi] - log_xp[lo])
         exp(log_fp[lo] + t * (log_fp[hi] - log_fp[lo]))
