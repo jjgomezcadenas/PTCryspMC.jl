@@ -104,6 +104,26 @@ singles_columns(b::SinglesBuffer) = (
     ("iz", b.iz), ("iphi", b.iphi), ("nblocks", b.nblocks), ("n_scatter", b.n_scatter),
     ("x0_mm", b.x0), ("y0_mm", b.y0), ("z0_mm", b.z0), ("t_rel_ns", b.t_rel))
 
+# Per-column (unit, description) for the generated schema doc (scripts/gen_schema.jl). Keep one
+# entry per `singles_columns` name — a test fails if a column here is undocumented. Single source
+# of truth: names/types come from `singles_columns`/the struct, units/meaning from here.
+const singles_doc = Dict{String,Tuple{String,String}}(
+    "event_number" => ("",    "annihilation (decay) index"),
+    "gamma"        => ("",     "which photon of the back-to-back pair (1 or 2)"),
+    "x_mm"         => ("mm",   "first crystal interaction point (the LOR point), x"),
+    "y_mm"         => ("mm",   "first crystal interaction point, y"),
+    "z_mm"         => ("mm",   "first crystal interaction point, z"),
+    "e_keV"        => ("keV",  "summed energy in the block (truth, unsmeared)"),
+    "iz"           => ("",     "wheel (z) block index"),
+    "iphi"         => ("",     "azimuthal (φ) block index"),
+    "nblocks"      => ("",     "distinct blocks touched (1 = contained, >1 = overspill)"),
+    "n_scatter"    => ("",     "phantom-scatter count (0 clean, 1 single, ≥2 multiple)"),
+    "x0_mm"        => ("mm",   "annihilation (emission) point, x"),
+    "y0_mm"        => ("mm",   "annihilation point, y"),
+    "z0_mm"        => ("mm",   "annihilation point, z"),
+    "t_rel_ns"     => ("ns",   "photon time relative to its decay = TOF + scintillation jitter"),
+)
+
 "Append one detected photon (the `navigate_single_photons` summary `s` + emission point `pos0`, both cm; `t_rel` [ns]), quantized."
 function push_single!(b::SinglesBuffer, ev::Integer, g::Integer, s, pos0, t_rel::Real)
     push!(b.event, Int32(ev)); push!(b.gamma, Int8(g))

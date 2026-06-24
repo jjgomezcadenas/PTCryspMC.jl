@@ -100,6 +100,12 @@ LOR separates single from multiple scatter), the timing residual, and a truth fl
 random). The HDF5 root attributes carry the provenance: detector config, geometry, energy and time
 windows, the run tag, and the seed.
 
+The full column schema for every output file (singles + LORs, column · type · unit · meaning, the
+quantization, the truth code, the provenance attrs) is **`docs/SCHEMA.md`**, generated from the code
+by `scripts/gen_schema.jl` (column names/types introspected from `singles_columns`/`coinc_columns`,
+units/meaning from the co-located `singles_doc`/`coinc_doc` maps). A test fails if it drifts — so
+regenerate it after any schema change rather than hand-editing.
+
 ## Code layout (`src/`)
 
 The photon transport and geometry are photon-only:

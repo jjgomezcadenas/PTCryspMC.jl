@@ -1017,4 +1017,18 @@ end
         @test run_tag(read_config(p2), p2) == "sphere_water_csi"
         rm(p2)
     end
+
+    @testset "schema doc in sync with the code" begin
+        include(joinpath(@__DIR__, "..", "scripts", "gen_schema.jl"))   # defines schema_markdown + SCHEMA_PATH (no write when included)
+        # Single source of truth: every column must have a doc entry (a new column can't be undocumented).
+        for (name, _) in singles_columns(SinglesBuffer())
+            @test haskey(PTCryspMC.singles_doc, name)
+        end
+        for (name, _) in coinc_columns(CoincidenceBuffer())
+            @test haskey(PTCryspMC.coinc_doc, name)
+        end
+        # docs/SCHEMA.md must match a fresh generation — regenerate via scripts/gen_schema.jl on drift.
+        @test isfile(SCHEMA_PATH)
+        @test schema_markdown() == read(SCHEMA_PATH, String)
+    end
 end

@@ -41,6 +41,34 @@ coinc_columns(b::CoincidenceBuffer) = (
 
 Base.empty!(b::CoincidenceBuffer) = (foreach(c -> empty!(c[2]), coinc_columns(b)); b)
 
+# Per-column (unit, description) for the generated schema doc (scripts/gen_schema.jl). One entry
+# per `coinc_columns` name — a test fails if a column is undocumented. Names/types come from
+# `coinc_columns`/the struct, units/meaning from here.
+const coinc_doc = Dict{String,Tuple{String,String}}(
+    "event"  => ("",    "annihilation index (shared by the two gammas; a cross-decay pair for randoms)"),
+    "truth"  => ("",     "0 = true, 1 = scatter, 2 = random"),
+    "x1_mm"  => ("mm",   "gamma 1 hit position (smeared in lors_det), x"),
+    "y1_mm"  => ("mm",   "gamma 1 hit position, y"),
+    "z1_mm"  => ("mm",   "gamma 1 hit position, z"),
+    "e1_keV" => ("keV",  "gamma 1 energy (smeared in lors_det)"),
+    "t1_ns"  => ("ns",   "gamma 1 time relative to the decay"),
+    "iz1"    => ("",     "gamma 1 wheel (z) block index"),
+    "iphi1"  => ("",     "gamma 1 azimuthal (φ) block index"),
+    "nscat1" => ("",     "gamma 1 phantom-scatter count (0 clean, 1 single, ≥2 multiple)"),
+    "x2_mm"  => ("mm",   "gamma 2 hit position, x"),
+    "y2_mm"  => ("mm",   "gamma 2 hit position, y"),
+    "z2_mm"  => ("mm",   "gamma 2 hit position, z"),
+    "e2_keV" => ("keV",  "gamma 2 energy"),
+    "t2_ns"  => ("ns",   "gamma 2 time relative to the decay"),
+    "iz2"    => ("",     "gamma 2 wheel (z) block index"),
+    "iphi2"  => ("",     "gamma 2 azimuthal (φ) block index"),
+    "nscat2" => ("",     "gamma 2 phantom-scatter count"),
+    "dt_ns"  => ("ns",   "timing residual (t1−t2) − TOF_diff; NaN for randoms"),
+    "x0_mm"  => ("mm",   "annihilation point (gamma 1's decay for randoms), x"),
+    "y0_mm"  => ("mm",   "annihilation point, y"),
+    "z0_mm"  => ("mm",   "annihilation point, z"),
+)
+
 "Append one accepted LOR (the `finish_event!` emit args), quantized."
 function push_coincidence!(b::CoincidenceBuffer, ev, x1, y1, z1, e1, t1, iz1, iphi1, nscat1,
                            x2, y2, z2, e2, t2, iz2, iphi2, nscat2, dt, x0, y0, z0, truth)
