@@ -167,7 +167,7 @@ function main()
         tpct = round(100 * st.n_true / nlor, digits=1)
         println("  acceptance: $(round(100*nlor/max(denom,1), digits=1))% of $nevents annihilations")
         println("  truth split: $(st.n_true) true ($tpct%), $(nlor - st.n_true) scatter ($(round(100-tpct, digits=1))%)")
-        println("  (truth ∈ {true,scatter}; random reserved for Step 5; has_randoms=false)")
+        println("  (truth ∈ {true,scatter}; randoms added later by reco_lors; has_randoms=false)")
     end
 end
 

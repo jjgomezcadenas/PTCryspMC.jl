@@ -84,7 +84,7 @@ end
 # Truth codes carried in the LOR list.
 const TRUTH_TRUE    = Int8(0)
 const TRUTH_SCATTER = Int8(1)
-const TRUTH_RANDOM  = Int8(2)     # reserved for the Step-5 randoms pass
+const TRUTH_RANDOM  = Int8(2)     # set by the randoms pass (build_randoms → reco_lors)
 
 """
     finish_event!(emit, ev, g1, g2, t1, t2, phscat1, phscat2, x0, y0, z0, resp, rng) -> (emitted, is_true)

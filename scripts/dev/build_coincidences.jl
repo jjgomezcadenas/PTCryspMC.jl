@@ -17,8 +17,8 @@
 #
 # Per gamma the record carries the first-interaction point (the LOR point, smeared in
 # detector mode), the summed energy in that crystal (smeared), the block (iz,iphi), and a
-# time t — a DUMMY 0.0 (the simulation has no timing yet; real times come from the randoms
-# pass, Step 5). The true emission point (x0,y0,z0) is carried through for source
+# time t — a DUMMY 0.0 (this dev chain carries no timing; the production chain stamps the
+# per-photon time t_rel in the singles). The true emission point (x0,y0,z0) is carried through for source
 # validation. The pair is tagged `true` if neither gamma scattered in the phantom, else
 # `scatter` (smearing does not change the truth tag).
 #
