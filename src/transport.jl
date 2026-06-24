@@ -1,7 +1,7 @@
 # Photon-only transport through a single cylinder, recording the interaction stack.
 # We follow only the photon: at a Compton interaction the recoil energy is deposited
 # locally and the photon continues; photoelectric deposits the full energy and ends
-# the history. (See docs/pet_simulation.tex.)
+# the history. (See docs/PTCryspMC_phys.tex.)
 
 "One recorded interaction of a photon history. Positions [cm], energies [MeV]."
 struct Interaction

@@ -2,6 +2,11 @@
 
 Orientation for any Claude Code session on this repo.
 
+## Working style
+
+Ask questions plainly, in prose — not as multiple-choice "shopping list" menus (avoid the
+AskUserQuestion option-list format). State what you need to know directly.
+
 ## Purpose
 
 Simulate how a PET scanner detects the positron activity left by a proton field, and
@@ -16,15 +21,21 @@ may live in its own repo. It is not described here.
 
 ## The guide
 
-`docs/pet_simulation.tex` explains the simulation: the idea, the input photons, how the
-fast Monte Carlo works (interactions, geometry, transport), and what it produces. Read it
-first. This file records the decisions, parameters and build notes, and refers to the
-guide for the method.
+Two LaTeX manuals in `docs/` describe the simulator. `PTCryspMC_phys.tex` is the **engine** —
+the physics, geometry, transport, and detector response (shared by both modes).
+`PTCryspMC_app.tex` is the **application** — the two modes the engine is driven by:
+**phantom-based** (a geometric phantom filled with a uniform source: the validated, currently
+running mode) and **proton-beam-based** (the positron activity a proton dose leaves, via a
+`ptcryspg4` scenario: the eventual target, not yet built). Read these for the method; this file
+records the decisions, parameters, and build notes.
 
 ## Input — a scenario from ptcrysp-scenarios
 
-Clone `ptcrysp-scenarios` and point the code at one scenario directory by name (config or
-env var; scenarios are append-only, so the name is the version). A scenario carries:
+This is the **proton-beam mode** — the eventual target, not yet implemented. What currently runs
+and is validated is the **phantom mode** (`runs/*.toml` with a geometric phantom + uniform source;
+see `docs/PTCryspMC_app.tex`). When built, the scenario will be the source for the proton-beam mode:
+clone `ptcrysp-scenarios` and point the code at one scenario directory by name (config or env var;
+scenarios are append-only, so the name is the version). A scenario carries:
 
 - `emitters.csv` — annihilation points + isotope per emitter (the spatial source).
 - `run_meta.csv` — normalization (target dose, Np per Gy, …).
@@ -35,7 +46,7 @@ Stamp the scenario name into every output.
 
 ## How the simulation works (decisions)
 
-A fast, photon-only Monte Carlo. Full method in `docs/pet_simulation.tex`; the decisions:
+A fast, photon-only Monte Carlo. Full method in `docs/PTCryspMC_phys.tex`; the decisions:
 
 - **Input photons.** Draw N_j annihilation points per isotope from the scenario (with
   replacement); each emits two back-to-back 511 keV photons with ~0.5° FWHM acollinearity.

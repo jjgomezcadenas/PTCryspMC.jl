@@ -1,7 +1,7 @@
 # Project status — PTCryspMC.jl
 
 A one-page snapshot of where the simulation stands, plus the **deferred-work register**.
-Companion docs: the *method* is in `docs/pet_simulation.tex` and `docs/overview.tex`; the
+Companion docs: the *method* is in `docs/PTCryspMC_phys.tex` (engine) and `docs/PTCryspMC_app.tex` (modes); the
 decisions + code layout in `CLAUDE.md`; the full chronological build log in `dev/dev_steps.md`.
 
 _Last updated: 2026-06-24._
@@ -44,8 +44,8 @@ and the pixelated detectors (LYSO, standard BGO) are still to add.
 
 ## Documentation
 
-- `docs/pet_simulation.tex` — the method (detailed).
-- `docs/overview.tex` — the project overview (physics + the geometry/source/detector choices).
+- `docs/PTCryspMC_phys.tex` — the engine (physics, geometry, transport, detector response).
+- `docs/PTCryspMC_app.tex` — the application (phantom-based and proton-beam-based modes).
 - Docstrings + a Literate/Documenter web doc-site — **planned (the next doc task), not built.**
 
 ## Deferred work & known nits

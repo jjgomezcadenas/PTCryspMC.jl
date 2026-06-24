@@ -250,7 +250,7 @@ end
 
 The up-to-two parameter intervals [s1,e1], [s2,e2] where the ray lies in the shell
 wall, S = (outer ∩ z-slab) ∖ bore. Absent pieces are returned as (Inf, -Inf). See
-docs/navigation.tex. Allocation-free hot path.
+docs/PTCryspMC_phys.tex. Allocation-free hot path.
 """
 @inline function _shell_intervals(pos, dir, cs::CylShell)
     a = dir[1]^2 + dir[2]^2
@@ -355,7 +355,7 @@ distance_to_entry(pos, dir, pv::PhysicalVolume)::Float64 =
 The detector ring: a placed `CylShell` physical volume plus its readout
 segmentation into `n_phi` azimuthal blocks × `n_z` axial wheels. A block is one
 (φ, z) cell spanning the full wall depth (the radial depth is the DOI). See
-docs/navigation.tex.
+docs/PTCryspMC_phys.tex.
 """
 struct Scanner
     volume::PhysicalVolume{CylShell}   # Deferred (dev/status.md #2): name collides with volume(); rename → pvol/shell

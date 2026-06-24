@@ -1,7 +1,7 @@
 # Detector response: how a truth hit is blurred into a measurement. The energy
 # resolution is FWHM(E) = a·√(511 keV / E), with `a` the fractional FWHM at 511 keV
 # (5% pure CsI, 7% CsI(Tl), 10% BGO); position is a Gaussian σ_xyz that includes the DOI.
-# (Times come later, with the randoms pass.) See docs/pet_simulation.tex.
+# (Times come later, with the randoms pass.) See docs/PTCryspMC_phys.tex.
 
 const FWHM_TO_SIGMA = 2.3548200450309493        # 2√(2 ln 2)
 
