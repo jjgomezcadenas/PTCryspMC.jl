@@ -101,12 +101,18 @@ end
 Macroscopic cross sections [cm^-1] for Compton (incoherent), photoelectric, and
 pair: Sigma = (mu/rho)(E) * density. Pair is last as it is zero below the 1.022 MeV
 threshold (2·m_e·c²), so it is always zero for the ≤ 511 keV photons here. Vacuum returns zeros.
+
+Energies OUTSIDE the XCOM grid are EXTRAPOLATED, not clamped: `clamp(searchsortedlast, 1, n-1)`
+pins the bracket to the end interval and `interp_loglog_prelogged` evaluates the log-log line with
+`t < 0` / `t > 1`. Fine for the 511 keV photons here within the 10 keV–10 MeV table, but a
+multiply-Compton-degraded photon can fall below the 10 keV floor where photoelectric is steep and
+the extrapolation is least trustworthy. Add a clamp here if low-energy tails ever matter.
 """
 function sigma_macro(mat::Material, E_MeV::Float64)::Tuple{Float64,Float64,Float64}
     isempty(mat.E) && return (0.0, 0.0, 0.0)
     lx = log(E_MeV)
     n = length(mat.E)
-    lo = clamp(searchsortedlast(mat.E, E_MeV), 1, n - 1)
+    lo = clamp(searchsortedlast(mat.E, E_MeV), 1, n - 1)   # end-interval bracket → extrapolates off-grid
     ρ = mat.density
     ΣC  = interp_loglog_prelogged(lx, mat.log_E, mat.log_incoherent,    mat.incoherent,    lo) * ρ
     ΣPh = interp_loglog_prelogged(lx, mat.log_E, mat.log_photoelectric, mat.photoelectric, lo) * ρ

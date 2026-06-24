@@ -1,0 +1,424 @@
+\documentclass[11pt]{article}
+
+\usepackage[a4paper,margin=2.4cm]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{siunitx}
+\usepackage{xcolor}
+\usepackage[hidelinks]{hyperref}
+\usepackage{enumitem}
+
+\title{\texttt{PTCryspMC.jl}: a fast photon-only Monte Carlo\\
+\large Project overview --- what it does and why}
+\author{}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+\noindent
+\texttt{PTCryspMC.jl} simulates how a PET scanner records the positron activity left by a
+proton field. It reads a frozen \emph{scenario} (the annihilation points and per-isotope
+decay budget produced upstream) and, for a given detector, writes the list of coincidences
+the scanner would measure. It is a fast, photon-only Monte Carlo: it transports the two
+\SI{511}{keV} photons of each annihilation through an analytic phantom and a segmented
+crystal ring, never the protons that created them. This document is a high-level companion
+to the method guide \texttt{docs/pet\_simulation.tex}: it describes \emph{what} the project
+does and \emph{why} each modelling choice was made, rather than re-deriving the detailed
+method. The numbers it quotes are read from the code and data tables; where a parameter is
+a placeholder this is stated.
+\end{abstract}
+
+\tableofcontents
+
+% =====================================================================
+\section{Motivation and scope}
+\label{sec:motivation}
+
+\paragraph{The physics question.}
+A therapeutic proton beam stops inside the patient at a depth set by its energy --- the
+Bragg peak --- and along its track it activates the tissue, creating short-lived
+positron emitters ($^{15}$O, $^{11}$C, $^{13}$N, \dots). Those positrons annihilate and
+emit pairs of \SI{511}{keV} photons, so a PET scanner placed around the patient sees a
+faint image of where the beam deposited dose. Comparing that image with the planned range
+is a way to verify, \emph{in vivo}, that the protons stopped where intended. The precision
+of that verification depends on the detector: its spatial, energy and timing resolution all
+shape the coincidence list a scanner can record.
+
+\paragraph{What this repository does.}
+\texttt{PTCryspMC.jl} answers one question only: \emph{given a fixed activity distribution
+and a candidate detector, what list of coincidences does the scanner record?} It reads a
+scenario (Sec.~\ref{sec:scenario}) and produces, per detector, a list-mode coincidence
+(line-of-response, LOR) file --- two \mbox{3-D} hit positions, two energies, two timestamps
+and a truth label per event. The simulation is run once per detector, and every detector
+reads the \emph{identical} scenario, so any difference in the output comes from the detector
+alone. This makes it a controlled bench for comparing scanners.
+
+\paragraph{What it does not do.}
+It does not transport protons, and it does not compute the activation: the annihilation
+points and their per-isotope counts are inputs, frozen upstream
+(\texttt{ptcryspg4}/\texttt{ptcrysp-scenarios}). The positron range is already folded into
+the annihilation points, so the emission points need no further treatment. The downstream
+analysis that consumes the coincidence list --- range precision, detector comparison, image
+reconstruction --- is separate, deferred, and lives elsewhere. The repository is, in short,
+the \emph{measurement} stage and nothing else.
+
+\paragraph{Why a fast, photon-only Monte Carlo.}
+A \SI{1}{Gy} in-room field produces of order $10^{8}$ decays. A full
+Geant4-style simulation tracking every secondary electron and every scintillation photon
+would be far too slow to run that many decays for each of several candidate scanners. The
+key realisation is that, for the PET measurement, almost all of the detector response is
+captured by following only the two annihilation photons: the electrons they liberate travel
+sub-millimetre at \SI{511}{keV} and so deposit their energy essentially at the point of
+interaction, and the scintillation light --- while it sets the timing and energy resolution
+--- can be folded in as an analytic response rather than tracked photon by photon. Dropping
+electron transport and optical tracking is what makes $10^{8}$ decays per detector
+affordable, and it is the central design choice of the whole project.
+
+% =====================================================================
+\section{Input: a frozen scenario}
+\label{sec:scenario}
+
+A scenario is a versioned, append-only directory read from \texttt{ptcrysp-scenarios}. It
+carries:
+\begin{itemize}[nosep]
+\item \texttt{emitters.csv} --- the annihilation points and the isotope of each emitter:
+the \emph{spatial} source.
+\item \texttt{sampling\_budget\_<scenario>.csv} --- the measured number of decays $N_j$ per
+isotope: the \emph{normalisation}.
+\item \texttt{run\_meta.csv}, \texttt{isotopes.csv}, \texttt{SCHEMA.md} --- the dose/timing
+normalisation, the isotope codes, and the column meanings.
+\end{itemize}
+The photon set is built by drawing $N_j$ annihilation points per isotope from the scenario
+\emph{with replacement}: the points supply the spatial distribution of the activity, and
+$N_j$ supplies the count. Because scenarios are append-only, the scenario name is its
+version, and it is stamped into every output file as provenance.
+
+% =====================================================================
+\section{The physics modelled}
+\label{sec:physics}
+
+\subsection{Annihilation: the back-to-back pair}
+Each drawn point emits two \SI{511}{keV} photons in a random (isotropic) direction. They
+are \emph{not} exactly anti-parallel: the residual momentum of the electron--positron pair
+gives a small \emph{acollinearity}. The code (\texttt{src/source.jl}) draws the first
+direction isotropically and tilts the partner of $-\mathbf{d}_1$ by a small \mbox{2-D}
+Gaussian in its transverse plane, with each projected angle having a full width at half
+maximum (FWHM) of about $0.5^\circ$:
+\begin{equation}
+\sigma_\theta = \frac{\mathrm{FWHM}}{2\sqrt{2\ln 2}}, \qquad
+\mathrm{FWHM} \approx 0.5^\circ .
+\end{equation}
+This blurs the line of response by a small, detector-independent amount and is the
+irreducible floor on PET spatial resolution from the source itself.
+
+\subsection{Photon interactions}
+A photon is transported until it is absorbed or leaves the setup. The distance to the next
+interaction is drawn from the material's total macroscopic cross section, and at the
+interaction point the process is chosen in proportion to the partial cross sections
+(\texttt{src/sampling.jl}). At \SI{511}{keV} two processes matter:
+\begin{itemize}[nosep]
+\item \textbf{Compton scattering} --- the photon transfers energy to an electron and
+continues with reduced energy in a new direction, both drawn from the Klein--Nishina
+distribution (sampled by the Butcher--Messel composition/rejection method, as in Geant4).
+The electron recoil $E-E'$ is deposited at the interaction point.
+\item \textbf{Photoelectric absorption} --- the photon is absorbed and its full energy
+deposited at the interaction point.
+\end{itemize}
+Pair production is carried in the cross-section machinery but is \emph{closed at}
+\SI{511}{keV} (below the $2m_ec^2 = \SI{1.022}{MeV}$ threshold), so it never fires for the
+annihilation photons. Cross sections come from NIST XCOM mass-attenuation tables, tabulated
+per compound over \SIrange{10}{10000}{keV} and interpolated log--log
+(\texttt{src/nist\_data.jl}, \texttt{src/materials.jl}). Because the table is per-compound,
+the macroscopic cross section is simply $\Sigma = (\mu/\rho)\,\rho$ [\si{cm^{-1}}], with no
+per-element mixing bookkeeping.
+
+\subsection{The phantom and the patient-scatter background}
+The patient is treated as a cylinder of \emph{water} (\SI{8}{cm} radius and half-length in
+the default geometry). Water is a good stand-in for soft tissue at \SI{511}{keV}, and its
+Compton scattering \emph{is} the patient-scatter background: a fraction of the photons
+Compton-scatter in the phantom before reaching the ring, degrading their direction and
+energy. A coincidence in which one or both photons scattered in the phantom is recorded but
+labelled \texttt{scatter}, so the background is preserved in the output rather than removed.
+Treating the phantom as a simple analytic solid (rather than a voxelised body) is
+deliberate: the scenario already fixes \emph{where} the activity is, and a homogeneous water
+cylinder reproduces the dominant attenuation and scatter physics at a fraction of the cost.
+
+% =====================================================================
+\section{Geometry}
+\label{sec:geometry}
+
+The geometry is a Geant4-style hierarchy (\texttt{src/geometry.jl}): a pure \texttt{Solid}
+(shape in its own local frame), a \texttt{LogicalVolume} (solid $+$ material) and a
+\texttt{PhysicalVolume} (a logical volume placed in the world frame). The available solids
+are \texttt{Cylinder}, \texttt{Box}, \texttt{Sphere} and \texttt{CylShell} (a hollow
+cylinder); each implements the ray interface \texttt{is\_inside},
+\texttt{distance\_to\_entry}, \texttt{distance\_to\_exit} in closed form, allocation-free
+on the transport hot path. The world is a large non-interacting cylinder of air enclosing
+the phantom (a placed \texttt{Cylinder}) and the detector ring.
+
+\subsection{The crystal ring as a structured block/wheel grid}
+The detector is a ring of crystal, modelled as a \emph{single} cylindrical shell
+(\texttt{CylShell}) rather than a thousand separate volumes. Its readout segmentation ---
+the physical blocks a real scanner reads out --- is imposed as a \emph{structured grid} on
+the shell: $n_\varphi$ azimuthal sectors (``blocks'') $\times$ $n_z$ axial sectors
+(``wheels''), each cell spanning the full wall depth (\texttt{Scanner} in
+\texttt{src/geometry.jl}). The default ring is $n_\varphi=48$, $n_z=20$ (\num{960} blocks),
+inner radius \SI{38.7}{cm}, wall thickness \SI{3.7}{cm} (the radial depth = the depth of
+interaction, DOI), half-length \SI{51.2}{cm}.
+
+The block a point belongs to is fixed by simple arithmetic on its $\varphi$ and $z$,
+\begin{equation}
+i_\varphi = \left\lfloor \frac{\operatorname{mod}(\operatorname{atan2}(y,x),\,2\pi)}{2\pi/n_\varphi}\right\rfloor,
+\qquad
+i_z = \left\lfloor \frac{z+H}{2H/n_z}\right\rfloor ,
+\end{equation}
+and the distance to the next boundary is the nearest of the inner/outer radius, the next
+$\varphi$ plane and the next $z$ plane --- all closed-form.
+
+\paragraph{Why a structured grid.}
+Stepping a photon through the segmented ring costs the same as through a single shell,
+\emph{whatever the number of blocks}: there is no list of volumes to test, no acceleration
+structure, just arithmetic. The block index is $O(1)$ and the boundary distances are
+analytic. This is what lets the geometry scale to fine segmentation without a transport
+penalty, and it is the reason the ring is one shell with a grid rather than many solids. The
+small dead gaps between physical blocks are skipped for now (the crystal is treated as
+continuous and each deposit is tagged with its block); they can be re-introduced later as
+thin non-interacting layers once the plane-crossing distances are added.
+
+% =====================================================================
+\section{The fast Monte Carlo}
+\label{sec:mc}
+
+\subsection{One annihilation at a time}
+The measured rate is modest and spread thin. For a \SI{1}{Gy} field the $\sim 10^{8}$
+decays average $\sim 10^{5}/$s over the acquisition, front-loaded (peaking near
+$7\times10^{5}/$s and falling with $^{15}$O's \SI{122}{s} half-life). Spread over the
+$\sim 10^{3}$ crystal blocks, each block sees $\sim 10^{2}/$s, so even with a slow
+($\sim\SI{1}{\micro s}$) crystal the chance of two signals overlapping in one block is
+$\sim 10^{-4}$. Pileup is therefore negligible, and the simulation processes annihilations
+\emph{independently}, one photon pair at a time. (The one exception --- accidental
+coincidences across different decays --- cannot occur within a single event and is added in
+a separate randoms pass, Sec.~\ref{sec:timing}.)
+
+\subsection{Transport across volumes}
+Each photon is carried across the volumes by the navigator (\texttt{src/navigator.jl}):
+phantom (water) $\to$ air gap $\to$ ring (crystal), switching the material at each boundary.
+Inside an absorbing volume the photon is advanced by the smaller of the distance to the next
+boundary and the free path sampled from the cross section
+(\texttt{propagate\_photon}, \texttt{src/transport.jl}); the non-interacting air mother is
+never stepped, only skipped to the next interface. The production path uses an
+allocation-free single-photon navigator for throughput on $10^{8}$-decay runs. Every
+recorded interaction is tagged with its volume and, in the ring, its readout block.
+
+\subsection{In the crystal: overspill and containment}
+Everything that can happen in the crystal comes out of following the photon, with no special
+cases:
+\begin{itemize}[nosep]
+\item it deposits its full energy in one block (full-energy event);
+\item it Compton-scatters and the scattered photon crosses into a \emph{neighbouring} block
+before being absorbed --- an \emph{overspill}, leaving energy in two blocks;
+\item the scattered photon escapes the crystal altogether (out the back, the axial end, or
+back toward the patient) --- only part of the \SI{511}{keV} is recorded (non-containment);
+\item it Compton-scatters more than once within the same block.
+\end{itemize}
+The transport produces all of these by construction; the bookkeeping below turns the
+deposits into hits.
+
+\subsection{Hits: the first-interaction LOR point}
+The deposits in one block are reduced to a hit (\texttt{src/coincidences.jl}): the energy is
+their \emph{sum}, the time is the \emph{earliest}, and the position is the \emph{first}
+interaction point --- not the energy-weighted centroid. The first interaction is the point
+the line of response should pass through, and the quantity a reconstruction aims to recover
+(in a monolithic crystal a CNN can separate one- from two-Compton events to find it). The
+full per-interaction truth is kept in the singles record so that one- versus two-Compton
+separation can be studied downstream.
+
+% =====================================================================
+\section{Detector response}
+\label{sec:response}
+
+The hit is then blurred by the detector resolution (\texttt{src/detector.jl}), and this is
+where candidate scanners differ.
+
+\paragraph{Position.}
+Each hit coordinate (including the DOI) is smeared by a Gaussian of width
+$\sigma_{xyz}$. For the monolithic CRYSP detectors $\sigma_{xyz}\sim\SI{1.7}{mm}$ (a
+continuous \mbox{3-D} readout). Pixelated detectors report a fixed crystal rather than a
+continuous position and are deferred.
+
+\paragraph{Energy.}
+The deposited energy is smeared by an energy-dependent resolution. The fractional FWHM
+scales as $\sqrt{\SI{511}{keV}/E}$, so the absolute width is
+\begin{equation}
+\mathrm{FWHM}(E) = a\,\sqrt{\SI{511}{keV}\cdot E}, \qquad
+\sigma_E(E) = \frac{\mathrm{FWHM}(E)}{2\sqrt{2\ln 2}},
+\end{equation}
+with $a$ the fractional FWHM at \SI{511}{keV}: $a=\SI{5}{\percent}$ for pure (cryogenic) CsI,
+\SI{7}{\percent} for CsI(Tl), \SI{10}{\percent} for cryogenic BGO (Sec.~\ref{sec:configs}).
+
+\paragraph{Energy window / selection.}
+A hit is kept if its (smeared) energy passes the selection: a symmetric window about
+\SI{511}{keV} of half-width $\sim 2\,\mathrm{FWHM}$ (tunable), and/or a minimum-energy cut.
+Because the window width scales with the resolution, a sharper detector rejects more
+patient scatter --- a direct lever connecting detector quality to background.
+
+\paragraph{The clean-coincidence condition.}
+For each annihilation the code looks at the blocks the two photons lit up. The clean case is
+\emph{both} photons contained in one block each (no overspill) and each passing the energy
+selection: the pair is recorded as a coincidence, labelled \texttt{true} if neither photon
+scattered in the phantom and \texttt{scatter} if one did. Anything else fails and the event
+yields nothing (an efficiency loss): a photon that missed the ring, escaped the crystal with
+too little energy, or overspilled into a third block. Every detected hit is \emph{also}
+written to a singles list, with its position, energy, parent event and scatter flag --- the
+substrate for the randoms pass.
+
+\paragraph{Per-crystal scintillation properties.}
+The light yield, decay-time mixture, energy resolution $a$ and photodetection efficiency
+(PDE) are carried on the crystal \texttt{Material} (\texttt{data/materials.json}), keyed to
+the crystal name, so a run needs no separate detector cards for them. These feed both the
+energy resolution and the timing model below.
+
+% =====================================================================
+\section{Timing and randoms}
+\label{sec:timing}
+
+\subsection{The timestamp: a physical first-photon model}
+A gamma's timestamp is \emph{not} a free Gaussian $\sigma_t$. It is the arrival time of the
+gamma's \emph{first detected scintillation photon}, a physical distribution set by the
+crystal (\texttt{src/timing.jl}). A deposit of energy $E$ produces
+\begin{equation}
+N_{\mathrm{det}} = (\text{light yield})\cdot E \cdot \mathrm{PDE}
+\end{equation}
+detected photons (e.g. cryogenic CsI $\sim 10^5\,\gamma/\mathrm{MeV}\times 0.5\,\mathrm{MeV}
+\times \mathrm{PDE} \sim 10^4$). Each is emitted at the scintillation mixture's effective
+initial rate $r_0=\sum_k w_k/\tau_k$, and the \emph{first} of $N_{\mathrm{det}}$ such
+arrivals is exponential with rate $N_{\mathrm{det}}\,r_0$, so
+\begin{equation}
+\text{jitter} = -\frac{\ln u}{N_{\mathrm{det}}\,r_0}, \qquad
+\langle\text{jitter}\rangle = \frac{1}{N_{\mathrm{det}}\,r_0}\;\sim\;\SI{0.1}{ns}.
+\end{equation}
+The timing resolution thus \emph{falls out} of yield, PDE, decay time and deposited energy
+--- there is no tunable $\sigma_t$. The full timestamp of a detected gamma is
+\begin{equation}
+t_0 = t_{\mathrm{annih}} + \mathrm{TOF} + \text{jitter}, \qquad
+\mathrm{TOF} = \frac{\lVert \mathbf{hit}-\mathbf{emit}\rVert}{c},
+\quad c = \SI{299.792458}{mm/ns},
+\end{equation}
+where $t_{\mathrm{annih}}$ is the event's annihilation time drawn from the activity curve
+(\texttt{src/activity.jl}): a truncated exponential $\propto e^{-\lambda(t-t_0)}$ over the
+acquisition window, with $\lambda=\ln 2/T_{1/2}$. The draw is deterministic per event number
+(a splitmix64 finalizer of the seed and event id), so it is independent of how the singles
+were chunked across threads and identical in every pass that reads it. The front-loading of
+the activity is the origin of the randoms' front-loading.
+
+\subsection{The three LOR categories}
+The list-mode output carries a truth label per coincidence:
+\begin{itemize}[nosep]
+\item \texttt{true} (code 0) --- both photons reached the detector without scattering in the
+phantom;
+\item \texttt{scatter} (code 1) --- a same-annihilation coincidence in which at least one
+photon Compton-scattered in the phantom (the patient-scatter background);
+\item \texttt{random} (code 2) --- two photons from \emph{different} annihilations whose
+timestamps happen to fall within the coincidence window.
+\end{itemize}
+For a true pair (common emission point) the timing-resolution residual is formed by
+subtracting the geometric time-of-flight difference,
+\begin{equation}
+\Delta t = \bigl|t_{0,1}-t_{0,2}\bigr| - \mathrm{TOF}_{\mathrm{diff}}, \qquad
+\mathrm{TOF}_{\mathrm{diff}} = \frac{\lVert \mathbf{hit}_1-\mathbf{emit}\rVert
+- \lVert \mathbf{hit}_2-\mathbf{emit}\rVert}{c},
+\end{equation}
+which would be zero with no fluctuations; its spread \emph{is} the timing resolution. The
+coincidence window $\tau$ is read off the trues' $|\Delta t_0|$ distribution (chosen for high
+true-pair acceptance) and that same window, applied to the singles stream, lets accidental
+cross-event singles leak in as randoms.
+
+\subsection{Forming randoms}
+Randoms are added in a separate pass over the singles list, with \emph{no further transport}
+(\texttt{src/randoms.jl}). Each surviving single is given an absolute timestamp
+($t_{\mathrm{annih}}$ of its decay $+$ its decay-relative time); the singles are sorted in
+time, and any two from \emph{different} decays whose times fall within $\tau$ are emitted as a
+random LOR. The implementation is an $O(n\log n)$ sort followed by a forward sliding window
+that breaks as soon as the gap exceeds $\tau$ (the window holds only $\sim S\tau$ singles).
+The expected rate follows
+\begin{equation}
+R_{\mathrm{random}} \approx 2\,\tau\,S(t)^2,
+\end{equation}
+with $S$ the total singles rate: front-loaded (it scales as activity squared, faster than
+the trues), largest at the start of the scan, and at most a few to ten percent of the trues
+for $\tau$ of a few ns. Crucially, transport --- the costly part --- runs \emph{once} to
+produce the trues and the singles; randoms (and any re-realisation the downstream analysis
+needs) are cheap operations on the singles list.
+
+% =====================================================================
+\section{Output and the production chain}
+\label{sec:output}
+
+\paragraph{The list-mode deliverable.}
+The output is the coincidence (LOR) list: per accepted coincidence, the two \mbox{3-D} hit
+positions [\si{mm}], the two energies [\si{keV}], the two timestamps [\si{ns}], the
+timing-resolution residual $\Delta t$, the common emission point, and the truth label
+(\texttt{true}/\texttt{scatter}/\texttt{random}). A companion \texttt{\_meta} record carries
+the provenance: detector config, geometry, energy and time windows, scenario name and seed.
+This list is what the deferred downstream analysis reads, and the only thing it reads.
+
+\paragraph{The chain.}
+The production chain (\texttt{scripts/}) runs in two stages. First a multi-threaded transport
+(\texttt{simulate\_source\_mt.jl}, via the allocation-free single-photon navigator) writes a
+\emph{singles} stack (\texttt{singles.\{csv,h5\}}). Then a streaming selection
+(\texttt{build\_coincidences\_from\_singles.jl}) reads the singles and writes the LOR file
+(\texttt{lors\_\{truth,det\}.h5}); the randoms pass runs over the same singles. The selection
+is a \emph{streaming}, event-ordered pass with $O(1)$ memory --- it never loads the whole
+file --- which is why it is written in Julia rather than Python: it must scale to the large
+stacks a full run produces. HDF5 stores quantized \texttt{Int16} columns
+(\SI{0.1}{mm}/\SI{0.1}{keV}, lossless at detector resolution), chunked and compressed
+($\sim 6\times$ smaller than float CSV, with typed partial reads) for the write-once,
+read-many singles list. CSV is kept for development and inspection. Each run is driven by a
+TOML config (\texttt{runs/<tag>.toml}, sections
+\texttt{[geometry] [source] [transport] [detector] [output]}) that is both the parameter
+source of truth and the run's provenance; its tag names the per-run output directory.
+
+\paragraph{Division of labour.}
+Julia carries the photon transport, the geometry, and the streaming coincidence/randoms
+selection (memory and throughput on large stacks). Python reads the scenario and makes the
+control and analysis plots. CSV and HDF5 are the interchange formats.
+
+% =====================================================================
+\section{Detector configurations under study}
+\label{sec:configs}
+
+The detectors of present interest are \emph{monolithic} crystals with continuous \mbox{3-D}
+readout (CRYSP; numbers from Soleti et al.\ 2024):
+\begin{center}
+\begin{tabular}{lccc}
+\hline
+Crystal & $a$ (FWHM @ \SI{511}{keV}) & light yield [$\gamma$/MeV] & decay [\si{ns}] \\
+\hline
+pure CsI (cryogenic) & \SI{5}{\percent}  & $1.0\times10^5$ & 1000 (single) \\
+CsI(Tl)              & \SI{7}{\percent}  & --- & --- \\
+BGO (cryogenic)      & \SI{10}{\percent} & $2.9\times10^4$ & 747 / 2253 (0.34 / 0.66) \\
+\hline
+\end{tabular}
+\end{center}
+All share a continuous position/DOI resolution $\sigma_{xyz}\sim\SI{1.7}{mm}$. The PDE is
+currently a \num{0.45} placeholder for both CsI and BGO and should be refined per crystal
+(it depends on the photodetector efficiency at the crystal's emission wavelength --- CsI in
+the UV, BGO near \SI{480}{nm}). Pixelated detectors (LYSO, standard BGO, $a\sim$
+\SIrange{15}{20}{\percent}) report a fixed crystal rather than a continuous position and come
+later. Because every detector reads the identical scenario through the identical transport,
+the differences in their coincidence lists are due to the crystal and readout alone --- which
+is precisely what makes the project a controlled comparison bench.
+
+% =====================================================================
+\section*{Reference material}
+\addcontentsline{toc}{section}{Reference material}
+\begin{itemize}[nosep]
+\item Method guide (companion to this overview): \texttt{docs/pet\_simulation.tex}.
+\item Ray--solid navigation math: \texttt{docs/navigation.tex}.
+\item The randoms / timing plan: \texttt{dev/randoms\_plan.md}.
+\item CRYSP detector numbers: Soleti et al.\ 2024.
+\item Upstream source method: \texttt{ptcryspg4/docs/simulate\_pt\_pet.tex}.
+\end{itemize}
+
+\end{document}

@@ -6,12 +6,13 @@ const ME = 0.51099895  # electron rest mass [MeV]
 sample_distance(Σ::Float64, rng::AbstractRNG)::Float64 = -log(rand(rng)) / Σ
 
 """
-Pick :compton / :photoelectric / :pair from the branching probabilities, in the
-(C, Ph, P) order returned by `sigma_macro`. Photoelectric is the catch-all so
-that a zero-width pair bucket (P below threshold) can never absorb a rounding
-leftover in `r`.
+Pick :compton / :photoelectric / :pair from the branching probabilities `P_C`, `P_P`
+(Compton, pair; each = Σ_proc/Σ_total). The cumulative buckets are tried in C → P order;
+**photoelectric is the catch-all** (the implied `1 − P_C − P_P`), so a zero-width pair
+bucket (P below the 1.022 MeV threshold) can never absorb a rounding leftover in `r` and
+wrongly return `:pair`. Photoelectric's own probability is therefore not needed as an argument.
 """
-function sample_process(P_C::Float64, P_Ph::Float64, P_P::Float64, rng::AbstractRNG)::Symbol
+function sample_process(P_C::Float64, P_P::Float64, rng::AbstractRNG)::Symbol
     r = rand(rng)
     r < P_C && return :compton
     r < P_C + P_P && return :pair
@@ -97,7 +98,7 @@ and force an allocation). `is_compton == false` means full absorption (photoelec
 @inline function sample_interaction_t(E::Float64, dir, ΣC::Float64, ΣPh::Float64, ΣP::Float64,
                                       rng::AbstractRNG)
     Σ = ΣC + ΣPh + ΣP
-    proc = sample_process(ΣC / Σ, ΣPh / Σ, ΣP / Σ, rng)
+    proc = sample_process(ΣC / Σ, ΣP / Σ, rng)
     if proc === :compton
         Eprime, cosθ = sample_compton(E, rng)
         ϕ = 2π * rand(rng)
@@ -126,7 +127,7 @@ the below-cut / stop bookkeeping is a loop concern and stays in each caller.
 function sample_interaction(E::Float64, dir, ΣC::Float64, ΣPh::Float64, ΣP::Float64,
                             rng::AbstractRNG)
     Σ = ΣC + ΣPh + ΣP
-    proc = sample_process(ΣC / Σ, ΣPh / Σ, ΣP / Σ, rng)
+    proc = sample_process(ΣC / Σ, ΣP / Σ, rng)
     if proc === :compton
         Eprime, cosθ = sample_compton(E, rng)
         ϕ = 2π * rand(rng)

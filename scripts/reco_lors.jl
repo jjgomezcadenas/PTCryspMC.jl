@@ -12,6 +12,9 @@
 #
 # eres defaults to the crystal's own eres_a unless [detector].eres is set; τ from [timing].tau_ns.
 #
+# Note: trues and randoms are not mutually exclusive (a single may appear in both a true and a
+# random LOR) — the multiples approximation, negligible at our rates; see src/randoms.jl.
+#
 #   julia --project=. scripts/reco_lors.jl --config runs/sphere_water_csi.toml
 
 using PTCryspMC
@@ -84,6 +87,10 @@ function main()
     out     = isempty(a["out"])     ? joinpath(outdir, "lors_det.h5")   : rp(a["out"])
     isfile(truth)   || error("truth LORs '$truth' not found (run build_true_coincidences_from_singles.jl)")
     isfile(randoms) || error("randoms '$randoms' not found (run build_randoms_from_singles.jl)")
+    # Merging randoms (paired within some τ) but applying no DT cut to the trues would be an
+    # inconsistent lors_det — guard against a config that cleared [timing].tau_ns after the randoms
+    # were built. (build_randoms itself errors on τ ≤ 0.)
+    tau > 0.0 || @warn "[timing].tau_ns ≤ 0: merging randoms with NO DT cut on the trues (inconsistent)"
 
     ecut = window > 0.0 ? "window ±$(round(resp.win_half,digits=1)) keV" :
            (emin > 0.0 ? "Emin $(round(emin,digits=0)) keV" : "no energy cut")

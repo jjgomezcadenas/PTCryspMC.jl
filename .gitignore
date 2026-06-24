@@ -7,6 +7,7 @@ deps/build.log
 
 # LaTeX build artifacts
 *.aux
+*.toc
 *.log
 *.out
 *.bbl

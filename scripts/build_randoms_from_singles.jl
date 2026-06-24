@@ -12,6 +12,10 @@
 # applied here — they come uniformly in the reco merge (lors_det.h5). So these are pre-energy-cut
 # random candidates. The window τ is read from [timing].tau_ns (chosen from the DT study).
 #
+# Trues and randoms are NOT mutually exclusive: a single can appear in both a random here and its
+# same-annihilation true (distinct LORs). This is the multiples approximation (no multiple-rejection,
+# no opposition filter) — negligible (~randoms/trues), and the count matches 2τS². See pair_randoms.
+#
 #   julia --project=. scripts/build_randoms_from_singles.jl --config runs/sphere_water_csi.toml
 
 using PTCryspMC
