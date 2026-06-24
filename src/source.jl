@@ -2,7 +2,7 @@
 #
 # A Source draws an annihilation point and emits two ~511 keV photons. The point is
 # drawn uniformly inside a phantom volume (source = attenuator: the same solid both
-# emits and attenuates — see dev/phantom_track_plan.md). The two photons are back to
+# emits and attenuates — see docs/PTCryspMC_app.tex). The two photons are back to
 # back up to a small acollinearity (~0.5 deg FWHM): they are not exactly 180 deg apart.
 
 "An isotropic unit direction (uniform on the sphere)."

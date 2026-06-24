@@ -10,7 +10,7 @@
 # material optionally overridden (Vacuum/Air = non-attenuated reference, Water = realistic).
 # Source = attenuator: the same volume both emits and attenuates.
 #
-# All parameters come from a run config TOML (see dev/phantom_track_plan.md, runs/*.toml);
+# All parameters come from a run config TOML (see runs/*.toml; docs/PTCryspMC_app.tex);
 # the run `tag` (= config filename) names the per-run output dir output/<tag>/, where the
 # stack and a copy of the config are written. Its air-only counterpart is shoot_into_ring.jl.
 #

@@ -1,7 +1,6 @@
 # Multi-volume navigation: carry a photon across volumes (water phantom → air gap →
 # CsI ring), switching the material at each boundary, by reusing the single-volume
-# `propagate_photon` rather than re-implementing its loop. See docs/PTCryspMC_phys.tex §4
-# and dev/navigator_plan.md.
+# `propagate_photon` rather than re-implementing its loop. See docs/PTCryspMC_phys.tex §4.
 #
 # World model: one non-interacting Air mother enclosing two radially disjoint leaf
 # absorbers (phantom, ring). A photon inside a leaf is transported by `propagate_photon`,

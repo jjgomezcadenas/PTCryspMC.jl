@@ -10,9 +10,10 @@ AskUserQuestion option-list format). State what you need to know directly.
 ## Purpose
 
 Simulate how a PET scanner detects the positron activity left by a proton field, and
-write the list of coincidences it would record. The source comes from upstream
-(`ptcryspg4`, frozen in `ptcrysp-scenarios`); this repo reads a scenario and produces
-`coincidences_<config>.csv` for a given detector. It never runs proton transport.
+write the list of coincidences it would record — the list-mode LOR file (`lors_det.h5`) for a
+given detector. The proton transport is done upstream by `ptcryspg4`; this repo begins from the
+annihilation points. It runs in two modes (a geometric phantom, validated; a `ptcryspg4` scenario,
+the target — see "The guide" below).
 
 The simulation runs once per detector, and every detector reads the identical scenario, so
 differences come from the detector alone. The analysis that consumes the coincidence list
@@ -87,25 +88,26 @@ Monolithic crystals with continuous 3-D readout: pure CsI (a = 5% FWHM @ 511 keV
 standard BGO, a = 15–20%) report a fixed crystal rather than a continuous position, and
 come later.
 
-## Output — `coincidences_<config>.csv`
+## Output — `lors_det.h5`
 
-Per accepted coincidence: two 3-D hit positions (mm), two energies (keV), two times (ns),
-and a truth flag (true / scatter / random). Companion `_meta`: detector config, geometry,
-energy and time windows, scenario name, seed.
+Per accepted coincidence (one LOR): two 3-D hit positions (mm), two energies (keV), two times
+(ns), the timing residual, and a truth flag (true / scatter / random). The HDF5 root attributes
+carry the provenance: detector config, geometry, energy and time windows, the run tag, and the seed.
 
 ## Code layout (`src/`)
 
 The photon transport and geometry are photon-only:
 
-- `geometry.jl` — a Geant4-style hierarchy: `Solid` (`Cylinder`; `CylShell` to come),
-  `LogicalVolume` (solid + material), `PhysicalVolume` (a placed logical volume), with
-  `is_inside`, `distance_to_entry`, `distance_to_exit`. `load_geometry` reads the world
-  from `geometry/geometry.json` (named section per component, `phantom` so far) into a
-  `Geometry` container; `load_solid` is the shape factory.
+- `geometry.jl` — a Geant4-style hierarchy: `Solid` (`Cylinder`, `Box`, `Sphere`, `CylShell`),
+  `LogicalVolume` (solid + material), `PhysicalVolume` (a placed logical volume), `Scanner` (the
+  ring + its block/wheel grid), with `is_inside`, `distance_to_entry`, `distance_to_exit`.
+  `load_geometry` reads the world from `geometry/geometry.json` (named sections: `world`,
+  `phantom`, `scanner`) into a `Geometry` container; `load_solid` is the shape factory.
 - `nist_data.jl`, `materials.jl` — the XCOM loader and `sigma_macro(material, E)` (the
   macroscopic Compton/photoelectric/pair cross sections); `load_material` /
-  `load_materials`. The water table (`data/xcom_water.csv`, 10 keV–10 MeV) is in place;
-  tissue and the crystals (CsI, BGO, LYSO) still to add.
+  `load_materials`. The water and crystal tables (`data/xcom_{water,CSI,BGO}.csv`) are in place,
+  with the per-crystal scintillation properties (light yield, decay, eres, PDE); tissue and LYSO
+  still to add.
 - `sampling.jl`, `transport.jl` — the Compton/photoelectric samplers and the photon step
   loop `propagate_photon` (through a `PhysicalVolume`); only the photon path is followed,
   with local energy deposition.
@@ -180,7 +182,7 @@ for scenario reading and plotting.
 ## Status / next
 
 **`dev/status.md` is the concise current snapshot + the deferred-work / known-nits register —
-read it first for "where are we."** `dev/dev_steps.md` is the full chronological build log. In brief:
+read it first for "where are we."** In brief:
 
 **Built and validated:** the foundations — the Geant4-style geometry, the materials / XCOM
 cross sections, and the photon physics core (`propagate_photon`) — plus the first result:
@@ -192,7 +194,7 @@ same-annihilation coincidences, hit formation + smear + energy window + two-bloc
 **and the randoms pass** — the full list-mode chain `singles → lors_truth + randoms → lors_det`
 (per-photon time `t_rel` stamped once in the singles; trues reuse it, randoms restore the absolute
 clock to pair cross-decay singles within τ; reco merges + smears + cuts + flags). See the chain
-description above and `dev/randoms_plan.md`.
+description above.
 
 **Remaining:**
 

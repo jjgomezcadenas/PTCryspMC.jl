@@ -1,8 +1,7 @@
 # Timing: the per-gamma timestamp = annihilation time + time-of-flight + scintillation jitter.
 # The jitter is NOT a free Gaussian σ_t: it's the arrival of the gamma's FIRST DETECTED
 # scintillation photon, a physical distribution set by the crystal's light yield, decay
-# mixture and photodetection efficiency (all carried on the Material). See dev/randoms_plan.md
-# and docs/PTCryspMC_phys.tex.
+# mixture and photodetection efficiency (all carried on the Material). See docs/PTCryspMC_phys.tex.
 
 "Speed of light [mm/ns] — for time-of-flight."
 const C_MM_PER_NS = 299.792458

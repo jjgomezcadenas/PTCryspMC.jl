@@ -2,7 +2,7 @@ module PTCryspMC
 
 # Fast PET detector simulation: read a scenario (the annihilation source) and
 # produce a coincidence list. See docs/PTCryspMC_phys.tex for the method and
-# CLAUDE.md for the decisions and build order. dev/dev_steps.md logs the build.
+# CLAUDE.md for the decisions and build order. dev/status.md for the current status.
 
 using Random
 using JSON

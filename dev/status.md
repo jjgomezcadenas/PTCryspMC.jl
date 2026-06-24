@@ -2,7 +2,7 @@
 
 A one-page snapshot of where the simulation stands, plus the **deferred-work register**.
 Companion docs: the *method* is in `docs/PTCryspMC_phys.tex` (engine) and `docs/PTCryspMC_app.tex` (modes); the
-decisions + code layout in `CLAUDE.md`; the full chronological build log in `dev/dev_steps.md`.
+decisions + code layout in `CLAUDE.md`.
 
 _Last updated: 2026-06-24._
 

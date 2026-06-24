@@ -1,6 +1,6 @@
 # Run configuration: the LOR-generation pipeline (simulate_phantom, build_coincidences)
 # is driven by a TOML config — the parameter source of truth and the run's provenance.
-# See dev/phantom_track_plan.md (Phase G) for the schema and directory layout.
+# See docs/PTCryspMC_app.tex and runs/*.toml for the schema and directory layout.
 
 import TOML
 
