@@ -17,6 +17,8 @@
 #   NEV=1000000 THREADS=8 scripts/run/run_prod.sh sphere_water_csi   # override scale/threads
 #
 # Env: NEV (events, default 1e7), NCHUNKS (chunks, default 144), THREADS (-t, default 16).
+# Clinic configs ([source].mode="clinic") IGNORE NEV — their N is derived from the activity, so
+# --nevents is not passed (pin one by hand with simulate_source_mt --nevents if you need to).
 # Logs: /tmp/ptcprod_<tag>.log per config. Data: prod/<tag>/*.h5.
 
 set -u
@@ -45,8 +47,14 @@ for cfg in $configs; do
   tag=${cfg:t:r}
   dir=prod/$tag
   print "=== $tag ==="
+  # Clinic mode derives N from the activity → don't pin with --nevents; count-driven configs do.
+  if grep -qE '^[[:space:]]*mode[[:space:]]*=[[:space:]]*"clinic"' $cfg; then
+    nevarg=()
+  else
+    nevarg=(--nevents $NEV)
+  fi
   if {
-    julia -t $THREADS --project=. scripts/simulate_source_mt.jl --config $cfg --nevents $NEV --nchunks $NCHUNKS --format hdf5 &&
+    julia -t $THREADS --project=. scripts/simulate_source_mt.jl --config $cfg $nevarg --nchunks $NCHUNKS --format hdf5 &&
     julia -t $THREADS --project=. scripts/build_true_coincidences_from_singles.jl --config $cfg --singles $dir/singles.h5 &&
     julia --project=. scripts/build_randoms_from_singles.jl --config $cfg --singles $dir/singles.h5 &&
     julia --project=. scripts/reco_lors.jl --config $cfg

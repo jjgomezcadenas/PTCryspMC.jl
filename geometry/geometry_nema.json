@@ -1,0 +1,30 @@
+{
+    "_doc": "NEMA-IQ variant of geometry.json: the phantom is a water body cylinder (R=10 cm, half-length 9 cm) — the attenuator. The activity map (background + six hot spheres) is defined inline in the run config's [[source.region]] entries (Option B), all sharing this phantom's water material (uniform attenuation). World and scanner are identical to geometry_sphere.json. Dimensions in cm.",
+    "world": {
+        "name": "world",
+        "shape": "cylinder",
+        "radius_cm": 60.0,
+        "half_length_cm": 60.0,
+        "position_cm": [0.0, 0.0, 0.0],
+        "material": "Air"
+    },
+    "phantom": {
+        "name": "phantom",
+        "shape": "cylinder",
+        "radius_cm": 10.0,
+        "half_length_cm": 9.0,
+        "position_cm": [0.0, 0.0, 0.0],
+        "material": "Water"
+    },
+    "scanner": {
+        "name": "CRYSP_CSI_1M",
+        "shape": "cyl_shell",
+        "r_inner_cm": 38.7,
+        "wall_thickness_cm": 3.7,
+        "half_length_cm": 51.2,
+        "n_phi": 48,
+        "n_z": 20,
+        "position_cm": [0.0, 0.0, 0.0],
+        "material": "CsI"
+    }
+}

@@ -1018,6 +1018,69 @@ end
         rm(p2)
     end
 
+    @testset "clinical source — activity, count, weighted draw" begin
+        mats = load_materials(DATA_DIR); wat = mats["Water"]
+        # isotope table
+        @test isotope("F18").beta_plus == 0.9686
+        @test isotope("F18").half_life_s ≈ 109.771 * 60
+        @test_throws ErrorException isotope("Xx")
+
+        # two regions: R=1 cm @ 10 kBq/mL at x=−10, R=2 cm @ 5 kBq/mL at x=+10 (separated so a
+        # sample's region is told by the sign of x).
+        r1 = PhysicalVolume(LogicalVolume("r1", Sphere(1.0), wat), (-10.0, 0.0, 0.0))
+        r2 = PhysicalVolume(LogicalVolume("r2", Sphere(2.0), wat), ( 10.0, 0.0, 0.0))
+        V1 = 4/3*π*1.0^3; V2 = 4/3*π*2.0^3
+        src = ClinicSource([r1, r2], [1.0e4, 5.0e3])        # Bq/mL
+        A1 = 1.0e4 * V1; A2 = 5.0e3 * V2
+        @test src.A0 ≈ A1 + A2                              # total activity = Σ c·V
+
+        @test_throws ErrorException ClinicSource([r1, r2], [1.0e4])   # length mismatch
+        @test_throws ErrorException ClinicSource([r1], [0.0])        # zero total activity
+
+        # N = β⁺ · (A0/λ)(1 − e^{−λT})
+        f18 = isotope("F18"); λ = log(2) / f18.half_life_s; T = 600.0
+        expect = f18.beta_plus * src.A0 / λ * (-expm1(-λ * T))
+        @test n_annihilations(src, f18, 0.0, T) == round(Int, expect)
+        @test n_annihilations(src, f18, 0.0, 1200.0) > n_annihilations(src, f18, 0.0, 600.0)
+        @test_throws ErrorException n_annihilations(src, f18, 600.0, 0.0)   # t1 < t0
+
+        # Weighted draw: region chosen ∝ its activity; every point lands in its region.
+        rng = MersenneTwister(7); n = 40000; n2 = 0; inside = true
+        for _ in 1:n
+            p = sample_position(src, rng)
+            in2 = p[1] > 0                                    # the +x sphere is region 2
+            n2 += in2
+            cx, R = in2 ? (10.0, 2.0) : (-10.0, 1.0)
+            inside &= (p[1]-cx)^2 + p[2]^2 + p[3]^2 <= R^2 + 1e-9
+        end
+        @test inside
+        @test isapprox(n2/n, A2/src.A0; atol=0.01)           # ≈ 0.80
+
+        # Option B: regions defined inline by shape build the source with no geometry change.
+        geom = load_geometry(GEOM_JSON, mats)
+        cfgB = Dict("source" => Dict("region" => [
+            Dict("shape"=>"sphere", "radius_cm"=>1.0, "position_cm"=>[-5.0, 0.0, 0.0], "conc_kBq_per_mL"=>10.0),
+            Dict("shape"=>"sphere", "radius_cm"=>2.0, "position_cm"=>[ 5.0, 0.0, 0.0], "conc_kBq_per_mL"=> 5.0),
+        ]))
+        csB = load_clinic_source(cfgB, geom)
+        @test length(csB.regions) == 2
+        @test csB.A0 ≈ 1.0e4 * (4/3*π*1^3) + 5.0e3 * (4/3*π*2^3)             # kBq/mL → Bq/mL (×1e3)
+        @test csB.regions[1].position == (-5.0, 0.0, 0.0)
+        @test material(csB.regions[1]).name == material(geom.phantom).name  # inserts share the phantom material
+        @test_throws ErrorException load_clinic_source(                     # a region with neither shape nor volume
+            Dict("source" => Dict("region" => [Dict("conc_kBq_per_mL"=>1.0)])), geom)
+
+        # activity_kBq: a region's TOTAL activity (Bq) as an alternative to a concentration.
+        csT = load_clinic_source(Dict("source" => Dict("region" => [
+            Dict("shape"=>"sphere", "radius_cm"=>2.0, "activity_kBq"=>100.0)])), geom)
+        @test csT.A0 ≈ 1.0e5                                  # 100 kBq total = 1e5 Bq, independent of volume
+        @test csT.conc[1] ≈ 1.0e5 / (4/3*π*2^3)              # back-computed concentration = total / volume
+        @test_throws ErrorException load_clinic_source(       # both conc and activity → ambiguous
+            Dict("source"=>Dict("region"=>[Dict("shape"=>"sphere","radius_cm"=>1.0,"conc_kBq_per_mL"=>1.0,"activity_kBq"=>1.0)])), geom)
+        @test_throws ErrorException load_clinic_source(       # a shape region with neither
+            Dict("source"=>Dict("region"=>[Dict("shape"=>"sphere","radius_cm"=>1.0)])), geom)
+    end
+
     @testset "schema doc in sync with the code" begin
         include(joinpath(@__DIR__, "..", "scripts", "gen_schema.jl"))   # defines schema_markdown + SCHEMA_PATH (no write when included)
         # Single source of truth: every column must have a doc entry (a new column can't be undocumented).
