@@ -1069,6 +1069,16 @@ end
         @test material(csB.regions[1]).name == material(geom.phantom).name  # inserts share the phantom material
         @test_throws ErrorException load_clinic_source(                     # a region with neither shape nor volume
             Dict("source" => Dict("region" => [Dict("conc_kBq_per_mL"=>1.0)])), geom)
+
+        # activity_kBq: a region's TOTAL activity (Bq) as an alternative to a concentration.
+        csT = load_clinic_source(Dict("source" => Dict("region" => [
+            Dict("shape"=>"sphere", "radius_cm"=>2.0, "activity_kBq"=>100.0)])), geom)
+        @test csT.A0 ≈ 1.0e5                                  # 100 kBq total = 1e5 Bq, independent of volume
+        @test csT.conc[1] ≈ 1.0e5 / (4/3*π*2^3)              # back-computed concentration = total / volume
+        @test_throws ErrorException load_clinic_source(       # both conc and activity → ambiguous
+            Dict("source"=>Dict("region"=>[Dict("shape"=>"sphere","radius_cm"=>1.0,"conc_kBq_per_mL"=>1.0,"activity_kBq"=>1.0)])), geom)
+        @test_throws ErrorException load_clinic_source(       # a shape region with neither
+            Dict("source"=>Dict("region"=>[Dict("shape"=>"sphere","radius_cm"=>1.0)])), geom)
     end
 
     @testset "schema doc in sync with the code" begin

@@ -162,8 +162,9 @@ end
 """
     load_clinic_source(cfg, geom) -> ClinicSource
 
-Build a `ClinicSource` from a config's `[[source.region]]` entries, each carrying a
-`conc_kBq_per_mL` and either
+Build a `ClinicSource` from a config's `[[source.region]]` entries, each carrying an activity ---
+a concentration `conc_kBq_per_mL` or a total `activity_kBq` (converted via the region's volume) ---
+and either
 
 - a `shape` (`"sphere"`, `"cylinder"`, …) + dimensions + optional `position_cm` — the region is built
   inline via `load_solid`, taking the phantom's material (uniform attenuation: the inserts are the
@@ -192,8 +193,14 @@ function load_clinic_source(cfg::AbstractDict, geom::Geometry)::ClinicSource
             else
                 error("[[source.region]] needs a 'shape' (inline) or a 'volume' (named geometry volume)")
             end
-            push!(regions, pv)
-            push!(conc, 1.0e3 * Float64(get(r, "conc_kBq_per_mL", 0.0)))   # kBq/mL → Bq/mL
+            # Activity: a concentration (Bq/mL) OR a total (Bq) — exactly one. `activity_kBq` converts
+            # via the region's volume, a convenience for a uniform fill ("100 kHz over the sphere").
+            hc = haskey(r, "conc_kBq_per_mL"); ha = haskey(r, "activity_kBq")
+            (hc && ha) && error("[[source.region]] has both conc_kBq_per_mL and activity_kBq — give one")
+            c = ha ? 1.0e3 * Float64(r["activity_kBq"]) / volume(pv) :
+                hc ? 1.0e3 * Float64(r["conc_kBq_per_mL"]) :
+                     error("[[source.region]] needs a conc_kBq_per_mL or an activity_kBq")
+            push!(regions, pv); push!(conc, c)
         end
     end
     ClinicSource(regions, conc)
