@@ -11,6 +11,35 @@
 const O15_HALFLIFE_S = 2.037 * 60.0
 
 """
+    Isotope(name, half_life_s, beta_plus)
+
+A positron emitter: its half-life and its positron branching fraction `β⁺` (the fraction of nuclear
+decays that emit a positron, hence an annihilation). A source's activity is a NUCLEAR decay rate;
+`β⁺` converts it to the annihilation rate the engine simulates.
+"""
+struct Isotope
+    name::String
+    half_life_s::Float64
+    beta_plus::Float64
+end
+
+# Common PET emitters: (half-life [s], β⁺ branching). Half-lives from the usual tables.
+const ISOTOPES = Dict{String,Isotope}(
+    "F18"  => Isotope("F18",  109.771 * 60, 0.9686),   # clinical default
+    "O15"  => Isotope("O15",  O15_HALFLIFE_S, 0.9990),
+    "C11"  => Isotope("C11",  20.364 * 60,  0.9975),
+    "N13"  => Isotope("N13",   9.965 * 60,  0.9981),
+    "Ga68" => Isotope("Ga68", 67.71 * 60,   0.8914),
+)
+
+"Look up a PET isotope by name (e.g. `\"F18\"`); errors with the known list if absent."
+function isotope(name::AbstractString)::Isotope
+    haskey(ISOTOPES, name) ||
+        error("unknown isotope '$name' (known: $(join(sort!(collect(keys(ISOTOPES))), ", ")))")
+    ISOTOPES[name]
+end
+
+"""
     ActivityModel(; t0=0.0, t1=600.0, half_life_s=O15_HALFLIFE_S, seed=1234)
 
 A single-isotope toy activity over the acquisition window `[t0, t1]` seconds. `event_time`
@@ -33,12 +62,26 @@ function ActivityModel(; t0::Real=0.0, t1::Real=600.0,
     ActivityModel(Float64(t0), Float64(t1), λ, UInt64(seed), -expm1(-λ * (t1 - t0)))
 end
 
-"Build the toy activity model from a run config's `[timing]` section."
-ActivityModel(cfg::AbstractDict) = ActivityModel(;
-    t0          = Float64(cfg_get(cfg, "timing", "t0_s", 0.0)),
-    t1          = Float64(cfg_get(cfg, "timing", "t1_s", 600.0)),
-    half_life_s = Float64(cfg_get(cfg, "timing", "half_life_s", O15_HALFLIFE_S)),
-    seed        = Int(cfg_get(cfg, "timing", "time_seed", 1234)))
+"""
+Build the activity model from a run config. In clinic mode (`[source].mode = \"clinic\"`) the
+half-life comes from the named isotope and the acquisition window from `[source]`; otherwise it is
+the toy `[timing]` activity (the count-driven phantom / API default).
+"""
+function ActivityModel(cfg::AbstractDict)
+    if String(cfg_get(cfg, "source", "mode", "")) == "clinic"
+        iso = isotope(String(cfg_get(cfg, "source", "isotope", "F18")))
+        return ActivityModel(;
+            t0          = Float64(cfg_get(cfg, "source", "t0_s", 0.0)),
+            t1          = Float64(cfg_get(cfg, "source", "t1_s", 600.0)),
+            half_life_s = iso.half_life_s,
+            seed        = Int(cfg_get(cfg, "source", "time_seed", 1234)))
+    end
+    ActivityModel(;
+        t0          = Float64(cfg_get(cfg, "timing", "t0_s", 0.0)),
+        t1          = Float64(cfg_get(cfg, "timing", "t1_s", 600.0)),
+        half_life_s = Float64(cfg_get(cfg, "timing", "half_life_s", O15_HALFLIFE_S)),
+        seed        = Int(cfg_get(cfg, "timing", "time_seed", 1234)))
+end
 
 """
     event_time(m, ev) -> Float64

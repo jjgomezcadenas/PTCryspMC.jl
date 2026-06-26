@@ -82,18 +82,17 @@ function main()
     geomfile = rp(cfg_get(cfg, "geometry", "file", "geometry/geometry.json"))
     phmat    = String(cfg_get(cfg, "geometry", "phantom_material", ""))
     crystal  = String(cfg_get(cfg, "transport", "crystal_material", "CsI"))
-    kind     = String(cfg_get(cfg, "source", "kind", "point"))
+    mode     = String(cfg_get(cfg, "source", "mode", ""))   # "" = count-driven (kind+nevents); "clinic" = activity-driven
     acol     = Float64(cfg_get(cfg, "source", "acol_fwhm_deg", 0.5))
     energy   = Float64(cfg_get(cfg, "source", "energy_keV", 511.0))
     cutoff   = Float64(cfg_get(cfg, "transport", "cutoff_keV", 10.0))
-    nevents  = a["nevents"] >= 0 ? a["nevents"] : Int(cfg_get(cfg, "source", "nevents", 100000))
     seed     = a["seed"]    >= 0 ? a["seed"]    : Int(cfg_get(cfg, "transport", "seed", 1234))
     fmt      = isempty(a["format"]) ? String(cfg_get(cfg, "output", "format", "csv")) : a["format"]
 
-    kind in ("point", "phantom") || error("[source].kind must be 'point' or 'phantom'")
     fmt in ("csv", "hdf5") || error("[output].format '$fmt' not supported (csv | hdf5)")
-    nevents >= 1 || error("nevents must be ≥ 1")
     ishdf5 = fmt == "hdf5"
+    # The source and the event count (nevents) are resolved after the geometry is built (clinic mode
+    # derives nevents from the regions' activity, which needs the geometry).
 
     tag = run_tag(cfg, a["config"])
     outdir = joinpath(rp(prod_base(cfg)), tag)
@@ -122,8 +121,27 @@ function main()
 
     E0 = energy / 1000.0
     cut_MeV = cutoff / 1000.0
-    uniform = kind == "phantom"
-    src = uniform ? UniformVolumeSource(geom.phantom) : PointSource(geom.phantom.position)
+
+    # Source + event count. Clinic (activity-driven): N = β⁺·∫A dt derived from the regions' activity
+    # and the isotope, points drawn ∝ region activity. Else count-driven: N given, uniform/point draw.
+    # A CLI --nevents always pins N (the validation knob).
+    if mode == "clinic"
+        iso     = isotope(String(cfg_get(cfg, "source", "isotope", "F18")))
+        t0_s    = Float64(cfg_get(cfg, "source", "t0_s", 0.0))
+        t1_s    = Float64(cfg_get(cfg, "source", "t1_s", 600.0))
+        clinic  = load_clinic_source(cfg, geom)
+        src     = length(clinic.regions) == 1 ? UniformVolumeSource(clinic.regions[1]) : clinic
+        nevents = a["nevents"] >= 0 ? a["nevents"] : n_annihilations(clinic, iso, t0_s, t1_s)
+        srcdesc = "clinic $(iso.name), A0=$(round(clinic.A0/1e3, digits=1)) kBq over [$(t0_s),$(t1_s)]s, $(length(clinic.regions)) region(s)"
+    else
+        kind    = String(cfg_get(cfg, "source", "kind", "point"))
+        kind in ("point", "phantom") || error("[source].kind must be 'point' or 'phantom'")
+        src     = kind == "phantom" ? UniformVolumeSource(geom.phantom) : PointSource(geom.phantom.position)
+        nevents = a["nevents"] >= 0 ? a["nevents"] : Int(cfg_get(cfg, "source", "nevents", 100000))
+        srcdesc = kind == "phantom" ? "uniform in $(name(geom.phantom)) ($(material(geom.phantom).name))" :
+                                      "point at the phantom centre ($(material(geom.phantom).name))"
+    end
+    nevents >= 1 || error("nevents must be ≥ 1")
 
     nthr    = nthreads()
     # The chunk count fixes the per-event RNG streams, so it must be reproducible: a CLI override,
@@ -141,8 +159,6 @@ function main()
     partfile(c) = joinpath(outdir, ishdf5 ? "singles.part$(c).bin" : "singles.part$(c).csv")
     rows = zeros(Int, nchunks)
 
-    srcdesc = uniform ? "uniform in $(name(geom.phantom)) ($(material(geom.phantom).name))" :
-                        "point at the phantom centre ($(material(geom.phantom).name))"
     println("run '$tag': back-to-back $energy keV, $srcdesc, acol $(acol)° FWHM; " *
             "ring $(name(sc.volume)) ($crystal), nblocks=$(nblocks(sc)), cutoff $cutoff keV, " *
             "$nevents events, seed $seed; threads=$nthr, chunks=$nchunks, format=$fmt")

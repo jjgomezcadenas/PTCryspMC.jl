@@ -102,3 +102,85 @@ function emit_pair(src::Source, rng::AbstractRNG; acol_fwhm_deg::Float64=0.5)
     d2  = _acollinear((-d1[1], -d1[2], -d1[3]), σ, rng)
     (pos, d1, d2)
 end
+
+# ── Clinical source (activity-driven) ───────────────────────────────────────────────────────────
+# Conventional PET: a tracer distribution at a known activity. The source carries one or more placed
+# regions, each filled to an activity concentration [Bq/mL]; the activity sets BOTH how many
+# annihilations there are (`n_annihilations`, with the isotope) and how they are placed (drawn ∝
+# region activity). The API scenario, by contrast, is count-driven (the per-isotope budget is given).
+
+"""
+    ClinicSource(regions, conc_Bq_per_mL)
+
+A clinical source: placed phantom `regions` (`PhysicalVolume`s), each filled to an activity
+concentration [Bq/mL]. An annihilation point is drawn by picking a region in proportion to its
+activity (concentration × volume) and then a point uniform within it. Pair it with an `Isotope` and
+an acquisition window for the count (`n_annihilations`); the timestamps come from the `ActivityModel`.
+"""
+struct ClinicSource <: Source
+    regions::Vector{PhysicalVolume}
+    conc::Vector{Float64}        # Bq/mL per region
+    cumA::Vector{Float64}        # cumulative region activity [Bq], for the weighted draw
+    A0::Float64                  # total activity [Bq] = Σ concentration × volume
+end
+
+function ClinicSource(regions::AbstractVector{<:PhysicalVolume}, conc_Bq_per_mL::AbstractVector{<:Real})
+    n = length(regions)
+    n >= 1 || error("ClinicSource needs at least one region")
+    n == length(conc_Bq_per_mL) || error("ClinicSource: $n regions but $(length(conc_Bq_per_mL)) concentrations")
+    A = Float64[Float64(conc_Bq_per_mL[i]) * volume(regions[i]) for i in 1:n]   # Bq = (Bq/mL)·(cm³ = mL)
+    all(>=(0.0), A) || error("ClinicSource: a region has negative activity")
+    A0 = sum(A)
+    A0 > 0.0 || error("ClinicSource: total activity is zero (all concentrations zero?)")
+    ClinicSource(collect(PhysicalVolume, regions), collect(Float64, conc_Bq_per_mL), cumsum(A), A0)
+end
+
+"A world-frame annihilation point: a region chosen ∝ its activity, then uniform inside it."
+function sample_position(src::ClinicSource, rng::AbstractRNG)
+    k  = min(searchsortedfirst(src.cumA, rand(rng) * src.A0), length(src.regions))
+    pv = src.regions[k]
+    p  = sample_point_in(solid(pv), rng)
+    o  = pv.position
+    (p[1] + o[1], p[2] + o[2], p[3] + o[3])
+end
+
+"""
+    n_annihilations(src::ClinicSource, iso::Isotope, t0, t1) -> Int
+
+Annihilations to simulate over `[t0, t1]` s: nuclear decays in the window × the positron branching,
+`N = β⁺ · (A₀/λ)(1 − e^{−λT})`, `λ = ln2/T½`. (A clinical activity can give a very large N — pick the
+activity for the count you want.)
+"""
+function n_annihilations(src::ClinicSource, iso, t0::Real, t1::Real)::Int   # iso :: Isotope (defined later)
+    T = Float64(t1) - Float64(t0)
+    T > 0 || error("acquisition window needs t1 > t0 (got t0=$t0, t1=$t1)")
+    λ = log(2.0) / iso.half_life_s
+    decays = src.A0 / λ * (-expm1(-λ * T))        # ∫ A dt  [nuclear decays]
+    round(Int, iso.beta_plus * decays)
+end
+
+"""
+    load_clinic_source(cfg, geom) -> ClinicSource
+
+Build a `ClinicSource` from a config's `[[source.region]]` entries — each a geometry `volume` name
+and a concentration `conc_kBq_per_mL`, resolved against `geom`. With no region table, the whole
+phantom at 1 kBq/mL is used (the uniform single-region phantom). Only the phantom is exposed as a
+named source volume today; multi-region awaits the geometry loader exposing more.
+"""
+function load_clinic_source(cfg::AbstractDict, geom::Geometry)::ClinicSource
+    byname = Dict{String,PhysicalVolume}(name(geom.phantom) => geom.phantom)
+    region_cfg = get(get(cfg, "source", Dict{String,Any}()), "region", Any[])
+    regions = PhysicalVolume[]; conc = Float64[]
+    if isempty(region_cfg)
+        push!(regions, geom.phantom); push!(conc, 1.0e3)         # default 1 kBq/mL over the phantom
+    else
+        for r in region_cfg
+            vname = String(r["volume"])
+            haskey(byname, vname) ||
+                error("[[source.region]] volume '$vname' is not in the geometry (have: $(join(keys(byname), ", ")))")
+            push!(regions, byname[vname])
+            push!(conc, 1.0e3 * Float64(get(r, "conc_kBq_per_mL", 0.0)))   # kBq/mL → Bq/mL
+        end
+    end
+    ClinicSource(regions, conc)
+end

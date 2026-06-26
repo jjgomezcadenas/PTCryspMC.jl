@@ -1,0 +1,42 @@
+# Sphere phantom (water), CsI ring — CLINICAL scenario (activity-driven). The source is the phantom
+# filled to an activity concentration; the count N is DERIVED from the activity, the isotope (F-18),
+# and the acquisition window (N = β⁺·(A₀/λ)(1−e^{−λT}), A₀ = conc·volume). The concentration here is
+# set low so the derived N is tractable for a demo run — a realistic clinical ~5 kBq/mL would give
+# ~10⁹ decays. tag = sphere_water_f18_csi -> prod/sphere_water_f18_csi/
+
+[geometry]
+file = "geometry/geometry_sphere.json"
+phantom_material = "Water"
+
+[source]
+mode          = "clinic"
+isotope       = "F18"           # → half-life 109.8 min, β⁺ 0.9686
+t0_s          = 0.0
+t1_s          = 600.0           # 10 min acquisition
+acol_fwhm_deg = 0.5
+energy_keV    = 511.0
+time_seed     = 1234
+
+[[source.region]]
+volume          = "phantom"     # a named solid in geometry_sphere.json
+conc_kBq_per_mL = 0.001         # 1 Bq/mL (demo scale; real clinic ~5 kBq/mL → ~10⁹ decays)
+
+[transport]
+crystal_material = "CsI"
+cutoff_keV       = 10.0
+seed             = 1234
+nchunks          = 144          # pinned → reproducible singles
+
+[detector]
+sigma_xyz_mm  = 1.7
+eres          = 0.05            # 5% FWHM at 511 keV (pure CsI)
+emin_keV      = 300.0
+reco_emin_keV = 450.0
+seed          = 1234
+
+[timing]
+tau_ns = 3.0                    # coincidence window
+
+[output]
+dir    = "output"
+format = "hdf5"
