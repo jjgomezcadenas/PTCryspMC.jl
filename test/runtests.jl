@@ -1055,6 +1055,20 @@ end
         end
         @test inside
         @test isapprox(n2/n, A2/src.A0; atol=0.01)           # ≈ 0.80
+
+        # Option B: regions defined inline by shape build the source with no geometry change.
+        geom = load_geometry(GEOM_JSON, mats)
+        cfgB = Dict("source" => Dict("region" => [
+            Dict("shape"=>"sphere", "radius_cm"=>1.0, "position_cm"=>[-5.0, 0.0, 0.0], "conc_kBq_per_mL"=>10.0),
+            Dict("shape"=>"sphere", "radius_cm"=>2.0, "position_cm"=>[ 5.0, 0.0, 0.0], "conc_kBq_per_mL"=> 5.0),
+        ]))
+        csB = load_clinic_source(cfgB, geom)
+        @test length(csB.regions) == 2
+        @test csB.A0 ≈ 1.0e4 * (4/3*π*1^3) + 5.0e3 * (4/3*π*2^3)             # kBq/mL → Bq/mL (×1e3)
+        @test csB.regions[1].position == (-5.0, 0.0, 0.0)
+        @test material(csB.regions[1]).name == material(geom.phantom).name  # inserts share the phantom material
+        @test_throws ErrorException load_clinic_source(                     # a region with neither shape nor volume
+            Dict("source" => Dict("region" => [Dict("conc_kBq_per_mL"=>1.0)])), geom)
     end
 
     @testset "schema doc in sync with the code" begin

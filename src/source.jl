@@ -162,23 +162,37 @@ end
 """
     load_clinic_source(cfg, geom) -> ClinicSource
 
-Build a `ClinicSource` from a config's `[[source.region]]` entries — each a geometry `volume` name
-and a concentration `conc_kBq_per_mL`, resolved against `geom`. With no region table, the whole
-phantom at 1 kBq/mL is used (the uniform single-region phantom). Only the phantom is exposed as a
-named source volume today; multi-region awaits the geometry loader exposing more.
+Build a `ClinicSource` from a config's `[[source.region]]` entries, each carrying a
+`conc_kBq_per_mL` and either
+
+- a `shape` (`"sphere"`, `"cylinder"`, …) + dimensions + optional `position_cm` — the region is built
+  inline via `load_solid`, taking the phantom's material (uniform attenuation: the inserts are the
+  same medium), so structured phantoms (Derenzo, NEMA-IQ) need no geometry change; or
+- a `volume` name — resolved against the geometry's named volumes (only the phantom today).
+
+With no region table, the whole phantom at 1 kBq/mL is used (the uniform single-region phantom).
 """
 function load_clinic_source(cfg::AbstractDict, geom::Geometry)::ClinicSource
     byname = Dict{String,PhysicalVolume}(name(geom.phantom) => geom.phantom)
+    phmat  = material(geom.phantom)        # source regions share the phantom's material (uniform attenuation)
     region_cfg = get(get(cfg, "source", Dict{String,Any}()), "region", Any[])
     regions = PhysicalVolume[]; conc = Float64[]
     if isempty(region_cfg)
         push!(regions, geom.phantom); push!(conc, 1.0e3)         # default 1 kBq/mL over the phantom
     else
-        for r in region_cfg
-            vname = String(r["volume"])
-            haskey(byname, vname) ||
-                error("[[source.region]] volume '$vname' is not in the geometry (have: $(join(keys(byname), ", ")))")
-            push!(regions, byname[vname])
+        for (i, r) in enumerate(region_cfg)
+            if haskey(r, "shape")                                # inline shape (Option B)
+                pos = Tuple(Float64.(get(r, "position_cm", [0.0, 0.0, 0.0])))::NTuple{3,Float64}
+                pv  = PhysicalVolume(LogicalVolume(String(get(r, "name", "region$i")), load_solid(r), phmat), pos)
+            elseif haskey(r, "volume")                           # named geometry volume
+                vname = String(r["volume"])
+                haskey(byname, vname) ||
+                    error("[[source.region]] volume '$vname' is not in the geometry (have: $(join(keys(byname), ", ")))")
+                pv = byname[vname]
+            else
+                error("[[source.region]] needs a 'shape' (inline) or a 'volume' (named geometry volume)")
+            end
+            push!(regions, pv)
             push!(conc, 1.0e3 * Float64(get(r, "conc_kBq_per_mL", 0.0)))   # kBq/mL → Bq/mL
         end
     end

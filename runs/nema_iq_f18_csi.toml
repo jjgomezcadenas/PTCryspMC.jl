@@ -1,0 +1,56 @@
+# NEMA NU-2 Image-Quality phantom — CLINICAL scenario, Option B (regions defined inline).
+# Water body cavity (background) + six fillable hot spheres (Ø 10/13/17/22/28/37 mm) on a
+# 11.45 cm-diameter ring, F-18, 4:1 hot:background. tag = nema_iq_f18_csi.
+#
+# Concentration convention: the background fills the whole body (including the sphere positions), so
+# the draw is ADDITIVE — effective sphere conc = background + sphere. To get a true 4:1, each sphere
+# carries the INCREMENT over background (3× background): 3 × 5.3 = 15.9 kBq/mL.
+#
+# At a realistic 5.3 kBq/mL the body holds ~10¹⁰ decays, so a run pins N with --nevents (the relative
+# region weighting — the activity map — is preserved at any N). The [geometry] phantom is the water
+# body cylinder (the attenuator); the background region matches it.
+
+[geometry]
+file             = "geometry/geometry_nema.json"   # phantom = water cylinder R=10 cm, half-length 9 cm
+phantom_material = "Water"
+
+[source]
+mode          = "clinic"
+isotope       = "F18"            # T½ 109.8 min, β⁺ 0.9686
+t0_s          = 0.0
+t1_s          = 600.0            # 10 min
+acol_fwhm_deg = 0.5
+energy_keV    = 511.0
+time_seed     = 1234
+
+# All source regions as an array of inline tables (≡ repeated [[source.region]] blocks). Background
+# first (the whole body), then the six spheres on the 5.72 cm ring at 60° spacing, z = 0.
+region = [
+  { shape = "cylinder", radius_cm = 10.0, half_length_cm = 9.0, position_cm = [ 0.00,  0.00, 0.0], conc_kBq_per_mL = 5.3  },  # background
+  { shape = "sphere",   radius_cm = 1.85,                       position_cm = [ 5.72,  0.00, 0.0], conc_kBq_per_mL = 15.9 },  # 37 mm
+  { shape = "sphere",   radius_cm = 1.40,                       position_cm = [ 2.86,  4.95, 0.0], conc_kBq_per_mL = 15.9 },  # 28 mm
+  { shape = "sphere",   radius_cm = 1.10,                       position_cm = [-2.86,  4.95, 0.0], conc_kBq_per_mL = 15.9 },  # 22 mm
+  { shape = "sphere",   radius_cm = 0.85,                       position_cm = [-5.72,  0.00, 0.0], conc_kBq_per_mL = 15.9 },  # 17 mm
+  { shape = "sphere",   radius_cm = 0.65,                       position_cm = [-2.86, -4.95, 0.0], conc_kBq_per_mL = 15.9 },  # 13 mm
+  { shape = "sphere",   radius_cm = 0.50,                       position_cm = [ 2.86, -4.95, 0.0], conc_kBq_per_mL = 15.9 },  # 10 mm
+]
+
+[transport]
+crystal_material = "CsI"
+cutoff_keV       = 10.0
+seed             = 1234
+nchunks          = 144          # pinned → reproducible singles
+
+[detector]
+sigma_xyz_mm  = 1.7
+eres          = 0.05            # 5% FWHM at 511 keV (pure CsI)
+emin_keV      = 300.0
+reco_emin_keV = 450.0
+seed          = 1234
+
+[timing]
+tau_ns = 3.0                    # coincidence window
+
+[output]
+dir    = "output"
+format = "hdf5"
