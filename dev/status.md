@@ -58,9 +58,36 @@ selected by `[source].mode`:
   is the pinned-N special case (back-compat). QA: `scripts/tests/check_clinic_regions.jl`. Configs:
   `sphere_water_f18_csi`, `nema_iq_f18_csi`, `sphere_air_bgo`. `run_prod.sh` derives N for clinic
   configs (no `--nevents`).
-- **API** (After Proton Irradiation, count-driven) — *planned* (the second source branch; needs the
-  scenario reader — see "Deferred by scope"). A frozen `ptcryspg4` scenario supplies the emitters and
-  the given per-isotope decay budget. Design in `docs/PTCryspMC_app.tex`.
+- **API** (After Proton Irradiation, count-driven) — *planned* (the second source branch). A frozen
+  `ptcryspg4` scenario supplies the emitters and the given per-isotope decay budget. Design in
+  `docs/PTCryspMC_app.tex`; build plan below.
+
+### API build plan (the next feature — continuity notes)
+
+Parallels Clinical (same source abstraction → N annihilations, per-event point, per-event isotope→λ),
+but count-driven and multi-isotope. **Blocked on the upstream `ptcrysp-scenarios` format** — the
+reader columns can't be fixed until it is (see `CLAUDE.md` "Input — a scenario"). Build order:
+
+1. **Scenario reader** (format-pending): `emitters.csv` (annihilation point + isotope tag, positron
+   range already applied), `sampling_budget_<scn>.csv` (`N_j` per isotope, given), `isotopes.csv`
+   (code → `T½`, `β⁺`), `run_meta.csv` (normalization). Stamp the scenario name into every output.
+2. **Per-scenario isotopes**: feed `isotopes.csv` into the `Isotope` table (already `(T½, β⁺)`, in
+   `src/activity.jl`).
+3. **`APISource <: Source`** (in `src/source.jl`, mirroring `ClinicSource`): holds the emitters +
+   budgets; `sample_position` draws an emitter (with replacement) per isotope to `N_j`, returning the
+   point and its isotope; `N = Σ N_j` (apply `β⁺` per isotope if the `N_j` are nuclear decays —
+   format-dependent).
+4. **Per-isotope timing + an isotope column on the singles** (a singles-schema add, exactly like
+   `n_scatter` was): `simulate_source_mt` records each single's isotope; `event_time`/`ActivityModel`
+   generalize to use the emitter's isotope λ; `build_randoms` pairs cross-decay singles with the
+   per-single λ. `SCHEMA.md` regenerates from the code.
+5. **Driver**: a `[source].mode="api"` branch in `simulate_source_mt` (load scenario → `APISource` →
+   per-isotope `ActivityModel`), alongside the existing clinic/count-driven branches.
+6. **Validate** against a real scenario; reuse the seed/`nchunks` reproducibility (the emitter draw
+   must be seeded per chunk).
+
+Buildable now regardless of format: the per-isotope `ActivityModel`, the singles `isotope` column, the
+`APISource` shape. Format-blocked: the reader (1–2) and whether `N_j` carry `β⁺`.
 
 ## Detector configs
 
