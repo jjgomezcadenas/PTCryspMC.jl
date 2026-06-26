@@ -4,13 +4,13 @@ A one-page snapshot of where the simulation stands, plus the **deferred-work reg
 Companion docs: the *method* is in `docs/PTCryspMC_phys.tex` (engine) and `docs/PTCryspMC_app.tex` (modes); the
 decisions + code layout in `CLAUDE.md`.
 
-_Last updated: 2026-06-24._
+_Last updated: 2026-06-26._
 
 ## What it does
 
-A fast, photon-only Monte Carlo: read a frozen scenario (positron-annihilation points left by a
-proton field) + a detector description → write the list-mode coincidence/LOR file a PET scanner
-would record. It never runs proton transport.
+A fast, photon-only Monte Carlo: from a **source** (a clinical tracer distribution, or — planned —
+the positron activity a proton field leaves) + a detector description, write the list-mode
+coincidence/LOR file a PET scanner would record. It never runs proton transport.
 
 ## The pipeline (built & validated)
 
@@ -35,11 +35,32 @@ simulate_source_mt.jl  (multi-threaded, alloc-free) ──► prod/<tag>/singles
   `py/plot_dt.py`); `compare_crystal_timing.jl` explains why τ is crystal-independent.
 - **Reco lower energy cut** `reco_emin_keV = 450` (photopeak region; the spectrum studies keep
   `emin_keV = 300` to see the Compton shoulder). No upper cut (it's an analysis-time choice).
-- **Validated (10⁷):** `Pkg.test` **812**; randoms match the analytic `2τS²` (CsI 1248 vs 1291,
-  ratio 0.97); reco acceptance CsI 8.98% / BGO 23.75%; corrected residual median|dt| (CsI 0.059 /
-  BGO 0.200 ns) matches the analytic single-photon jitter.
+- **Validated:** `Pkg.test` **870**; randoms match the analytic `2τS²` (CsI 1248 vs 1291, ratio 0.97;
+  the clinical Vacuum/BGO 10⁸ run 52694 vs 52708, ratio 1.00); reco acceptance CsI 8.98% / BGO 23.75%;
+  corrected residual median|dt| (CsI 0.059 / BGO 0.200 ns) matches the analytic single-photon jitter;
+  the clinical N-from-activity matches the analytic to the event.
 - **Scale.** `scripts/tests/bench_chain.jl`: the full chain at 10⁸ runs **~3 min serial, ~14 GB
-  peak** (`build_randoms`, the only N-scaling stage) — fits 48 GB, no rework needed.
+  peak** (`build_randoms`, the only N-scaling stage) — fits 48 GB, no rework needed. (The clinical
+  Vacuum/BGO 10⁸ run completed the whole chain in 180 s on 16 threads.)
+
+## Source scenarios (the front end)
+
+The engine + chain above are shared; what drives them is the **source**, in one of two scenarios
+selected by `[source].mode`:
+
+- **Clinical** (activity-driven) — *built & validated.* A tracer distribution at a known activity:
+  one or more `[[source.region]]` (a named geometry `volume`, or an inline `shape` + dims +
+  `position_cm`), each with a concentration (`conc_kBq_per_mL`) or a total (`activity_kBq`). An isotope
+  (F-18 default → `T½`, `β⁺`) + an acquisition window `[t0_s,t1_s]` fix the rest:
+  `N = β⁺·(Σ cᵢVᵢ/λ)(1−e^{−λT})` annihilations, each drawn from a region ∝ its activity `cᵢVᵢ` and
+  timed by the decay curve. Structured phantoms (Derenzo, NEMA-IQ) need no geometry change (the
+  inserts share the phantom material → the transport is unchanged). The count-driven uniform phantom
+  is the pinned-N special case (back-compat). QA: `scripts/tests/check_clinic_regions.jl`. Configs:
+  `sphere_water_f18_csi`, `nema_iq_f18_csi`, `sphere_air_bgo`. `run_prod.sh` derives N for clinic
+  configs (no `--nevents`).
+- **API** (After Proton Irradiation, count-driven) — *planned* (the second source branch; needs the
+  scenario reader — see "Deferred by scope"). A frozen `ptcryspg4` scenario supplies the emitters and
+  the given per-isotope decay budget. Design in `docs/PTCryspMC_app.tex`.
 
 ## Detector configs
 
@@ -49,7 +70,7 @@ and the pixelated detectors (LYSO, standard BGO) are still to add.
 ## Documentation
 
 - `docs/PTCryspMC_phys.tex` — the engine (physics, geometry, transport, detector response).
-- `docs/PTCryspMC_app.tex` — the application (phantom-based and proton-beam-based modes).
+- `docs/PTCryspMC_app.tex` — the application (the Clinical and API source scenarios).
 - Docstrings + a Literate/Documenter web doc-site — **planned (the next doc task), not built.**
 
 ## Deferred work & known nits
@@ -78,9 +99,12 @@ _(The former #1 — the `first_photon_jitter` `-log(1-rand)` guard — is now fi
 
 ### Deferred by scope (not from the review)
 
-- **Two source branches** (design in `docs/PTCryspMC_app.tex`; engine + chain already shared). Both feed the same source abstraction → (N annihilations, per-event point, per-event isotope→λ):
-  - **Clinical** (activity-driven, buildable now): `[source].mode="clinic"`, one or more `[[source.region]]` (a geometry volume + concentration Bq/mL), an isotope (F-18 default → `T½`, `β⁺`), and `[t0,t1]`. Derive `N = β⁺·(Σ cᵢVᵢ/λ)(1−e^{−λT})`; draw region ∝ `cᵢVᵢ`; single-isotope timing. The current uniform-phantom + pinned-N run is the validation special case (so it still reproduces). New: isotope table `(T½,β⁺)`, multi-region draw, N-derivation; migrate `isotope`+window `[timing]`→`[source]` (keep `tau_ns` in `[timing]`).
-  - **API** (After Proton Irradiation, count-driven): `[source].mode="api"`, `scenario=…` → `emitters.csv` (points+isotope, range pre-applied), `sampling_budget` (`N_j` given), `isotopes.csv` (per-isotope `T½`). Needs the scenario reader (the piece below). Adds an isotope column to the singles; per-isotope `event_time`.
+- **API source scenario** — the second source branch (Clinical is built; see "Source scenarios").
+  `[source].mode="api"`, `scenario=…` → a frozen `ptcryspg4` scenario: `emitters.csv` (points +
+  isotope, range pre-applied), the measured per-isotope budget `N_j` (given, not derived),
+  `isotopes.csv` (per-isotope `T½`). Needs the scenario reader; adds an isotope column to the singles
+  + per-isotope `event_time`. Multi-region clinic spatial draw uses dynamic dispatch per event — worth
+  a glance if a clinic run ever goes to 10⁸ with many regions.
 - Refine the per-crystal **PDE** (0.45 placeholder for CsI and BGO; should differ by emission colour).
 - Cylinder/vacuum configs need their own `examine_dt` (different scanner length → different TOF tail) before fixing their `[timing].tau_ns`.
 - Threshold / CFD timing (the "first photon" model is the leading-edge idealization).
@@ -88,6 +112,8 @@ _(The former #1 — the `first_photon_jitter` `-log(1-rand)` guard — is now fi
 
 ## Next
 
-1. **Docstrings + Literate/Documenter doc-site** (the remaining documentation task).
-2. Crystal XCOM tables + the R5 `load_xcom` hardening; the CsI(Tl) config.
-3. Downstream, separate & deferred: range precision, detector comparison, reconstruction.
+1. **API source scenario** — the second source branch (the `ptcryspg4` scenario reader), when the
+   upstream format is fixed.
+2. **Docstrings + Literate/Documenter doc-site** (the remaining documentation task).
+3. Crystal XCOM tables + the `load_xcom` hardening; the CsI(Tl) config.
+4. Downstream, separate & deferred: range precision, detector comparison, reconstruction.
