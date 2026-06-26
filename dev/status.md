@@ -78,7 +78,9 @@ _(The former #1 — the `first_photon_jitter` `-log(1-rand)` guard — is now fi
 
 ### Deferred by scope (not from the review)
 
-- Real per-isotope activity (Step 1 scenario source: isotope tags + the sampling budget). Swapping it in changes only `event_time` + adds an isotope column to the singles.
+- **Two source branches** (design in `docs/PTCryspMC_app.tex`; engine + chain already shared). Both feed the same source abstraction → (N annihilations, per-event point, per-event isotope→λ):
+  - **Clinical** (activity-driven, buildable now): `[source].mode="clinic"`, one or more `[[source.region]]` (a geometry volume + concentration Bq/mL), an isotope (F-18 default → `T½`, `β⁺`), and `[t0,t1]`. Derive `N = β⁺·(Σ cᵢVᵢ/λ)(1−e^{−λT})`; draw region ∝ `cᵢVᵢ`; single-isotope timing. The current uniform-phantom + pinned-N run is the validation special case (so it still reproduces). New: isotope table `(T½,β⁺)`, multi-region draw, N-derivation; migrate `isotope`+window `[timing]`→`[source]` (keep `tau_ns` in `[timing]`).
+  - **API** (After Proton Irradiation, count-driven): `[source].mode="api"`, `scenario=…` → `emitters.csv` (points+isotope, range pre-applied), `sampling_budget` (`N_j` given), `isotopes.csv` (per-isotope `T½`). Needs the scenario reader (the piece below). Adds an isotope column to the singles; per-isotope `event_time`.
 - Refine the per-crystal **PDE** (0.45 placeholder for CsI and BGO; should differ by emission colour).
 - Cylinder/vacuum configs need their own `examine_dt` (different scanner length → different TOF tail) before fixing their `[timing].tau_ns`.
 - Threshold / CFD timing (the "first photon" model is the leading-edge idealization).
