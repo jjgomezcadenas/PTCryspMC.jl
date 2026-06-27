@@ -7,6 +7,8 @@
 # full-stack dev chain (simulate_phantom -> build_coincidences -> output/, single-threaded, fanned
 # out in parallel). This one drives the production chain instead:
 #   simulate_source_mt -> build_true_coincidences_from_singles -> build_randoms_from_singles -> reco_lors
+# and finishes with py/plot_prod.py, so each run drops a control-plot PNG (prod/<tag>/lors_det.png)
+# beside its deliverable.
 #
 # HDF5 (so the runs carry the provenance attrs) + a PINNED nchunks, so the singles are
 # bit-reproducible from (config + seed) — they can be regenerated exactly after pruning.
@@ -57,7 +59,8 @@ for cfg in $configs; do
     julia -t $THREADS --project=. scripts/simulate_source_mt.jl --config $cfg $nevarg --nchunks $NCHUNKS --format hdf5 &&
     julia -t $THREADS --project=. scripts/build_true_coincidences_from_singles.jl --config $cfg --singles $dir/singles.h5 &&
     julia --project=. scripts/build_randoms_from_singles.jl --config $cfg --singles $dir/singles.h5 &&
-    julia --project=. scripts/reco_lors.jl --config $cfg
+    julia --project=. scripts/reco_lors.jl --config $cfg &&
+    python3 py/plot_prod.py --config $cfg
   } >/tmp/ptcprod_$tag.log 2>&1; then
     grep -hE "kept|acceptance" /tmp/ptcprod_$tag.log | tail -2
   else
