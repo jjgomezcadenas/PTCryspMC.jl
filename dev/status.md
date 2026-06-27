@@ -36,8 +36,10 @@ simulate_source_mt.jl  (multi-threaded, alloc-free) ──► prod/<tag>/singles
 - **Reco lower energy cut** `reco_emin_keV = 450` (photopeak region; the spectrum studies keep
   `emin_keV = 300` to see the Compton shoulder). No upper cut (it's an analysis-time choice).
 - **Validated:** `Pkg.test` **870**; randoms match the analytic `2τS²` (CsI 1248 vs 1291, ratio 0.97;
-  the clinical Vacuum/BGO 10⁸ runs 52694 vs 52708, and at 10× activity 579705 vs 578399 — both ratio
-  1.00, so 2τS² holds across an order of magnitude in activity); reco acceptance CsI 8.98% / BGO 23.75%;
+  the clinical Vacuum/BGO 10⁸ runs at fixed N over 100× in rate — 100 kHz×1000 s: 52694 vs 52708;
+  1 MBq×100 s: 579705 vs 578399; 10 MBq×10 s: 5837886 vs 5839021 — all ratio 1.00, so 2τS² holds across
+  three orders of magnitude in activity, with randoms reaching ~10% of trues at the 10 MBq end);
+  reco acceptance CsI 8.98% / BGO 23.75%;
   corrected residual median|dt| (CsI 0.059 / BGO 0.200 ns) matches the analytic single-photon jitter;
   the clinical N-from-activity matches the analytic to the event.
 - **Scale.** `scripts/tests/bench_chain.jl`: the full chain at 10⁸ runs **~3 min serial, ~14 GB
