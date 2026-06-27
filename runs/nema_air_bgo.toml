@@ -1,0 +1,54 @@
+# NEMA NU-2 Image-Quality phantom, VACUUM (air ≈ no attenuation) — non-attenuated reference, BGO.
+# CLINICAL, Option B (regions inline): water-body cavity (background) + six hot spheres
+# (Ø 10/13/17/22/28/37 mm) on a 11.45 cm-dia ring, F-18, 4:1 hot:background.
+#
+# Realistic activity: background 5.3 kBq/mL → A0 ≈ 30.7 MBq over the body. To land N ≈ 1e8 the
+# acquisition is short, t1_s = 3.36 s (N = β⁺·(A0/λ)(1−e^{−λT}) ≈ 1.0e8). This is the HIGH-activity
+# NEMA (randoms ∝ A²T are large here — see nema_la_air_bgo for the ×0.1-activity / ×10-time twin at
+# the same N but 1/10 the randoms). tag = nema_air_bgo.
+#
+# Additive concentration convention: the background fills the whole body (incl. the sphere
+# positions), so each sphere carries the INCREMENT over background (3× = 15.9 kBq/mL) → effective 4:1.
+
+[geometry]
+file             = "geometry/geometry_nema.json"   # phantom = body cylinder R=10 cm, half-length 9 cm
+phantom_material = "Vacuum"                         # air ≈ vacuum: no attenuation / scatter (reference)
+
+[source]
+mode          = "clinic"
+isotope       = "F18"            # T½ 109.8 min, β⁺ 0.9686
+t0_s          = 0.0
+t1_s          = 3.36             # → N ≈ 1.0e8 at A0 ≈ 30.7 MBq
+acol_fwhm_deg = 0.5
+energy_keV    = 511.0
+time_seed     = 1234
+
+region = [
+  { shape = "cylinder", radius_cm = 10.0, half_length_cm = 9.0, position_cm = [ 0.00,  0.00, 0.0], conc_kBq_per_mL = 5.3  },  # background
+  { shape = "sphere",   radius_cm = 1.85,                       position_cm = [ 5.72,  0.00, 0.0], conc_kBq_per_mL = 15.9 },  # 37 mm
+  { shape = "sphere",   radius_cm = 1.40,                       position_cm = [ 2.86,  4.95, 0.0], conc_kBq_per_mL = 15.9 },  # 28 mm
+  { shape = "sphere",   radius_cm = 1.10,                       position_cm = [-2.86,  4.95, 0.0], conc_kBq_per_mL = 15.9 },  # 22 mm
+  { shape = "sphere",   radius_cm = 0.85,                       position_cm = [-5.72,  0.00, 0.0], conc_kBq_per_mL = 15.9 },  # 17 mm
+  { shape = "sphere",   radius_cm = 0.65,                       position_cm = [-2.86, -4.95, 0.0], conc_kBq_per_mL = 15.9 },  # 13 mm
+  { shape = "sphere",   radius_cm = 0.50,                       position_cm = [ 2.86, -4.95, 0.0], conc_kBq_per_mL = 15.9 },  # 10 mm
+]
+
+[transport]
+crystal_material = "BGO"
+cutoff_keV       = 10.0
+seed             = 1234
+nchunks          = 144          # pinned → reproducible singles
+
+[detector]
+sigma_xyz_mm  = 1.7
+eres          = 0.10            # 10% FWHM at 511 keV (cryogenic BGO)
+emin_keV      = 300.0
+reco_emin_keV = 450.0
+seed          = 1234
+
+[timing]
+tau_ns = 3.0                    # coincidence window
+
+[output]
+dir    = "output"
+format = "hdf5"
