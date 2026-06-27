@@ -1,0 +1,41 @@
+# Sphere phantom (Water), BGO ring. CLINICAL: F-18 uniform fill at 1 MBq over 100 s.
+# N = β⁺·(A₀/λ)(1−e^{−λT}) ≈ 0.9686 · 9.95×10⁷ ≈ 9.6×10⁷. Water → real attenuation +
+# Compton scatter (nscat1/nscat2 populated), the attenuating counterpart of
+# sphere_air_bgo_1MBq (Vacuum reference). tag = sphere_water_bgo_1MBq.
+
+[geometry]
+file             = "geometry/geometry_sphere.json"
+phantom_material = "Water"
+
+[source]
+mode          = "clinic"
+isotope       = "F18"
+t0_s          = 0.0
+t1_s          = 100.0
+acol_fwhm_deg = 0.5
+energy_keV    = 511.0
+time_seed     = 1234
+
+[[source.region]]
+volume       = "phantom"
+activity_kBq = 1000.0            # 1 MBq total
+
+[transport]
+crystal_material = "BGO"
+cutoff_keV       = 10.0
+seed             = 1234
+nchunks          = 144           # pinned → reproducible singles
+
+[detector]
+sigma_xyz_mm  = 1.7
+eres          = 0.10             # 10% FWHM at 511 keV (cryogenic BGO)
+emin_keV      = 300.0
+reco_emin_keV = 450.0
+seed          = 1234
+
+[timing]
+tau_ns = 3.0                     # coincidence window
+
+[output]
+dir    = "output"
+format = "hdf5"
