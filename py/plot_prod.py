@@ -2,9 +2,9 @@
 """Control plots for a production LOR file (prod/<tag>/lors_det.h5).
 
 A 3x3 panel of QA diagnostics for the list-mode deliverable — energy, the ring hit map,
-the axial efficiency profile, the source fill, the timing residual, and the truth/scatter
+the LOR axial midpoint, the source fill, the coincidence Δt, and the truth/scatter
 composition. Reads ONLY lors_det.h5 (so it runs on already-pruned runs) plus the scanner
-geometry from the config's geometry JSON. Writes prod/<tag>/lors_det.png.
+geometry from the config's geometry JSON. Writes prod/<tag>/<tag>_lors_det.png.
 
 This is the production counterpart of py/plot_coincidences.py (which is the dev-chain
 plotter: CSV from output/, two truth classes). Here the input is HDF5, truth has three
@@ -174,7 +174,10 @@ def main():
     if n_t:
         a.hist(zmid[is_t], bins=60, range=(-H, H), histtype="step", color=C_TRUE, label="true")
     a.set_xlabel("LOR axial midpoint z [mm]"); a.set_ylabel("LORs"); a.legend()
-    a.set_title("Axial sensitivity profile")
+    # NB: the midpoint of a back-to-back pair tracks the SOURCE, not the ring — for a compact
+    # central source this traces the source axial extent, not the detector sensitivity (which would
+    # need a FOV-filling source). The full ring length shows up in the hit map (panel 4) instead.
+    a.set_title("LOR axial midpoint (≈ source axial extent)")
 
     # 6. source fill, transverse
     a = ax(6)
@@ -192,19 +195,26 @@ def main():
     a.set_xlabel("x0 [mm]"); a.set_ylabel("z0 [mm]")
     a.set_title("Source fill (axial)")
 
-    # 8. timing residual dt, true vs scatter (randoms are NaN)
+    # 8. coincidence Δt = t1 − t2 (RAW, not TOF-corrected) — the quantity the τ window cuts on:
+    #    trues/scatter peak at 0 (the TOF spread), randoms are flat across the window. The TOF-
+    #    corrected residual (dt_ns = jitter only) is the timing resolution, annotated as one number.
     a = ax(8)
-    dt = d["dt_ns"]
-    fin = np.isfinite(dt)
-    lo, hi = np.percentile(dt[fin], [0.5, 99.5]) if fin.any() else (-1.0, 1.0)
-    rng = (min(lo, -hi), max(hi, -lo))
-    for mask, c, lab in ((is_t & fin, C_TRUE, "true"), (is_s & fin, C_SCAT, "scatter")):
+    draw = d["t1_ns"] - d["t2_ns"]
+    xr = tau if tau > 0 else float(np.nanpercentile(np.abs(draw), 99.5) or 1.0)
+    for mask, c, lab in ((is_t, C_TRUE, "true"), (is_s, C_SCAT, "scatter"), (is_r, C_RAND, "random")):
         if mask.any():
-            a.hist(dt[mask], bins=70, range=rng, histtype="step", color=c, label=lab)
+            a.hist(draw[mask], bins=70, range=(-xr, xr), histtype="step", color=c, label=lab)
     a.axvline(0, color="gray", ls="--", lw=1)
-    a.set_yscale("log"); a.set_xlabel("dt residual [ns]"); a.set_ylabel("LORs"); a.legend()
+    for s in (-tau, tau):
+        if tau > 0:
+            a.axvline(s, color="gray", ls=":", lw=1)
+    a.set_yscale("log"); a.set_xlabel("Δt = t1 − t2 [ns]"); a.set_ylabel("LORs"); a.legend()
+    a.set_title("Coincidence Δt (raw, τ window)")
+    dt = d["dt_ns"]; fin = np.isfinite(dt)
     med = np.median(np.abs(dt[is_t & fin])) if (is_t & fin).any() else float("nan")
-    a.set_title(f"Timing residual (median|dt| true {med:.3f} ns)")
+    a.text(0.03, 0.97, f"TOF-corr.\nmedian|dt|\n{med:.3f} ns", transform=a.transAxes,
+           ha="left", va="top", fontsize=8, family="monospace",
+           bbox=dict(boxstyle="round", fc="white", ec="0.7"))
 
     # 9. composition + efficiency: true / scatter(single+multiple) / random
     a = ax(9)
