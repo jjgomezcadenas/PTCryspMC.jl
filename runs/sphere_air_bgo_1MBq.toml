@@ -1,0 +1,41 @@
+# Sphere phantom, VACUUM (air ≈ no attenuation) — non-attenuated reference, BGO. CLINICAL: F-18
+# uniform fill at a TOTAL activity of 1 MBq over a 100 s acquisition. N = β⁺·(A₀/λ)(1−e^{−λT}) ≈
+# 0.9686 · 9.95×10⁷ ≈ 9.6×10⁷. Same count as sphere_air_bgo (100 kHz × 1000 s) but 10× the rate over
+# 1/10 the time → ~10× the randoms (a randoms-scaling counterpart). tag = sphere_air_bgo_1MBq.
+
+[geometry]
+file             = "geometry/geometry_sphere.json"
+phantom_material = "Vacuum"      # air ≈ vacuum: no attenuation / scatter (the reference)
+
+[source]
+mode          = "clinic"
+isotope       = "F18"
+t0_s          = 0.0
+t1_s          = 100.0            # 100 s acquisition
+acol_fwhm_deg = 0.5
+energy_keV    = 511.0
+time_seed     = 1234
+
+[[source.region]]
+volume       = "phantom"         # the whole sphere, uniform
+activity_kBq = 1000.0            # 1 MBq total
+
+[transport]
+crystal_material = "BGO"
+cutoff_keV       = 10.0
+seed             = 1234
+nchunks          = 144           # pinned → reproducible singles
+
+[detector]
+sigma_xyz_mm  = 1.7
+eres          = 0.10             # 10% FWHM at 511 keV (cryogenic BGO)
+emin_keV      = 300.0
+reco_emin_keV = 450.0
+seed          = 1234
+
+[timing]
+tau_ns = 3.0                     # coincidence window
+
+[output]
+dir    = "output"
+format = "hdf5"
