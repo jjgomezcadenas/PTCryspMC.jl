@@ -45,7 +45,9 @@ def paths_from_config(path):
     prod_dir = out.get("prod_dir", "prod")
     rundir = os.path.join(REPO, prod_dir, tag)
     geom_file = os.path.join(REPO, cfg.get("geometry", {}).get("file", "geometry/geometry.json"))
-    return os.path.join(rundir, "lors_det.h5"), os.path.join(rundir, "lors_det.png"), geom_file
+    # The PNG carries the full tag (the h5 keeps its short name): control plots from several
+    # runs get opened side by side, so the filename must identify the run on its own.
+    return os.path.join(rundir, "lors_det.h5"), os.path.join(rundir, f"{tag}_lors_det.png"), geom_file
 
 
 def scanner_geometry(geom_file):
@@ -92,7 +94,9 @@ def main():
         args.geometry = args.geometry or geom
     if not args.lors:
         p.error("pass --config or --lors")
-    args.out = args.out or os.path.splitext(args.lors)[0] + ".png"
+    if not args.out:                                  # tag the PNG by its run dir (prod/<tag>/)
+        rundir = os.path.dirname(os.path.abspath(args.lors))
+        args.out = os.path.join(rundir, f"{os.path.basename(rundir)}_lors_det.png")
     Ri, wall, H = scanner_geometry(args.geometry) if args.geometry else (387.0, 37.0, 512.0)
 
     d, attrs = load_lors(args.lors)
