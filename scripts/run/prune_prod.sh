@@ -38,6 +38,7 @@ fi
 total=0
 for d in $dirs; do
   tag=${d:t}
+  [[ $tag == _* ]] && continue        # skip meta dirs (e.g. _gallery), not runs
   if [[ ! -d $d ]]; then print "skip $tag: no such dir ($d)"; continue; fi
   if [[ ! -f $d/lors_det.h5 ]]; then print "skip $tag: no lors_det.h5 (incomplete run — not pruning)"; continue; fi
   if [[ ! -f $d/config.toml ]]; then print "skip $tag: no config.toml (cannot regenerate — not pruning)"; continue; fi

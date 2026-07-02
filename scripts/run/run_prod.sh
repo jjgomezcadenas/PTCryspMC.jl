@@ -74,3 +74,5 @@ for cfg in $configs; do
   printf "%-24s " $tag
   grep -h "acceptance" /tmp/ptcprod_$tag.log 2>/dev/null | tail -1 || print "ERROR -> /tmp/ptcprod_$tag.log"
 done
+
+${0:A:h}/gallery.sh                    # refresh prod/_gallery/ with every run's control PNG
