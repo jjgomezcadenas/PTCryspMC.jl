@@ -43,6 +43,16 @@ physically:
 
 `dose -> counts  =  activation_yield_per_Gy x dose x (decay+washout window fraction) x geometry_sensitivity`
 
+**Sharded master.** The top of the dose axis sets the master size: with a top dose
+point worth 10^8 decays, the master needs 10^9 (the 10x rule above). Build it as
+ten independent 10^8-decay runs with different seeds — statistically identical to
+one monolithic 10^9 run, and every simulation, file and pruning step stays at the
+proven production scale. A realisation is then drawn from the POOLED master: stream
+all ten shards and keep each event independently with p = target/M_total (p = 0.1
+at the top dose point, smaller below). Seed the thinning RNG with the realisation
+index: each realisation is reproducible on demand, so it can be reconstructed,
+fitted and discarded — no realisation is ever stored.
+
 ### 3. Reconstruct each realisation — everything fixed
 Same MLEM iteration count, same voxel grid (identical across geometries despite
 different FOVs), no post-filter on the first pass. Iteration count is common-mode
@@ -72,6 +82,12 @@ Sweep dose -> `sigma_R`-vs-dose curve, one per configuration.
 
 ## Guardrails
 
+- **Cross-check the thinning at the top dose.** The ten shards are themselves ten
+  truly independent experiments at exactly the top dose point (10^8 each): fit the
+  endpoint of each shard and take the std of the ten — a bias-free sigma_R with no
+  shared-master deflation. The thinned estimate at that dose must agree with it
+  within the ten-sample precision (~1/sqrt(2x9) ~ 24%); agreement validates the
+  thinning machinery at the one dose point where p is largest. Costs ten fits.
 - **Trues-only on the first pass.** Add scatter/randoms as a separate axis later:
   open and closed geometries handle scatter qualitatively differently, and that must
   not be confounded into the headline curve.
@@ -101,6 +117,9 @@ Range precision scales as `sigma_R ~ 1/sqrt(N_coincident_counts)`. Counts-limite
 not resolution-limited — so the long-AFOV geometric sensitivity feeds straight into
 precision, and (unlike the clinical CRC case) the missing TOF hurts less because the
 analysis is 1-D along a known beam axis and the distal edge is strongly localised.
+The same scaling sizes the master: the top dose point dictates M >= 10x its counts
+(10^8-decay top point -> 10^9-decay master, i.e. the ten shards above), while every
+lower dose point thins from the same master for free.
 
 ## Companion code
 `range_endpoint.py` — `thin_lm` (step 2), `fit_endpoint` (step 5), `sigma_R` (step 6).
