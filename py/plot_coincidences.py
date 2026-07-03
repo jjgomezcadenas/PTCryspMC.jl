@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Diagnostics for the list-mode coincidence file written by
-scripts/build_coincidences.jl (truth or detector mode).
+scripts/dev/build_coincidences.jl (truth or detector mode).
 
 Reads a coincidence CSV (one row per coincidence = one LOR):
   event, x1_mm,y1_mm,z1_mm, e1_keV, t1_ns, iz1,iphi1,

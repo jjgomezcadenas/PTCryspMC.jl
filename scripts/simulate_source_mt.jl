@@ -1,7 +1,7 @@
 #!/usr/bin/env julia
 # Production singles driver — TOML-config driven, MULTI-THREADED, singles-only output.
 #
-# Same source + transport as scripts/simulate_phantom.jl (a back-to-back 511 keV source fills
+# Same source + transport as scripts/dev/simulate_phantom.jl (a back-to-back 511 keV source fills
 # the phantom and emits pairs with acollinearity, each photon navigated phantom → air → ring),
 # but it writes the REDUCED *singles* stack — one row per detected photon — via the allocation-
 # free `navigate_single_photons`, so it scales to the ~10⁸-decay production runs. The full per-

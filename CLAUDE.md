@@ -12,8 +12,8 @@ AskUserQuestion option-list format). State what you need to know directly.
 Simulate how a PET scanner detects the positron activity left by a proton field, and
 write the list of coincidences it would record — the list-mode LOR file (`lors_det.h5`) for a
 given detector. The proton transport is done upstream by `ptcryspg4`; this repo begins from the
-annihilation points. It runs in two modes (a geometric phantom, validated; a `ptcryspg4` scenario,
-the target — see "The guide" below).
+annihilation points. It runs in two modes (Clinical — a tracer distribution at a known activity,
+built & validated; Proton Activity — a `ptcryspg4` scenario, the target — see "The guide" below).
 
 The simulation runs once per detector, and every detector reads the identical scenario, so
 differences come from the detector alone. The analysis that consumes the coincidence list
@@ -25,16 +25,17 @@ may live in its own repo. It is not described here.
 Two LaTeX manuals in `docs/` describe the simulator. `PTCryspMC_phys.tex` is the **engine** —
 the physics, geometry, transport, and detector response (shared by both modes).
 `PTCryspMC_app.tex` is the **application** — the two modes the engine is driven by:
-**phantom-based** (a geometric phantom filled with a uniform source: the validated, currently
-running mode) and **proton-beam-based** (the positron activity a proton dose leaves, via a
-`ptcryspg4` scenario: the eventual target, not yet built). Read these for the method; this file
-records the decisions, parameters, and build notes.
+**Clinical** (a radiotracer distribution at a known activity — regions, isotope, acquisition
+window: the validated, currently running mode) and **Proton Activity (API)** (the positron
+activity a proton dose leaves, via a `ptcryspg4` scenario: the eventual target, not yet built).
+Read these for the method; this file records the decisions, parameters, and build notes.
 
 ## Input — a scenario from ptcrysp-scenarios
 
-This is the **proton-beam mode** — the eventual target, not yet implemented. What currently runs
-and is validated is the **phantom mode** (`runs/*.toml` with a geometric phantom + uniform source;
-see `docs/PTCryspMC_app.tex`). When built, the scenario will be the source for the proton-beam mode:
+This is the **Proton Activity (API) mode** — the eventual target, not yet implemented. What
+currently runs and is validated is the **Clinical mode** (`runs/*.toml` with an activity-driven
+tracer distribution; see `docs/PTCryspMC_app.tex`). When built, the scenario will be the source
+for the API mode:
 clone `ptcrysp-scenarios` and point the code at one scenario directory by name (config or env var;
 scenarios are append-only, so the name is the version). A scenario carries:
 
@@ -79,18 +80,18 @@ A fast, photon-only Monte Carlo. Full method in `docs/PTCryspMC_phys.tex`; the d
   each gamma contained in one block (no overspill); the two hits emerge roughly opposite (observed,
   not enforced). Plus the coincidence-window cut |t1 − t2| ≤ τ.
 - **Randoms.** A separate pass over the singles, no re-transport: time-tag each single from the
-  activity model (a single toy isotope, ¹⁵O, in phantom mode; the per-isotope scenario activity in
-  proton-beam mode), restore the absolute clock, sort, pair cross-annihilation singles within the
+  activity model (the config's single isotope — F-18 default — in clinic mode; the per-isotope
+  scenario activity in API mode), restore the absolute clock, sort, pair cross-annihilation singles within the
   coincidence window τ (a few ns). Rate ≈ 2τS², front-loaded, at most a few percent of the trues.
 - **Run once.** Transport runs once → trues + singles. Randoms, and any re-realization the
   downstream analysis needs, are cheap operations on the singles list.
 
 ## Current detectors (scope)
 
-Monolithic crystals with continuous 3-D readout: pure CsI (a = 5% FWHM @ 511 keV), CsI(Tl)
-(7%), cryogenic BGO (10%); position/DOI σ_xyz ~1.7 mm (CRYSP). Pixelated detectors (LYSO,
-standard BGO, a = 15–20%) report a fixed crystal rather than a continuous position, and
-come later.
+Monolithic crystals with continuous 3-D readout: pure CsI (a = 5% FWHM @ 511 keV) and
+cryogenic BGO (10%), both validated; position/DOI σ_xyz ~1.7 mm (CRYSP). CsI(Tl) (7%) is
+still to add. Pixelated detectors (LYSO, standard BGO, a = 15–20%) report a fixed crystal
+rather than a continuous position, and come later.
 
 ## Output — `lors_det.h5`
 
@@ -130,7 +131,7 @@ chain** — `simulate_source_mt.jl`, `build_true_coincidences_from_singles.jl`,
 = the full-stack dev chain `simulate_phantom.jl` + `build_coincidences.jl`, `scripts/studies/`
 = one-off explorations, `scripts/tests/` = QA/benchmark scripts, `scripts/run/` = launchers
 (`run_matrix.sh` fans the dev chain across configs → `output/`; `run_prod.sh` runs the production
-chain per config → `prod/`, HDF5 + pinned nchunks for reproducibility)), `py/` (Python plotters),
+chain per NAMED config → `prod/` (explicit-only, HDF5 + pinned nchunks for reproducibility))), `py/` (Python plotters),
 `runs/` (TOML run configs, tracked), `test/`. Three
 gitignored output trees, one per script category (each holding only directories): `output/`
 (dev chain — `<tag>/` run cases + `control_plots/`), `prod/` (production chain — `<tag>/`
@@ -166,8 +167,8 @@ output dir `output/<tag>/`, which holds the stack, the coincidence file(s), the 
 copy of the config. `src/config.jl` reads it (`read_config`, `run_tag`, `cfg_get`).
 
 The full chain — source injection, the block/wheel grid, transport, hit formation + selection,
-and the randoms pass — is built and validated in phantom mode. See `dev/status.md` for the current
-state and what remains (the proton-beam scenario source; the Documenter doc-site).
+and the randoms pass — is built and validated in Clinical mode. See `dev/status.md` for the current
+state and what remains (the Proton Activity (API) scenario source; the Documenter doc-site).
 
 ## Tech stack
 
@@ -177,7 +178,7 @@ state and what remains (the proton-beam scenario source; the Documenter doc-site
   the singles stack): O(1) memory, no whole-file load, so it scales to the
   large stacks a full run produces (this is why it is Julia, not Python — see the note
   below).
-- **Python** — scenario reading (proton-beam mode, to come), the control plots and the
+- **Python** — scenario reading (API mode, to come), the control plots and the
   documentation figures (`py/fig_*.py`), and lighter downstream analysis.
 - **CSV and HDF5** in and out (CSV for dev/inspection; HDF5 — quantized Int16, compressed —
   for the production singles stack: ~6× smaller, typed/partial fast reads for the write-once,

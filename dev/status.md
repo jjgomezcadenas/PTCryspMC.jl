@@ -59,9 +59,10 @@ selected by `[source].mode`:
   timed by the decay curve. Structured phantoms (Derenzo, NEMA-IQ) need no geometry change (the
   inserts share the phantom material → the transport is unchanged). The count-driven uniform phantom
   is the pinned-N special case (back-compat). QA: `scripts/tests/check_clinic_regions.jl`. Configs:
-  `sphere_water_f18_csi`, `nema_iq_f18_csi`, `sphere_air_bgo`. `run_prod.sh` derives N for clinic
-  configs (no `--nevents`).
-- **API** (After Proton Irradiation, count-driven) — *planned* (the second source branch). A frozen
+  `sphere_water_f18_csi`, the sphere/cylinder × air/water BGO set, and the NEMA quartet
+  (`nema_{air,water}_bgo`, `nema_la_{air,water}_bgo`). `run_prod.sh` derives N for clinic
+  configs (no `--nevents`) and runs NAMED configs only.
+- **Proton Activity (API)** (count-driven) — *planned* (the second source branch). A frozen
   `ptcryspg4` scenario supplies the emitters and the given per-isotope decay budget. Design in
   `docs/PTCryspMC_app.tex`; build plan below.
 
@@ -136,7 +137,6 @@ _(The former #1 — the `first_photon_jitter` `-log(1-rand)` guard — is now fi
   + per-isotope `event_time`. Multi-region clinic spatial draw uses dynamic dispatch per event — worth
   a glance if a clinic run ever goes to 10⁸ with many regions.
 - Refine the per-crystal **PDE** (0.45 placeholder for CsI and BGO; should differ by emission colour).
-- Cylinder/vacuum configs need their own `examine_dt` (different scanner length → different TOF tail) before fixing their `[timing].tau_ns`.
 - Threshold / CFD timing (the "first photon" model is the leading-edge idealization).
 - Pixelated detectors report a fixed crystal, not a continuous position. Placement **rotation** transform (only when a volume needs it).
 

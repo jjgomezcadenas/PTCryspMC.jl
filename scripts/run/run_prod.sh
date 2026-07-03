@@ -7,15 +7,15 @@
 # full-stack dev chain (simulate_phantom -> build_coincidences -> output/, single-threaded, fanned
 # out in parallel). This one drives the production chain instead:
 #   simulate_source_mt -> build_true_coincidences_from_singles -> build_randoms_from_singles -> reco_lors
-# and finishes with py/plot_prod.py, so each run drops a control-plot PNG (prod/<tag>/lors_det.png)
-# beside its deliverable.
+# and finishes with py/plot_prod.py, so each run drops a control-plot PNG
+# (prod/<tag>/<tag>_lors_det.png) beside its deliverable.
 #
 # HDF5 (so the runs carry the provenance attrs) + a PINNED nchunks, so the singles are
 # bit-reproducible from (config + seed) — they can be regenerated exactly after pruning.
 #
-# Usage (from anywhere):
-#   scripts/run/run_prod.sh                                    # every runs/*.toml
-#   scripts/run/run_prod.sh sphere_water_csi sphere_water_bgo  # named configs
+# Usage (from anywhere) — configs are always NAMED (a production run is a deliverable and is
+# never launched by accident; name, name.toml and runs/name.toml all accepted):
+#   scripts/run/run_prod.sh sphere_water_csi sphere_water_bgo
 #   NEV=1000000 THREADS=8 scripts/run/run_prod.sh sphere_water_csi   # override scale/threads
 #
 # Env: NEV (events, default 1e7), NCHUNKS (chunks, default 144), THREADS (-t, default 16).
@@ -30,16 +30,17 @@ NEV=${NEV:-10000000}
 NCHUNKS=${NCHUNKS:-144}
 THREADS=${THREADS:-16}
 
-# Collect configs: the args (name, name.toml or runs/name.toml all accepted), else all.
-if (( $# )); then
-  configs=()
-  for a in "$@"; do configs+=(runs/${a:t:r}.toml); done
-else
-  configs=(runs/*.toml(N))            # (N) = no error if none match
-fi
-(( ${#configs} )) || { print "no configs found in runs/"; exit 1 }
+# Collect configs from the args (name, name.toml or runs/name.toml all accepted). Always named —
+# no bare-glob mode: a production run overwrites prod/<tag>/ and must be asked for explicitly.
+(( $# )) || { print "usage: $0 <config> [config ...]   (name, name.toml or runs/name.toml)"; exit 1 }
+configs=()
+for a in "$@"; do configs+=(runs/${a:t:r}.toml); done
+# Fail fast, BEFORE any simulation runs: the config must exist and be prod-runnable —
+# [timing].tau_ns is the key the randoms stage refuses to run without (dev-only configs lack it).
 for cfg in $configs; do
   [[ -f $cfg ]] || { print "missing config: $cfg"; exit 1 }
+  grep -qE '^[[:space:]]*tau_ns[[:space:]]*=' $cfg ||
+    { print "not a production config (no [timing].tau_ns): $cfg — dev configs run via run_matrix.sh"; exit 1 }
 done
 
 print "prod chain: ${#configs} config(s)  NEV=$NEV NCHUNKS=$NCHUNKS THREADS=$THREADS  -> ${(j: :)${(@)configs:t:r}}"

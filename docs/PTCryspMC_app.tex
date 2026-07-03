@@ -8,7 +8,7 @@
 \graphicspath{{figures/}}
 
 \title{\texttt{PTCryspMC.jl} --- The application\\[2pt]
-\large Clinical and after-proton-irradiation PET scenarios}
+\large Clinical and proton-activity PET scenarios}
 \author{}
 \date{}
 
@@ -21,11 +21,10 @@ The detector response is computed by the engine of the companion document \textt
 this document describes how that engine is driven. The simulator addresses two operation scenarios
 that share the engine and differ only in the source --- where the annihilations are, and how many
 there are. In the \emph{clinical} scenario a radiotracer of known activity is distributed in a
-phantom or a patient; in the \emph{after-proton-irradiation} (API) scenario the source is the
-positron activity that a proton dose leaves behind. The engine and the coincidence chain are
-complete and validated on a controlled water phantom --- the simplest clinical source; the
-activity-driven clinical front-end and the API scenario reader are described here as the design being
-built on that validated base.
+phantom or a patient; in the \emph{proton-activity} (API) scenario the source is the
+positron activity that a proton dose leaves behind. The engine, the coincidence chain, and the
+activity-driven clinical front-end are built and validated; the API scenario reader is described
+here as the design to be built on that base.
 \end{abstract}
 
 \tableofcontents
@@ -228,7 +227,7 @@ $10^{8}$ annihilations in a few minutes. Across crystals, the denser BGO contain
 events than CsI --- a higher acceptance after the photopeak cut --- while its lower light yield gives
 it a coarser timing resolution, both as the physics predicts.
 
-\section{The after-proton-irradiation (API) scenario}
+\section{The proton-activity (API) scenario}
 \label{sec:api}
 
 This is the scenario the simulator ultimately serves. It is outlined here; the implementation
