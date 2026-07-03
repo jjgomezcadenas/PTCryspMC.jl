@@ -138,6 +138,12 @@ _(The former #1 — the `first_photon_jitter` `-log(1-rand)` guard — is now fi
   a glance if a clinic run ever goes to 10⁸ with many regions.
 - Refine the per-crystal **PDE** (0.45 placeholder for CsI and BGO; should differ by emission colour).
 - Threshold / CFD timing (the "first photon" model is the leading-edge idealization).
+- **Open dual-head geometry** (the CRYSP-open arm of the range-verification study,
+  `docs/range_verification_recipe.md`) — postponed. When taken up, the cheap representation is a
+  *partial ring*: a `phi_gaps` angular acceptance on the existing `CylShell` `Scanner` (blocks in
+  the gap arcs void), which captures the missing angular coverage without new solids/navigation;
+  flat two-panel geometry only if the planar detail itself becomes the question. The limited-angle
+  penalty materializes only through reconstruction (MLEM — downstream, not in this repo).
 - Pixelated detectors report a fixed crystal, not a continuous position. Placement **rotation** transform (only when a volume needs it).
 
 ## Next
