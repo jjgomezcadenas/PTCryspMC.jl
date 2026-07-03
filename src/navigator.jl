@@ -142,7 +142,9 @@ Reduce a full-stack `Vector{NavStep}` (the `navigate_photon` output) to the sing
 by the same rule `build_coincidences` uses: the first scanner deposit (process ≠ `:escape`)
 fixes the LOR point and block; later scanner deposits add energy and bump the distinct-block
 count when the block changes; each phantom interaction increments `nscat` (the phantom-scatter
-count: 0 clean, 1 single, ≥2 multiple). The single source of
+count: 0 clean, 1 single, ≥2 multiple) — except a `:below_cut` record, which is the same
+Compton's residual deposit, not a new interaction (`_leaf_reduce` never sees it as a separate
+row). The single source of
 truth for the reduction — `navigate_single_photons` must return exactly this on the same
 history (asserted in the tests), and the future singles-reader reuses it.
 """
@@ -161,8 +163,8 @@ function _reduce_steps(steps)
                 nblk += 1; pbz = st.iz; pbphi = st.iphi
             end
             esum += st.hit.e_dep
-        elseif st.volume === :phantom
-            nscat += 1
+        elseif st.volume === :phantom && st.hit.process !== :below_cut
+            nscat += 1                    # :below_cut = the same Compton's residual, not a new scatter
         end
     end
     (reached=reached, x=hx, y=hy, z=hz, iz=hiz, iphi=hiphi, e=esum, nblocks=nblk, nscat=nscat)

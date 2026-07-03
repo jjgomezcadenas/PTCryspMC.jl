@@ -35,7 +35,7 @@ simulate_source_mt.jl  (multi-threaded, alloc-free) ──► prod/<tag>/singles
   `py/plot_dt.py`); `compare_crystal_timing.jl` explains why τ is crystal-independent.
 - **Reco lower energy cut** `reco_emin_keV = 450` (photopeak region; the spectrum studies keep
   `emin_keV = 300` to see the Compton shoulder). No upper cut (it's an analysis-time choice).
-- **Validated:** `Pkg.test` **870**; randoms match the analytic `2τS²` (CsI 1248 vs 1291, ratio 0.97;
+- **Validated:** `Pkg.test` **902**; randoms match the analytic `2τS²` (CsI 1248 vs 1291, ratio 0.97;
   the clinical Vacuum/BGO 10⁸ runs at fixed N over 100× in rate — 100 kHz×1000 s: 52694 vs 52708;
   1 MBq×100 s: 579705 vs 578399; 10 MBq×10 s: 5837886 vs 5839021 — all ratio 1.00, so 2τS² holds across
   three orders of magnitude in activity, with randoms reaching ~10% of trues at the 10 MBq end);

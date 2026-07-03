@@ -561,6 +561,36 @@ end
         @test ntested == 6000
         @test nmismatch == 0
 
+        # The below-cut rule: the residual record a phantom Compton leaves when the photon
+        # drops below egamma_cut is the SAME interaction's bookkeeping, not a new scatter —
+        # _reduce_steps must not count it (navigate_single_photons never sees it as a row).
+        # Pin the rule on a hand-built history first…
+        steps_bc = [NavStep(Interaction(1.0, 0.0, 0.0, 0.511, 0.341, :compton),   :phantom, -1, -1),
+                    NavStep(Interaction(1.0, 0.0, 0.0, 0.170, 0.170, :below_cut), :phantom, -1, -1)]
+        red = PTCryspMC._reduce_steps(steps_bc)
+        @test red.nscat == 1 && !red.reached
+
+        # …then through the real shells: raise the cut so histories routinely end below cut
+        # (in the phantom AND in the crystal), and require full == sing to still hold.
+        # (At the default 10 keV cut no 511 keV seed reaches :below_cut, so the branch would
+        # otherwise stay untested.)
+        nbc_phantom = 0; nmis_bc = 0
+        for ev in 1:2000
+            r_emit = MersenneTwister(30_000 + ev)
+            pos, d1, d2 = emit_pair(PointSource(geom.phantom.position), r_emit)
+            for dir in (d1, d2)
+                rf = MersenneTwister(40_000 + ev)            # identical streams for both calls
+                rs = MersenneTwister(40_000 + ev)
+                steps = navigate_photon(geom, 0.511, pos, dir, rf; egamma_cut=0.35)
+                sing  = navigate_single_photons(geom, 0.511, pos, dir, rs; egamma_cut=0.35)
+                nbc_phantom += count(st -> st.volume === :phantom && st.hit.process === :below_cut,
+                                     steps)
+                PTCryspMC._reduce_steps(steps) == sing || (nmis_bc += 1)
+            end
+        end
+        @test nbc_phantom > 0            # the phantom below-cut branch is actually exercised
+        @test nmis_bc == 0
+
         # The reducer reaches the ring (the summary is non-trivial) and respects the
         # contract: a reached photon has a valid block, an unreached one is the empty single.
         r = MersenneTwister(42)
@@ -671,6 +701,10 @@ end
         h5 = joinpath(dir, "s.h5")
         @test pack_singles_hdf5(h5, [part], [200], Dict("seed" => 7)) == 200
         @test !isfile(part)                              # part consumed by the packer
+        # Root attributes: the run metadata + the packer's own nrows; default for a missing key.
+        @test singles_hdf5_attr(h5, "seed") == 7
+        @test singles_hdf5_attr(h5, "nrows") == 200
+        @test singles_hdf5_attr(h5, "absent", -1) == -1
         got = SinglesBuffer()
         foreach_singles_hdf5(h5; batch=64) do b
             for ((_, dst), (_, srcv)) in zip(singles_columns(got), singles_columns(b))
@@ -697,8 +731,8 @@ end
                 st.hit.process === :escape && continue
                 if st.volume === :scanner
                     fill_full!(a, st.hit.x*10, st.hit.y*10, st.hit.z*10, st.hit.e_dep*1000, st.iz, st.iphi)
-                elseif st.volume === :phantom
-                    ps += 1
+                elseif st.volume === :phantom && st.hit.process !== :below_cut
+                    ps += 1               # :below_cut = the same Compton's residual, not a new scatter
                 end
             end
             (a, ps)
@@ -744,13 +778,104 @@ end
                 push!(af, gf2[1]); push!(psf, gf2[2])
                 push!(as, gs2[1]); push!(pss, gs2[2]); push!(gt, t)
             end
-            finish_event!((a...) -> push!(emit_full, a), ev, af[1], af[2], gt[1], gt[2], psf[1], psf[2], pos[1], pos[2], pos[3], resp, MersenneTwister(ev))
-            finish_event!((a...) -> push!(emit_sing, a), ev, as[1], as[2], gt[1], gt[2], pss[1], pss[2], pos[1], pos[2], pos[3], resp, MersenneTwister(ev))
+            # Emission point in mm — the SAME units as the GammaAcc hit coordinates — so
+            # finish_event!'s tof_diff (and hence dt) is computed in consistent units.
+            finish_event!((a...) -> push!(emit_full, a), ev, af[1], af[2], gt[1], gt[2], psf[1], psf[2], pos[1]*10, pos[2]*10, pos[3]*10, resp, MersenneTwister(ev))
+            finish_event!((a...) -> push!(emit_sing, a), ev, as[1], as[2], gt[1], gt[2], pss[1], pss[2], pos[1]*10, pos[2]*10, pos[3]*10, resp, MersenneTwister(ev))
         end
         @test nacc_mismatch == 0             # GammaAcc + nscat identical (discrete exact, energy to rtol)
         @test !isempty(emit_full)
         @test length(emit_full) == length(emit_sing)
         @test all(((p, q),) -> ceq(p, q), zip(emit_full, emit_sing))   # same LORs through the core
+        # dt must equal (t1−t2) − TOF_diff recomputed from the emitted fields alone (all mm;
+        # positions unsmeared here) — an independent guard on the units of finish_event!'s
+        # timing math (emission point and hit coordinates MUST share units).
+        @test all(p -> isapprox(p[18],
+                       (p[6] - p[14]) - (tof_ns((p[19], p[20], p[21]), (p[2], p[3], p[4])) -
+                                         tof_ns((p[19], p[20], p[21]), (p[10], p[11], p[12])));
+                       atol=1e-9), emit_sing)
+    end
+
+    @testset "finish_event! — detector mode (smear + energy selection)" begin
+        # The reco path (reco_lors.jl): a Response with smearing and an energy cut, the cut
+        # evaluated on the SMEARED energy. Hand-built accumulators (opposite hits at ±400 mm
+        # on x) keep every gate deterministic where it must be; statistical checks pin the
+        # applied smear widths. Truth mode (all-off Response) is covered by the coincidence-core
+        # testset above — this one exercises everything that testset switches off.
+        mk(e; x=400.0, over=false) = fill_singles!(GammaAcc(), x, 0.0, 0.0, e, 3, 7, over ? 2 : 1)
+        sink(v) = (a...) -> push!(v, a)
+        never = (a...) -> error("must not emit")
+        det = Response(1.7, 0.05, 450.0, false, 0.0)     # CsI-like reco: σ=1.7 mm, 5%, emin 450
+
+        # Containment gates (response-independent): unreached and overspill both reject.
+        rng = MersenneTwister(11)
+        @test finish_event!(never, 1, GammaAcc(), mk(511.0; x=-400.0), 0.0, 0.0, 0, 0,
+                            0.0, 0.0, 0.0, det, rng) == (false, false)
+        @test finish_event!(never, 1, mk(511.0; over=true), mk(511.0; x=-400.0), 0.0, 0.0, 0, 0,
+                            0.0, 0.0, 0.0, det, rng) == (false, false)
+
+        # emin, deterministic at eres = 0: 460/511 passes the 450 cut, 440 is rejected.
+        nosm = Response(0.0, 0.0, 450.0, false, 0.0)
+        out = Any[]
+        @test finish_event!(sink(out), 1, mk(460.0), mk(511.0; x=-400.0), 0.0, 0.0, 0, 0,
+                            0.0, 0.0, 0.0, nosm, rng)[1]
+        @test finish_event!(never, 2, mk(440.0), mk(511.0; x=-400.0), 0.0, 0.0, 0, 0,
+                            0.0, 0.0, 0.0, nosm, rng) == (false, false)
+        @test length(out) == 1 && out[1][5] == 460.0     # e1 through unsmeared at eres = 0
+
+        # Symmetric window about 511 (half-width 25 keV): 530 in; 540 and 485 out.
+        win = Response(0.0, 0.0, 300.0, true, 25.0)
+        @test finish_event!(sink(Any[]), 1, mk(530.0), mk(511.0; x=-400.0), 0.0, 0.0, 0, 0,
+                            0.0, 0.0, 0.0, win, rng)[1]
+        @test !finish_event!(never, 1, mk(540.0), mk(511.0; x=-400.0), 0.0, 0.0, 0, 0,
+                             0.0, 0.0, 0.0, win, rng)[1]
+        @test !finish_event!(never, 1, mk(485.0), mk(511.0; x=-400.0), 0.0, 0.0, 0, 0,
+                             0.0, 0.0, 0.0, win, rng)[1]
+
+        # Smearing is applied, unbiased, with the right widths (no cut → every event emits).
+        sm = Response(1.7, 0.05, 0.0, false, 0.0)
+        rngs = MersenneTwister(21); N = 20_000
+        all_emitted = true
+        se = 0.0; se2 = 0.0; sx = 0.0; sx2 = 0.0
+        for ev in 1:N
+            o = Any[]
+            all_emitted &= finish_event!(sink(o), ev, mk(511.0), mk(511.0; x=-400.0), 0.0, 0.0,
+                                         0, 0, 0.0, 0.0, 0.0, sm, rngs)[1]
+            p = o[1]
+            se += p[5] - 511.0; se2 += (p[5] - 511.0)^2      # e1 about the truth energy
+            sx += p[2] - 400.0; sx2 += (p[2] - 400.0)^2      # x1 about the truth position
+        end
+        @test all_emitted
+        @test abs(se / N) < 0.5 && isapprox(sqrt(se2 / N), energy_sigma(511.0, 0.05); rtol=0.03)
+        @test abs(sx / N) < 0.05 && isapprox(sqrt(sx2 / N), 1.7; rtol=0.03)
+
+        # The selection cuts on the SMEARED energy: truth 511 keV against emin = 511 → each
+        # gamma passes with p ≈ 1/2, the pair with p ≈ 1/4.
+        half = Response(0.0, 0.10, 511.0, false, 0.0)
+        rngh = MersenneTwister(31)
+        nacc = count(ev -> finish_event!((a...) -> nothing, ev, mk(511.0), mk(511.0; x=-400.0),
+                                         0.0, 0.0, 0, 0, 0.0, 0.0, 0.0, half, rngh)[1], 1:20_000)
+        @test isapprox(nacc / 20_000, 0.25; atol=0.01)
+
+        # Smearing does not change the truth tag; the scatter counts pass through.
+        o2 = Any[]
+        em, ist = finish_event!(sink(o2), 7, mk(511.0), mk(511.0; x=-400.0), 0.0, 0.0, 1, 0,
+                                0.0, 0.0, 0.0, sm, MersenneTwister(3))
+        @test em && !ist && o2[1][22] == TRUTH_SCATTER && o2[1][9] == 1
+        em, ist = finish_event!(sink(o2), 8, mk(511.0), mk(511.0; x=-400.0), 0.0, 0.0, 0, 0,
+                                0.0, 0.0, 0.0, sm, MersenneTwister(3))
+        @test em && ist && o2[2][22] == TRUTH_TRUE
+
+        # dt is computed from the TRUTH hit positions (the LOR physics), not the smeared
+        # ones: with position smearing ON, the emitted dt still equals (t1−t2) − TOF_diff
+        # of the unsmeared hits, while the emitted positions have moved.
+        t1 = 4.0; t2 = 2.5; x0 = (10.0, -5.0, 3.0)
+        exp_dt = (t1 - t2) - (tof_ns(x0, (400.0, 0.0, 0.0)) - tof_ns(x0, (-400.0, 0.0, 0.0)))
+        o3 = Any[]
+        @test finish_event!(sink(o3), 9, mk(511.0), mk(511.0; x=-400.0), t1, t2, 0, 0,
+                            x0[1], x0[2], x0[3], sm, MersenneTwister(5))[1]
+        @test o3[1][18] == exp_dt
+        @test (o3[1][2], o3[1][3], o3[1][4]) != (400.0, 0.0, 0.0)
     end
 
     @testset "coincidence HDF5 round-trip" begin
@@ -763,7 +888,11 @@ end
                     0.25 * ev, 1.0, 2.0, 3.0, Int8(ev % 2))   # nscat1(9), nscat2(17), dt(18), x0,y0,z0,truth(22)
             push_coincidence!(w, args...); push!(ref, args)
         end
+        set_lor_attr!(w, "nevents", 4242)                # post-hoc stamp on the open stream
         @test close(w) == 150
+        # Attribute round-trip (singles_hdf5_attr is a generic root-attribute reader).
+        @test singles_hdf5_attr(p, "nevents") == 4242
+        @test singles_hdf5_attr(p, "has_randoms") == false   # ctor-time attr
         got = Tuple[]
         foreach_coincidences_hdf5(p; batch=32) do b
             for i in 1:length(b)
@@ -812,6 +941,17 @@ end
         @test ActivityModel(Dict("timing" => Dict("t1_s" => 300.0))).t1 == 300.0
         @test ActivityModel(Dict{String,Any}()).t1 == 600.0      # default 10 min, ¹⁵O
         @test_throws ErrorException ActivityModel(; t0=10.0, t1=5.0)
+
+        # ActivityModel(cfg), clinic branch: the half-life comes from the named isotope and
+        # the acquisition window from [source] (not [timing]).
+        mc = ActivityModel(Dict("source" => Dict("mode" => "clinic", "isotope" => "O15",
+                                                 "t0_s" => 5.0, "t1_s" => 105.0, "time_seed" => 42)))
+        @test mc.t0 == 5.0 && mc.t1 == 105.0 && mc.seed == UInt64(42)
+        @test mc.λ == log(2.0) / O15_HALFLIFE_S
+        @test ActivityModel(Dict("source" => Dict("mode" => "clinic"))).λ ==
+              log(2.0) / isotope("F18").half_life_s              # F-18 is the clinic default
+        @test_throws ErrorException ActivityModel(Dict("source" =>
+              Dict("mode" => "clinic", "isotope" => "Xx99")))    # unknown isotope errors
     end
 
     @testset "scintillation timing — first-photon jitter + TOF + stamp" begin
@@ -1009,6 +1149,8 @@ end
         @test cfg_get(cfg, "source", "missing", 99) == 99    # default for a missing key
         @test cfg_get(cfg, "nope", "x", 7) == 7              # default for a missing section
         @test run_tag(cfg, path) == "myrun"                  # [output].tag wins
+        @test prod_base(cfg) == "prod"                       # production base dir defaults
+        @test prod_base(Dict("output" => Dict("prod_dir" => "prodX"))) == "prodX"
         rm(path)
 
         # Without [output].tag, the tag is the config filename (without .toml).

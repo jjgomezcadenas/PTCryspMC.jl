@@ -37,8 +37,9 @@ function photon_stats(steps)
     Escan = 0.0; nscat = 0
     blocks = Set{Tuple{Int,Int}}()
     for st in steps
-        if st.volume == :phantom && st.hit.process != :escape
-            nscat += 1                       # phantom-scatter count (0 clean, 1 single, ≥2 multiple)
+        if st.volume == :phantom && st.hit.process != :escape && st.hit.process != :below_cut
+            nscat += 1                       # phantom-scatter count (0 clean, 1 single, ≥2 multiple);
+                                             # :below_cut = the same Compton's residual, not a new scatter
         elseif st.volume == :scanner && st.hit.process != :escape
             Escan += st.hit.e_dep
             push!(blocks, (st.iz, st.iphi))
