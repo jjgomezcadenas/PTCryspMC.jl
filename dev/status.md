@@ -144,6 +144,10 @@ _(The former #1 — the `first_photon_jitter` `-log(1-rand)` guard — is now fi
   the gap arcs void), which captures the missing angular coverage without new solids/navigation;
   flat two-panel geometry only if the planar detail itself becomes the question. The limited-angle
   penalty materializes only through reconstruction (MLEM — downstream, not in this repo).
+- **Range-study analysis migrates out** when the reconstruction (MLEM) repo is created: `git mv`
+  `docs/range_verification_recipe.md` + `py/range_endpoint.py` there. What stays HERE is the
+  master-production plan the recipe fixes (per geometry: ten independent 10⁸-decay trues-only
+  shards, distinct seeds — 10× the top dose point), since it runs on this repo's chain.
 - Pixelated detectors report a fixed crystal, not a continuous position. Placement **rotation** transform (only when a volume needs it).
 
 ## Next
