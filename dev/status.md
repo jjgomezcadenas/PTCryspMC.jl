@@ -4,7 +4,7 @@ A one-page snapshot of where the simulation stands, plus the **deferred-work reg
 Companion docs: the *method* is in `docs/PTCryspMC_phys.tex` (engine) and `docs/PTCryspMC_app.tex` (modes); the
 decisions + code layout in `CLAUDE.md`.
 
-_Last updated: 2026-06-26._
+_Last updated: 2026-07-05._
 
 ## What it does
 
@@ -150,10 +150,33 @@ _(The former #1 — the `first_photon_jitter` `-log(1-rand)` guard — is now fi
   shards, distinct seeds — 10× the top dose point), since it runs on this repo's chain.
 - Pixelated detectors report a fixed crystal, not a continuous position. Placement **rotation** transform (only when a volume needs it).
 
+## API source + products handoff — BUILT & VALIDATED (2026-07-05)
+
+- **API (Proton Activity) source** — the second source branch is DONE (`[source].mode="api"`).
+  Reads a frozen `ptcryspg4` scenario (phantom from `phantom_regions.csv`, per-isotope emitter
+  pools, decay budget), materializes the source (`M_j ~ Poisson(N_j·f_inside)`, seeded by
+  `(master_seed, realization)` independent of the transport chunking), drops escaped positrons,
+  transports, and writes a self-describing `lors_det.h5`. Full 8-step build + validation in
+  **`dev/api_plan.md`**; engine pieces: `Ellipsoid` solid, `G4_BRAIN_ICRP` material + `xcom_brain.csv`,
+  `src/scenario.jl` (reader + `APISource` + `materialize_api_source`), isotope singles column,
+  per-isotope randoms timing. QA: `scripts/tests/check_scenario.jl`, `check_api_source.jl`,
+  `check_api_validation.jl`. **`Pkg.test` 992.**
+- **Products handoff (`PtCryspProds`)** — `scripts/run/publish_prod.jl` exports a run into the tree
+  `<scenario>/<scanner>/<crystal>/<budget>_<dose>/lors_shardNNN.h5` (+ shared `scanner_geometry.json`,
+  `phantom/`, `README.md`); `scripts/run/run_shards.sh` generates shards sequentially (chain →
+  publish → gates → prune all `.h5`). Layout contract in **`dev/PRODUCTS.md`**, the downstream
+  recipe (shards vs realizations, `thin_lm`, σ_R) in **`dev/data_generation_strategy.md`**.
+- **First master produced:** `~/Projects/PtCryspProds/uniform_headep_sobp_1e8/crysp_ring_1m/bgo/
+  fast_1Gy/` — 10 shards (realizations 0–9, ΣM = 8.02e8, all validated). `runs/uniform_headep_bgo_api.toml`.
+
 ## Next
 
-1. **API source scenario** — the second source branch (the `ptcryspg4` scenario reader), when the
-   upstream format is fixed.
-2. **Docstrings + Literate/Documenter doc-site** (the remaining documentation task).
-3. Crystal XCOM tables + the `load_xcom` hardening; the CsI(Tl) config.
-4. Downstream, separate & deferred: range precision, detector comparison, reconstruction.
+1. **CsI arm + other scanners** — a CsI config (copy the BGO one, `crystal_material="CsI"`) →
+   `run_shards … 0 9` for the detector comparison at matched shards; head/children `CylShell`
+   variants for the geometry comparison. All mechanical now.
+2. **Downstream reconstruction / σ_R repo** — consumes `PtCryspProds` (see
+   `dev/data_generation_strategy.md`); builds `thin_lm` (Bernoulli, pooled shards), MLEM, the
+   depth profile; `py/range_endpoint.py` has `fit_endpoint`/`sigma_R`.
+3. **Deferred, scoped:** multi-region (skull/brain/scalp) head phantom — `dev/multiregion_phantom_plan.md`;
+   open dual-head (`phi_gaps`) and mixed BGO/CsI (per-block crystals) geometries — engine gates.
+4. Docstrings + Literate/Documenter doc-site; `load_xcom` hardening + CsI(Tl) config.
