@@ -20,6 +20,7 @@ One row per detected photon (deposited in the ring; a miss writes nothing).
 | `iphi` | Int16 |  | azimuthal (φ) block index |
 | `nblocks` | Int8 |  | distinct blocks touched (1 = contained, >1 = overspill) |
 | `n_scatter` | Int8 |  | phantom-scatter count (0 clean, 1 single, ≥2 multiple) |
+| `isotope` | Int8 |  | emitter isotope id (API mode; 0 = single toy isotope otherwise) |
 | `x0_mm` | Int16 | mm | annihilation (emission) point, x |
 | `y0_mm` | Int16 | mm | annihilation point, y |
 | `z0_mm` | Int16 | mm | annihilation point, z |

@@ -49,10 +49,10 @@ end
 function write_chunk_csv(path, geom, src, E0::Float64, cut_MeV::Float64, acol::Float64,
                          range::UnitRange{Int}, rng::AbstractRNG, mat)
     open(path, "w") do io
-        singles_chunk!(geom, src, E0, cut_MeV, acol, range, rng, mat) do ev, g, s, pos0, t_rel
+        singles_chunk!(geom, src, E0, cut_MeV, acol, range, rng, mat) do ev, g, s, pos0, t_rel, iso
             println(io, join((ev, g,
                 round(s.x*10, digits=4), round(s.y*10, digits=4), round(s.z*10, digits=4),
-                round(s.e*1000, digits=4), s.iz, s.iphi, s.nblocks, s.nscat,
+                round(s.e*1000, digits=4), s.iz, s.iphi, s.nblocks, s.nscat, iso,
                 round(pos0[1]*10, digits=4), round(pos0[2]*10, digits=4), round(pos0[3]*10, digits=4),
                 round(t_rel, digits=5)), ","))
         end
@@ -65,8 +65,8 @@ end
 function write_chunk_bin(path, geom, src, E0::Float64, cut_MeV::Float64, acol::Float64,
                          range::UnitRange{Int}, rng::AbstractRNG, mat)
     buf = SinglesBuffer()
-    singles_chunk!(geom, src, E0, cut_MeV, acol, range, rng, mat) do ev, g, s, pos0, t_rel
-        push_single!(buf, ev, g, s, pos0, t_rel)
+    singles_chunk!(geom, src, E0, cut_MeV, acol, range, rng, mat) do ev, g, s, pos0, t_rel, iso
+        push_single!(buf, ev, g, s, pos0, t_rel, iso)
     end
     open(io -> write_part(io, buf), path, "w")
     length(buf)
@@ -182,7 +182,7 @@ function main()
         pack_singles_hdf5(out, parts, rows, meta)
     else
         open(out, "w") do io
-            println(io, "event_number,gamma,x_mm,y_mm,z_mm,e_keV,iz,iphi,nblocks,n_scatter,x0_mm,y0_mm,z0_mm,t_rel_ns")
+            println(io, "event_number,gamma,x_mm,y_mm,z_mm,e_keV,iz,iphi,nblocks,n_scatter,isotope,x0_mm,y0_mm,z0_mm,t_rel_ns")
             buf = Vector{UInt8}(undef, 1 << 20)
             for p in parts
                 open(p, "r") do pin

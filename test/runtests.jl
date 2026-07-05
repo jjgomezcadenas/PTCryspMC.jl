@@ -479,12 +479,27 @@ end
         # The transport consumes an APISource through event_point (the point is the array's, not drawn).
         geom = load_geometry(GEOM_JSON, mats)
         c = geom.phantom.position
-        apis = APISource(fill(c, 60), fill(Int8(0), 60), [log(2.0) / 122.24])
-        captured = NTuple{3,Float64}[]
-        singles_chunk!(geom, apis, 0.511, 0.010, 0.5, 1:60, MersenneTwister(9), mats["CsI"]) do ev, g, s, pos0, t_rel
-            push!(captured, pos0)
+        # Two isotopes: event 1..30 = iso 0, 31..60 = iso 3. The transport must stamp each single
+        # with its event's isotope via event_isotope.
+        isos60 = Int8[ev <= 30 ? 0 : 3 for ev in 1:60]
+        apis = APISource(fill(c, 60), isos60, [log(2.0) / 122.24, 0.0, 0.0, log(2.0) / 19.29])
+        captured = Tuple{NTuple{3,Float64},Int8}[]
+        singles_chunk!(geom, apis, 0.511, 0.010, 0.5, 1:60, MersenneTwister(9), mats["CsI"]) do ev, g, s, pos0, t_rel, iso
+            push!(captured, (pos0, iso))
         end
-        @test !isempty(captured) && all(p -> p == c, captured)     # pos0 from the array, every time
+        @test !isempty(captured) && all(c_ -> c_[1] == c, captured)          # pos0 from the array
+        @test all(c_ -> c_[2] == isos60[1] || c_[2] == isos60[end], captured) # isotope is 0 or 3
+        @test any(c_ -> c_[2] == Int8(3), captured)                          # both isotopes appear
+
+        # Per-isotope activity models: truncated exponential on [0, t_meas], λ from each half-life.
+        models = scenario_activity_models(scn; seed=5)
+        @test length(models) == 2 && all(m -> m.t0 == 0.0 && m.t1 == 1200.0, models)
+        @test isapprox(models[1].λ, log(2.0)/122.24) && isapprox(models[2].λ, log(2.0)/1223.4)
+        ts0 = [event_time(models[1], ev) for ev in 1:20000]   # O15  (short T½ → front-loaded)
+        ts1 = [event_time(models[2], ev) for ev in 1:20000]   # C11  (long  T½ → flatter)
+        @test all(t -> 0.0 <= t <= 1200.0, ts0) && all(t -> 0.0 <= t <= 1200.0, ts1)
+        @test sum(ts0)/20000 < sum(ts1)/20000                 # shorter half-life front-loads more
+        @test isapprox(sum(ts0)/20000, 122.24/log(2.0); rtol=0.1)   # O15 mean ≈ 1/λ (T ≫ 1/λ)
     end
 
     @testset "logical volume" begin
@@ -869,8 +884,8 @@ end
             ranges = chunk_ranges(nevents, nchunks)
             rngs   = [MersenneTwister(seed + (c - 1)) for c in eachindex(ranges)]
             parts  = [Tuple[] for _ in ranges]
-            body(c) = singles_chunk!(geom, src, 0.511, 0.010, 0.5, ranges[c], rngs[c], mats["CsI"]) do ev, g, s, _, t_rel
-                push!(parts[c], (ev, g, s.iz, s.iphi, round(s.e, digits=9), s.nblocks, s.nscat, round(t_rel, digits=6)))
+            body(c) = singles_chunk!(geom, src, 0.511, 0.010, 0.5, ranges[c], rngs[c], mats["CsI"]) do ev, g, s, _, t_rel, iso
+                push!(parts[c], (ev, g, s.iz, s.iphi, round(s.e, digits=9), s.nblocks, s.nscat, iso, round(t_rel, digits=6)))
             end
             if threaded
                 Threads.@threads for c in eachindex(ranges); body(c); end
@@ -907,9 +922,10 @@ end
         for i in 1:200
             s = (reached=true, x=0.13i, y=-0.07i, z=0.05i, iz=i % 20, iphi=i % 48,
                  e=0.001*(50 + i), nblocks=(i % 3) + 1, nscat=(i % 4))
-            push_single!(buf, i, (i % 2) + 1, s, (0.01i, -0.02i, 0.03i), 0.05i)
+            push_single!(buf, i, (i % 2) + 1, s, (0.01i, -0.02i, 0.03i), 0.05i, i % 5)
         end
         @test length(buf) == 200
+        @test buf.isotope == Int8[i % 5 for i in 1:200]     # per-photon isotope column stored
 
         # Binary part round-trip (the thread-safe intermediate).
         io = IOBuffer(); write_part(io, buf); seekstart(io)

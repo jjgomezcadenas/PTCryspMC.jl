@@ -243,3 +243,17 @@ function materialize_api_source(scn::Scenario; master_seed::Integer=1, realizati
     lambdas = [log(2.0) / iso.half_life_s for iso in scn.isotopes]
     APISource(points, isotope, lambdas)
 end
+
+"""
+    scenario_activity_models(scn; seed=1234) -> Vector{ActivityModel}
+
+Per-isotope activity models for the API randoms timing: one `ActivityModel` per isotope, sharing
+the window [0, t_meas] and `seed`, differing only in the decay constant λ (from each isotope's
+half-life). Production ends before the measurement window opens, so the decay time within the
+window is a pure per-isotope truncated exponential on [0, t_meas] — exactly this model. Index by
+`isotope_id + 1`; the randoms pass picks the model by each single's isotope column.
+"""
+function scenario_activity_models(scn::Scenario; seed::Integer=1234)::Vector{ActivityModel}
+    [ActivityModel(; t0=0.0, t1=scn.t_meas_s, half_life_s=iso.half_life_s, seed=seed)
+     for iso in scn.isotopes]
+end

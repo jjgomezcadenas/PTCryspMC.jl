@@ -150,16 +150,20 @@ the two back-to-back directions from the chunk rng. One loop, alloc-free, dispat
 
 ## Step 6 — Isotope singles column + per-isotope timing  (schema + randoms)
 
-- Add `isotope` (Int8) to the singles schema (`src/singles.jl` `singles_columns`/`singles_doc`,
-  binary part I/O, `src/singles_hdf5.jl`), exactly as `n_scatter` was added.
-- `simulate_source_mt` records each single's `event_isotope(src, ev)`.
-- `ActivityModel` per isotope: `event_time(m, ev)` uses the event's isotope λ and `t1 = t_meas`
-  (truncated exponential on [0, t_meas]). `build_randoms` reads each single's isotope → its λ for
-  the absolute-clock restore and cross-decay pairing.
-- Regenerate `docs/SCHEMA.md` (`scripts/gen_schema.jl`); the drift test keeps it honest.
+- ✅ `isotope` (Int8) added to the singles schema (`src/singles.jl` `singles_columns`/`singles_doc`,
+  binary part I/O, `src/singles_hdf5.jl`), exactly as `n_scatter` was; populated for all modes via
+  `event_isotope(src, ev)` (0 for the drawn count/clinic sources). CSV header + `simulate_source_mt`
+  sinks updated. `docs/SCHEMA.md` regenerated (drift test green).
+- ✅ Per-isotope `scenario_activity_models(scn; seed)` → a `Vector{ActivityModel}` (window [0,t_meas],
+  λ from each half-life). Verified: per-isotope truncated-exponential mean matches the analytic to
+  <1% (C10 front-loads to ~28 s, C11 to ~530 s in a 1200 s window). `scripts/tests/check_scenario.jl`
+  reports + gates it.
+- **DEFERRED to step 7** (needs the driver's scenario models): `build_randoms` reading the isotope
+  column to time each single by its isotope's λ. The column and the model helper are in place; the
+  wiring (API-mode model construction + the randoms per-isotope restore) lands with the driver.
 
-**Tests:** singles round-trip carries isotope; `event_time` per isotope is a truncated exponential
-with the right mean; randoms pairing uses per-single λ (short-lived C10 front-loads).
+**Tests (done):** singles round-trip carries isotope; `singles_chunk!` stamps each single's isotope
+via `event_isotope`; `scenario_activity_models` gives the right per-isotope truncated exponential.
 
 ---
 

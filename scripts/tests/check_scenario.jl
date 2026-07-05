@@ -3,8 +3,10 @@
 # what the detector sim will see — the per-isotope annihilation-point pools, the expected decay
 # budget N_expected (rescaled to the requested dose), the kept fraction f_inside and the escaped
 # positrons dropped, plus the effective detectable count M_j = N_expected · f_inside the source
-# (step 5) will Poisson-draw. Runs sanity gates (fractions in range, every budget isotope has a
-# pool, the escaped fraction is small) and errors if any is violated, so it is a genuine check.
+# (step 5) will Poisson-draw, and the per-isotope decay timing in the measurement window (the
+# truncated exponential the randoms pass samples). Runs sanity gates (fractions in range, every
+# budget isotope has a pool, the escaped fraction is small, each isotope's sampled decay-time mean
+# matches the analytic truncated-exponential) and errors if any is violated, so it is a genuine check.
 #
 #   julia --project=. scripts/tests/check_scenario.jl --scenario ~/Projects/ptcrysp-scenarios/scenarios/uniform_headep_sobp_1e8
 #   julia --project=. scripts/tests/check_scenario.jl --scenario <dir> --budget offline --dose 2.0
@@ -64,7 +66,27 @@ function main()
             n_emit, tot_drop, n_emit > 0 ? 100 * tot_drop / n_emit : 0.0)
     @printf("  total N_expected = %.4e  |  effective detectable ΣM_j = %.4e\n", tot_exp, tot_eff)
 
+    # Per-isotope decay timing in the measurement window (the truncated-exponential the randoms
+    # pass samples): short-lived isotopes front-load (mean → 1/λ), long-lived flatten (mean → T/2).
+    models = scenario_activity_models(s; seed=1234)
+    T = s.t_meas_s; ndraw = 50_000
+    @printf("\n  per-isotope decay time in the %.0f s window (%d draws):\n", T, ndraw)
+    @printf("  %-5s %10s %10s %12s %12s %8s\n", "iso", "T_half[s]", "1/λ[s]", "mean_samp", "mean_exact", "samp/ex")
+    bad_t = String[]
+    for j in 1:length(models)
+        λ = models[j].λ
+        acc = 0.0
+        for ev in 1:ndraw; acc += event_time(models[j], ev); end
+        samp  = acc / ndraw
+        exact = 1.0 / λ - T * exp(-λ * T) / (1.0 - exp(-λ * T))   # truncated-exp mean on [0,T]
+        @printf("  %-5s %10.1f %10.1f %12.1f %12.1f %8.4f\n",
+                s.isotopes[j].name, s.isotopes[j].half_life_s, 1.0 / λ, samp, exact, samp / exact)
+        (isapprox(samp, exact; rtol=0.05) && 0.0 <= samp <= T) || push!(bad_t, s.isotopes[j].name)
+    end
+
     # ---- sanity gates (error on violation) ----------------------------------
+    isempty(bad_t) ||
+        error("isotopes whose sampled decay-time mean misses the truncated-exponential: $(join(bad_t, ", "))")
     for j in 1:n
         0.0 < s.f_inside[j] <= 1.0 ||
             error("isotope $(s.isotopes[j].name): f_inside $(s.f_inside[j]) out of (0,1]")
