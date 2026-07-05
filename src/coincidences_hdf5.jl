@@ -137,6 +137,37 @@ end
 "Set a root attribute on the (open) LOR file — e.g. the final `nevents` once the stream ends."
 set_lor_attr!(w::CoincidenceWriter, key::AbstractString, val) = (attributes(w.file)[key] = val; w)
 
+# Source/geometry provenance carried VERBATIM through the LOR chain (singles → lors_truth →
+# lors_det) so a lors_det.h5 alone identifies its scenario/scanner/crystal/source. Same-name keys
+# only; the transport seed is renamed (singles "seed" → LOR "transport_seed") and nevents/nchunks
+# are stamped by the drivers, so they are NOT here (avoids a double write).
+const PROVENANCE_ATTRS = String[
+    "source_mode", "scenario", "budget", "dose_Gy", "realization", "master_seed",
+    "keep_escaped", "prompt_gamma_modeled", "n_escaped_dropped",
+    "phantom_material", "geometry_file", "n_phi", "n_z",
+    "isotope_names", "t_meas_s", "time_seed",
+]
+
+"""
+    copy_provenance!(w, src)
+
+Copy the `PROVENANCE_ATTRS` present as root attributes of the HDF5 file `src` onto the open LOR
+writer `w`. Propagates the source/geometry provenance one stage down the chain; absent keys
+(e.g. a non-API run, or CSV-sourced singles) are silently skipped.
+"""
+function copy_provenance!(w::CoincidenceWriter, src::AbstractString)
+    dst = attributes(w.file)
+    h5open(src, "r") do h
+        a = attributes(h)
+        for k in PROVENANCE_ATTRS
+            # Only add keys not already stamped by the driver (e.g. time_seed) — writing an existing
+            # HDF5 attribute errors ("already exists"); the driver's own value wins.
+            (haskey(a, k) && !haskey(dst, k)) && (dst[k] = read(a[k]))
+        end
+    end
+    w
+end
+
 function Base.close(w::CoincidenceWriter)::Int
     _flush!(w)
     attributes(w.file)["nrows"] = w.n

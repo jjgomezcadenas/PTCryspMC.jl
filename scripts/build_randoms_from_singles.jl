@@ -158,6 +158,7 @@ function main()
 
     nevents = ishdf5 ? Int(singles_hdf5_attr(singles, "nevents", 0)) : 0
     set_lor_attr!(w, "nevents", nevents)
+    ishdf5 && copy_provenance!(w, singles)     # carry the source/geometry provenance
     close(w)
 
     expect = analytic_randoms(r.t_abs, tau)

@@ -158,6 +158,7 @@ function main()
     if ishdf5
         set_lor_attr!(w, "transport_seed", Int(singles_hdf5_attr(singles, "seed", seed)))
         set_lor_attr!(w, "nchunks", Int(singles_hdf5_attr(singles, "nchunks", 0)))
+        copy_provenance!(w, singles)     # carry the source/geometry provenance (scenario, dose, …)
     end
     nlor = close(w)
 

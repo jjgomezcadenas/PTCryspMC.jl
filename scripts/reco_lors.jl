@@ -116,6 +116,7 @@ function main()
     set_lor_attr!(w, "nevents", nevents)
     transport_seed >= 0 && set_lor_attr!(w, "transport_seed", transport_seed)
     nchunks_tr > 0 && set_lor_attr!(w, "nchunks", nchunks_tr)
+    copy_provenance!(w, truth)           # carry the source/geometry provenance → lors_det is self-describing
     nlor = close(w)
 
     println("read $ntru truth + $nrnd random LORs → kept $nlor → $out")
