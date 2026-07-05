@@ -197,7 +197,27 @@ still applies.
 
 ---
 
-## Step 8 — Validation
+## Step 8 — Validation  ✅ DONE
+
+Reference run: `uniform_headep_sobp_1e8`, budget `fast`, dose 1 Gy, BGO, master_seed 1 / realization 0
+→ 80.18M events, the full chain in ~5 min on 18 threads. `scripts/tests/check_api_validation.jl`
+gates it, all green:
+- **N & per-isotope**: materialized N = 80,177,205 = singles `nevents`; every M_j within ~2σ of its
+  Poisson budget.
+- **Reproducibility / nchunks-invariance**: every singles emission point equals the materialized
+  array's `point[event_number]` to the 0.1 mm quantization — the source is indexed by event, not
+  redrawn per chunk.
+- **Spatial activity profile**: source↔detected z-profile correlation = 1.0000 (detection does not
+  distort the SOBP activity shape); distal 50% activity edge z ≈ −18 mm (proximal to the target
+  distal face z = −5 mm, the physical activity-vs-dose offset the range study measures).
+- **Randoms 2τS² with per-isotope timing**: 84,820 measured vs 85,173 analytic → **ratio 1.00**
+  (the new multi-isotope timing reproduces the accidental-coincidence law at full dose).
+- **LOR split**: 46.37M LORs — 32.1% true / 67.7% scatter / 0.18% random (physical for a brain head).
+
+The reference `prod/uniform_headep_bgo_api/lors_det.h5` is the first end-to-end API deliverable —
+ready for the downstream reconstruction / R study.
+
+### original step 8 checks
 
 - **N**: ΣM_j vs the budget arithmetic (fast: ~8.0e7 at 1 Gy); per-isotope within Poisson.
 - **Spatial**: the singles' annihilation-point z-profile vs the scenario's `figures/activity.png`
