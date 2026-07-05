@@ -62,9 +62,10 @@ selected by `[source].mode`:
   `sphere_water_f18_csi`, the sphere/cylinder × air/water BGO set, and the NEMA quartet
   (`nema_{air,water}_bgo`, `nema_la_{air,water}_bgo`). `run_prod.sh` derives N for clinic
   configs (no `--nevents`) and runs NAMED configs only.
-- **Proton Activity (API)** (count-driven) — *planned* (the second source branch). A frozen
-  `ptcryspg4` scenario supplies the emitters and the given per-isotope decay budget. Design in
-  `docs/PTCryspMC_app.tex`; build plan below.
+- **Proton Activity (API)** (count-driven) — **BUILT & VALIDATED** (see the "API source + products
+  handoff" section above; `dev/api_plan.md`). A frozen `ptcryspg4` scenario supplies the emitters and
+  the per-isotope decay budget. (The "API build plan" section below is the original build order, now
+  historical.)
 
 ### API build plan (the next feature — continuity notes)
 
