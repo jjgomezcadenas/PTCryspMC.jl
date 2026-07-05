@@ -422,6 +422,67 @@ end
         rm(dir; recursive=true)
     end
 
+    @testset "truth/ bundle (publish_prod handoff)" begin
+        mats = load_materials(DATA_DIR)
+        dir = mktempdir()
+        # Same minimal fixture as the scenario reader, + the truth-side files.
+        write(joinpath(dir, "phantom_regions.csv"),
+            "region,priority,material,solid,a_mm,b_mm,c_mm,cx_mm,cy_mm,cz_mm,euler_x_deg,euler_y_deg,euler_z_deg\n" *
+            "phantom,0,Water,ellipsoid,100,100,100,0,0,0,0,0,0\n")
+        write(joinpath(dir, "isotopes.csv"),
+            "isotope_id,name,half_life_s,endpoint_MeV,prompt_gamma\n0,O15,122.24,1.74,0\n1,C11,1223.4,0.96,0\n")
+        # iso0: 2 inside (z=+30,−30 mm) + 1 escaped; iso1: 1 inside (z=+30 mm) + 1 escaped.
+        # (off the ±20 mm bin edges, so each lands unambiguously in the ±40 bin.)
+        write(joinpath(dir, "emitters.csv"),
+            "event_id,isotope_id,prod_x_mm,prod_y_mm,prod_z_mm,anh_x_mm,anh_y_mm,anh_z_mm\n" *
+            "1,0,0,0,0,0,0,30\n2,0,0,0,0,0,0,-30\n3,0,0,0,0,200,0,0\n" *
+            "4,1,0,0,0,0,0,30\n5,1,0,0,0,0,0,300\n")
+        write(joinpath(dir, "sampling_budget_fast.csv"), "isotope_id,N_expected\n0,1.0e3\n1,5.0e2\n")
+        write(joinpath(dir, "sampling_budget_fast_meta.csv"),
+            "scenario,source_file,dose_Gy,t_irr_s,t_del_s,t_meas_s,target_dose_Gy\nfast,emitters.csv,1.0,60.0,60.0,1200.0,0.01\n")
+        write(joinpath(dir, "run_meta.csv"),
+            "n_protons,geometry,phantom_material,random_seed,geant4_version,physics_list\n100000000,test_head,Water,12345,11.4.1,QGSP_BIC_HP\n")
+        # depth_dose z-frame: 3 bins at −40, 0, +40 mm (edges at ±20 → each inside emitter lands cleanly).
+        write(joinpath(dir, "depth_dose.csv"), "z_mm,dose_core_Gy\n-40,0.1\n0,0.9\n40,0.2\n")
+        write(joinpath(dir, "sobp_layers.csv"), "energy_MeV,weight\n100,1.0\n")
+        write(joinpath(dir, "sobp_layers_meta.csv"), "design_geometry,n_layers\ntest,1\n")
+
+        truth = joinpath(mktempdir(), "truth")
+        write_truth_bundle(dir, truth, mats; budget="fast", dose_Gy=1.0)
+
+        # All six verbatim copies + the derived profile (+ its meta) are present.
+        for f in ("depth_dose.csv", "sobp_layers.csv", "sobp_layers_meta.csv", "run_meta.csv",
+                  "sampling_budget_fast.csv", "sampling_budget_fast_meta.csv",
+                  "activity_profile_fast.csv", "activity_profile_fast_meta.csv")
+            @test isfile(joinpath(truth, f))
+        end
+
+        # Parse the derived activity profile.
+        lines = readlines(joinpath(truth, "activity_profile_fast.csv"))
+        hdr = split(lines[1], ',')
+        @test hdr == ["z_mm", "O15", "C11", "total"]                  # isotope names, id order, + total
+        rows = [parse.(Float64, split(l, ',')) for l in lines[2:end]]
+        zcol = [r[1] for r in rows]
+        @test zcol == [-40.0, 0.0, 40.0]                              # z-frame == depth_dose.csv
+
+        # Per-isotope column integral == expected decays = N_expected · f_inside (at 1 Gy).
+        col_sum(j) = sum(r[j] for r in rows)
+        @test isapprox(col_sum(2), 1.0e3 * (2/3))                     # O15: f_inside = 2/3
+        @test isapprox(col_sum(3), 5.0e2 * (1/2))                     # C11: f_inside = 1/2
+        @test isapprox(col_sum(4), col_sum(2) + col_sum(3))           # total == Σ isotopes
+        # Spatial placement: iso0 split evenly between the ±40 bins; iso1 all in the +40 bin.
+        @test isapprox(rows[1][2], 1.0e3 * (2/3) / 2) && isapprox(rows[3][2], 1.0e3 * (2/3) / 2)
+        @test rows[1][3] == 0.0 && isapprox(rows[3][3], 5.0e2 * (1/2))
+        @test rows[2][2] == 0.0 && rows[2][3] == 0.0                  # z=0 bin empty (no emitters there)
+
+        # Idempotent: a second call keeps files (no error); --force path overwrites.
+        write_truth_bundle(dir, truth, mats; budget="fast", dose_Gy=1.0)          # no-op, no throw
+        write_truth_bundle(dir, truth, mats; budget="fast", dose_Gy=2.5, force=true)
+        rows2 = [parse.(Float64, split(l, ',')) for l in readlines(joinpath(truth, "activity_profile_fast.csv"))[2:end]]
+        @test isapprox(sum(r[2] for r in rows2), 2.5e3 * (2/3))       # dose-linear rescale on force
+        rm(dir; recursive=true)
+    end
+
     @testset "APISource — Poisson materialization (phase 1)" begin
         mats = load_materials(DATA_DIR)
 

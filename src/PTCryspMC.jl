@@ -51,6 +51,7 @@ export XCOMData, load_xcom,
        C_MM_PER_NS, first_photon_jitter, tof_ns, photon_timestamp,
        pair_randoms,
        load_phantom_regions, Scenario, load_scenario,
-       APISource, event_point, event_isotope, materialize_api_source, scenario_activity_models
+       APISource, event_point, event_isotope, materialize_api_source, scenario_activity_models,
+       write_truth_bundle, write_activity_profile
 
 end # module PTCryspMC

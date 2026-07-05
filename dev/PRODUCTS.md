@@ -20,6 +20,12 @@ PtCryspProds/
     phantom/                             ── shared by ALL scanners/crystals — the μ-map inputs
       phantom_regions.csv                   the region(s): shape, semi-axes, centre, material (from the scenario)
       material_<name>.csv                   composition + μ(511) per material (build the voxel μ-map from these)
+    truth/                               ── shared by ALL scanners/crystals — detector-independent truth
+      depth_dose.csv                        dose(z): the Bragg/SOBP distal edge → dose-R80
+      sobp_layers.csv (+ _meta)             the SOBP beam design
+      run_meta.csv                          target-box depths, Np/Gy, normalization
+      sampling_budget_<budget>.csv (+_meta) per-isotope N_expected for the acquisition timing
+      activity_profile_<budget>.csv (+_meta) binned true activity(z), per isotope + total → activity-R50
     <scanner>/                           ── SCANNER GEOMETRY (closed_1m, head, children, open_dualhead, mixed…)
       scanner_geometry.json                 the ring/panel geometry (+ per-block crystal map if heterogeneous)
       <crystal>/                         ── CRYSTAL (bgo, csi) — ONLY for homogeneous scanners
@@ -39,6 +45,7 @@ Example (the first available case):
 ```
 PtCryspProds/uniform_headep_sobp_1e8/
   phantom/{phantom_regions.csv, material_g4_brain_icrp.csv}
+  truth/{depth_dose.csv, sobp_layers.csv, run_meta.csv, sampling_budget_fast.csv, activity_profile_fast.csv, …}
   crysp_ring_1m/
     scanner_geometry.json
     bgo/fast_1Gy/{config.toml, lors_shard000.h5 … lors_shard009.h5}
@@ -51,7 +58,7 @@ PtCryspProds/uniform_headep_sobp_1e8/
 
 | level | axis | varies | shared with… |
 |---|---|---|---|
-| `<scenario>/` | proton field + phantom | scenario | the **source** & the **μ-map** — across everything below |
+| `<scenario>/` | proton field + phantom | scenario | the **source**, the **μ-map** (`phantom/`) & the **truth** (`truth/`) — across everything below |
 | `<scanner>/` | scanner geometry | scanner | `scanner_geometry.json` — across the crystals in it |
 | `<crystal>/` | crystal material (homogeneous only) | crystal | — |
 | `<budget>_<dose>/` | acquisition timing + master top dose | budget | — |
@@ -90,6 +97,11 @@ That is what makes the geometry and detector comparisons isolate a single axis.
 - **Detector comparison:** fix scanner/budget, sweep `<crystal>/`.
 - **Reconstruction inputs:** `<scenario>/phantom/` (build the μ-map) + `<scanner>/scanner_geometry.json`
   (the system model). Never in the LOR file.
+- **Truth reference (scoring):** `<scenario>/truth/` — detector-independent. `activity_profile_<budget>.csv`
+  is the clean β⁺ source curve (→ activity-R50, the recon target); `depth_dose.csv` is the physical dose
+  edge (→ dose-R80). Their offset is the locked reference the reconstructed edge is scored against. The
+  activity profile carries the *same* source scaling as the shards (`N_expected·f_inside` at the run's
+  dose; escaped positrons excluded), so it composes with the pooled LORs directly.
 - **Provenance / regeneration:** every `lors_shardNNN.h5` carries full provenance in its HDF5 root
   attributes (scenario, scanner, crystal, budget, dose, master_seed, shard index, detector windows,
   n_phi/n_z). `config.toml` is the exact recipe: regenerate shard N with the base config +
@@ -105,6 +117,9 @@ That is what makes the geometry and detector comparisons isolate a single axis.
 | `config.toml` | the run recipe (base config; shards = realizations 0..N) | regeneration; provenance |
 | `scanner_geometry.json` | ring/panel geometry (+ crystal map if heterogeneous) | MLEM system model |
 | `phantom/phantom_regions.csv` + `material_*.csv` | the phantom medium | build the μ-map for AC |
+| `truth/depth_dose.csv` | dose(z), the SOBP distal edge | dose-R80 (the clinical range) |
+| `truth/activity_profile_<budget>.csv` | binned true activity(z), per isotope + `total` | activity-R50 (the recon target) |
+| `truth/{sobp_layers,run_meta,sampling_budget_<budget>}.csv` (+`_meta`) | beam design + normalization + per-isotope N_expected | scenario characterization |
 | `README.md` | this contract | anyone browsing the tree |
 
 `lors_shardNNN.h5` truth flag: `0` true, `1` scatter, `2` random. First-pass analysis is

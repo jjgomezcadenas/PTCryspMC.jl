@@ -245,6 +245,98 @@ function materialize_api_source(scn::Scenario; master_seed::Integer=1, realizati
 end
 
 """
+    write_activity_profile(path, scn, depth_dose_path)
+
+Derive the binned true β⁺ activity(z) — the clean, detector-independent source curve the analysis
+scores its reconstruction against — and write it to `path`. Bins are the exact z-frame of
+`depth_dose.csv` (`z_mm` column), so activity(z) and dose(z) overlay directly; the outermost bin
+edges run to ±∞ so every inside-phantom emitter is counted and each isotope's column integrates to
+its expected decay count at the scenario's `dose_Gy`. Per isotope j the pool holds `N_kept_j` sampled
+annihilation points (escaped positrons already dropped), representing the inside distribution from
+which the shard materializes `M_j ~ Poisson(N_expected_j·f_inside_j)`; so each pooled point carries
+weight `N_expected_j·f_inside_j / N_kept_j` — the same source scaling the LOR shard uses, hence the
+profile composes with the LORs. Columns: `z_mm`, one per isotope (its `name`, in isotope-id order),
+`total`. Writes a companion `<path stem>_meta.csv` (scenario/budget/dose/units).
+"""
+function write_activity_profile(path::AbstractString, scn::Scenario, depth_dose_path::AbstractString)
+    dh, dr = _read_csv(depth_dose_path)
+    zc = _col(dh, "z_mm")
+    centers = [parse(Float64, r[zc]) for r in dr]     # mm, the dose z-frame
+    nb = length(centers)
+    nb >= 2 || error("depth_dose.csv needs ≥2 z bins (got $nb)")
+    # interior edges (midpoints); the two outer bins run to ±∞ so nothing inside-phantom is lost.
+    edges = [(centers[i] + centers[i + 1]) / 2 for i in 1:(nb - 1)]
+
+    niso = length(scn.pools)
+    acc  = [zeros(Float64, nb) for _ in 1:niso]        # acc[j][bin] = expected decays
+    for j in 1:niso
+        nkept = length(scn.pools[j])
+        nkept == 0 && continue
+        w = scn.n_expected[j] * scn.f_inside[j] / nkept
+        col = acc[j]
+        @inbounds for p in scn.pools[j]
+            b = searchsortedlast(edges, p[3] * 10) + 1  # cm → mm; 1..nb
+            col[b] += w
+        end
+    end
+
+    names = [scn.isotopes[j].name for j in 1:niso]
+    open(path, "w") do io
+        println(io, "z_mm,", join(names, ","), ",total")
+        for k in 1:nb
+            tot = 0.0
+            print(io, centers[k])
+            for j in 1:niso
+                v = acc[j][k]; tot += v
+                print(io, ",", v)
+            end
+            println(io, ",", tot)
+        end
+    end
+    # companion meta (self-describing): the scaling this profile carries.
+    meta = replace(path, r"\.csv$" => "_meta.csv")
+    open(meta, "w") do io
+        println(io, "scenario,budget,dose_Gy,target_dose_Gy,t_meas_s,n_isotopes,z_frame,units,note")
+        println(io, join((scn.name, scn.budget, scn.dose_Gy, scn.target_dose_Gy, scn.t_meas_s,
+                          niso, "depth_dose.csv", "decays",
+                          "expected(mean) counts at dose_Gy; dose-linear; escaped positrons excluded"), ","))
+    end
+    path
+end
+
+"""
+    write_truth_bundle(scndir, truthdir, materials; budget="fast", dose_Gy=1.0, force=false)
+
+Export the detector-independent scenario truth into `truthdir` (the `<scenario>/truth/` level of the
+products tree, shared across scanners/crystals like `phantom/`). Five verbatim copies —
+`depth_dose.csv` (→ dose-R80), `sobp_layers.csv` (+ `_meta`), `run_meta.csv`, and the budget's
+`sampling_budget_<budget>.csv` (+ `_meta`) — plus the one derived `activity_profile_<budget>.csv`
+(→ activity-R50, via `write_activity_profile`, which streams `emitters.csv`). Idempotent: existing
+files are kept unless `force`. Called by `publish_prod` (once per scenario) and runnable stand-alone
+to backfill an already-published master. Returns `truthdir`.
+"""
+function write_truth_bundle(scndir::AbstractString, truthdir::AbstractString,
+                            materials::Dict{String,Material};
+                            budget::AbstractString="fast", dose_Gy::Real=1.0, force::Bool=false)
+    isdir(scndir) || error("scenario_dir not found: $scndir")
+    mkpath(truthdir)
+    copies = ["depth_dose.csv", "sobp_layers.csv", "sobp_layers_meta.csv", "run_meta.csv",
+              "sampling_budget_$(budget).csv", "sampling_budget_$(budget)_meta.csv"]
+    for f in copies
+        src = joinpath(scndir, f)
+        isfile(src) || error("truth source missing: $src")
+        dst = joinpath(truthdir, f)
+        (force || !isfile(dst)) && cp(src, dst; force=true)
+    end
+    prof = joinpath(truthdir, "activity_profile_$(budget).csv")
+    if force || !isfile(prof)
+        scn = load_scenario(scndir, materials; budget=budget, dose_Gy=dose_Gy)
+        write_activity_profile(prof, scn, joinpath(scndir, "depth_dose.csv"))
+    end
+    truthdir
+end
+
+"""
     scenario_activity_models(scn; seed=1234) -> Vector{ActivityModel}
 
 Per-isotope activity models for the API randoms timing: one `ActivityModel` per isotope, sharing
