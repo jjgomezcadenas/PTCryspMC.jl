@@ -170,6 +170,14 @@ The full chain — source injection, the block/wheel grid, transport, hit format
 and the randoms pass — is built and validated in Clinical mode. See `dev/status.md` for the current
 state and what remains (the Proton Activity (API) scenario source; the Documenter doc-site).
 
+**API (Proton Activity) source — in progress on branch `api-scenario`.** Reads a frozen
+`ptcryspg4` scenario (emitters + per-isotope decay budget + phantom) and drives the engine from it.
+`dev/api_plan.md` is the step-by-step build plan (Ellipsoid solid, brain material, phantom loader,
+scenario reader, APISource + Poisson materialization, isotope column, driver). Multi-region
+(non-uniform, layered soft-tissue/brain/bone) head phantoms are deferred and fully scoped in
+`dev/multiregion_phantom_plan.md` — a self-contained brief (data, prerequisites, navigator design,
+tests) for a future instance; the single-region uniform phantom path is built.
+
 ## Tech stack
 
 - **Julia** — the photon transport and geometry, and the coincidence selection. The

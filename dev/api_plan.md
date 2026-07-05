@@ -19,7 +19,10 @@ already fetched from NIST into `data/`.
 - **Multi-region phantom** (`headep`, `mird_head`): the navigator has one phantom leaf. This
   scenario is single-region, so the loader reads `phantom_regions.csv` generically but **errors
   if >1 region** ("multi-region phantom deferred"). The generic read keeps the single-source-of-
-  truth and marks the extension point.
+  truth and marks the extension point. **Fully scoped for a future instance in
+  `dev/multiregion_phantom_plan.md`** (data, the two extra materials + XCOM-table prerequisite, the
+  `MultiRegionPhantom` + region-aware navigator design, tests) — bone attenuates ~1.7× brain, the
+  reason it matters. Not on the critical path for the uniform-phantom API source below.
 - **Region rotation** (Euler angles): 0 in every current scenario. Loader **errors if any Euler
   angle ≠ 0**. Matches the existing deferred-rotation nit.
 - **Prompt-gamma isotopes** (C10, O14 carry `prompt_gamma=1`): the de-excitation γ in coincidence
