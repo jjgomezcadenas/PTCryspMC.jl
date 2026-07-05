@@ -46,8 +46,15 @@ for N in $(seq $LO $HI); do
   print "  OK: nevents=$nev, randoms measured/analytic=$ratio, published lors_shard$s3.h5"
   prev_nev=$nev
 
-  # --- prune the heavy intermediates (the shard is safely in PtCryspProds) ---
-  rm -f $dir/singles.h5 $dir/lors_truth.h5 $dir/randoms.h5
+  # --- prune ALL heavy .h5: the shard is exported, so prod/ keeps no .h5 (only config.toml).
+  # Guard: delete the source lors_det.h5 only once the published shard is confirmed on disk.
+  published=$(ls $PRODS/*/*/*/*/lors_shard$s3.h5 2>/dev/null | head -1)
+  if [[ -n $published && -f $published ]]; then
+    rm -f $dir/singles.h5 $dir/lors_truth.h5 $dir/randoms.h5 $dir/lors_det.h5
+  else
+    print "  WARN: published shard $s3 not found — keeping lors_det.h5"
+    rm -f $dir/singles.h5 $dir/lors_truth.h5 $dir/randoms.h5
+  fi
 done
 
 # --- master check: all shards present, self-describing, with distinct realizations ---
