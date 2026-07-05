@@ -50,6 +50,6 @@ export XCOMData, load_xcom,
        ActivityModel, event_time, O15_HALFLIFE_S, Isotope, isotope, ISOTOPES,
        C_MM_PER_NS, first_photon_jitter, tof_ns, photon_timestamp,
        pair_randoms,
-       load_phantom_regions
+       load_phantom_regions, Scenario, load_scenario
 
 end # module PTCryspMC

@@ -367,6 +367,61 @@ end
         rm(p)
     end
 
+    @testset "scenario reader (API source)" begin
+        mats = load_materials(DATA_DIR)
+        dir = mktempdir()
+        # A minimal frozen-scenario fixture (the real emitters.csv is 144 MB / external).
+        # Phantom: a 10 cm ellipsoid at the origin (is_inside in cm: sum((p/10)^2) <= 1).
+        write(joinpath(dir, "phantom_regions.csv"),
+            "region,priority,material,solid,a_mm,b_mm,c_mm,cx_mm,cy_mm,cz_mm,euler_x_deg,euler_y_deg,euler_z_deg\n" *
+            "phantom,0,Water,ellipsoid,100,100,100,0,0,0,0,0,0\n")
+        write(joinpath(dir, "isotopes.csv"),
+            "isotope_id,name,half_life_s,endpoint_MeV,prompt_gamma\n0,O15,122.24,1.74,0\n1,C11,1223.4,0.96,0\n")
+        # Emitters: iso0 = 2 inside + 1 escaped (200 mm = 20 cm, outside); iso1 = 1 inside + 1 escaped.
+        write(joinpath(dir, "emitters.csv"),
+            "event_id,isotope_id,prod_x_mm,prod_y_mm,prod_z_mm,anh_x_mm,anh_y_mm,anh_z_mm\n" *
+            "1,0,0,0,0,0,0,0\n2,0,0,0,0,50,0,0\n3,0,0,0,0,200,0,0\n" *      # iso0: in, in, escaped
+            "4,1,0,0,0,0,30,0\n5,1,0,0,0,0,0,300\n")                        # iso1: in, escaped
+        write(joinpath(dir, "sampling_budget_fast.csv"),
+            "isotope_id,N_expected\n0,1.0e3\n1,5.0e2\n")
+        write(joinpath(dir, "sampling_budget_fast_meta.csv"),
+            "scenario,source_file,dose_Gy,t_irr_s,t_del_s,t_meas_s,target_dose_Gy\n" *
+            "fast,emitters.csv,1.0,60.0,60.0,1200.0,0.01\n")
+        write(joinpath(dir, "run_meta.csv"),
+            "n_protons,geometry,phantom_material,random_seed,geant4_version,physics_list\n" *
+            "100000000,test_head,Water,12345,11.4.1,QGSP_BIC_HP\n")
+
+        # Default: drop escaped, dose 1 Gy.
+        s = load_scenario(dir, mats; budget="fast")
+        @test s.name != "" && s.budget == "fast" && s.t_meas_s == 1200.0
+        @test solid(s.phantom) isa Ellipsoid && material(s.phantom).name == "Water"
+        @test length(s.pools) == 2
+        @test length(s.pools[1]) == 2 && length(s.pools[2]) == 1     # escaped dropped
+        @test s.pools[1][1] == (0.0, 0.0, 0.0) && s.pools[1][2] == (5.0, 0.0, 0.0)   # mm → cm
+        @test s.n_dropped == [1, 1]
+        @test isapprox(s.f_inside[1], 2/3) && isapprox(s.f_inside[2], 1/2)
+        @test s.isotopes[1].name == "O15" && s.isotopes[2].name == "C11"
+        @test isapprox(s.isotopes[1].half_life_s, 122.24)
+        @test s.n_expected == [1.0e3, 5.0e2]                          # at 1 Gy, unscaled
+        @test s.provenance["geometry"] == "test_head" && s.provenance["prompt_gamma_modeled"] == false
+        @test s.provenance["n_escaped_dropped"] == 2
+
+        # Dose rescale is linear (budget reference dose is 1 Gy).
+        s2 = load_scenario(dir, mats; budget="fast", dose_Gy=2.5)
+        @test s2.n_expected == [2.5e3, 1.25e3]
+
+        # keep_escaped retains the out-of-phantom points.
+        sk = load_scenario(dir, mats; budget="fast", keep_escaped=true)
+        @test length(sk.pools[1]) == 3 && length(sk.pools[2]) == 2
+        @test sk.n_dropped == [0, 0] && sk.provenance["keep_escaped"] == true
+
+        # An emitter isotope_id outside the isotopes table is an error, not a silent miss.
+        write(joinpath(dir, "emitters.csv"),
+            "event_id,isotope_id,prod_x_mm,prod_y_mm,prod_z_mm,anh_x_mm,anh_y_mm,anh_z_mm\n9,7,0,0,0,0,0,0\n")
+        @test_throws ErrorException load_scenario(dir, mats; budget="fast")
+        rm(dir; recursive=true)
+    end
+
     @testset "logical volume" begin
         w  = load_material(DATA_DIR, "Water")
         lv = LogicalVolume("phantom", Cylinder(8.0, 8.0), w)

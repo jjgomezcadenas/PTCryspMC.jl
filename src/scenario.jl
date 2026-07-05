@@ -78,3 +78,116 @@ function load_phantom_regions(path::AbstractString, materials::Dict{String,Mater
               parse(Float64, getf("cz_mm")) / 10)
     PhysicalVolume(LogicalVolume(getf("region"), sol, materials[matname]), centre)
 end
+
+"Read a one-row CSV (run_meta, a budget meta) into a `String => String` field map."
+function _read_meta_row(path::AbstractString)::Dict{String,String}
+    header, rows = _read_csv(path)
+    isempty(rows) && error("no data row in $path")
+    Dict(header[i] => rows[1][i] for i in eachindex(header))
+end
+
+# Stream emitters.csv (the big file — millions of rows) into per-isotope pools of annihilation
+# points (`anh_*`, mm → cm), one push per row so the whole file is never held as strings. Points
+# outside the phantom are the escaped/surface-pinned positrons (they annihilate far away in air,
+# not at the pinned point) — DROPPED unless `keep_escaped`. Returns the pools and the per-isotope
+# total (kept + dropped), so the caller can form the inside fraction.
+function _read_emitter_pools(path::AbstractString, n_iso::Int, phantom, keep_escaped::Bool)
+    pools   = [NTuple{3,Float64}[] for _ in 1:n_iso]
+    n_total = zeros(Int, n_iso)
+    open(path) do io
+        header = String.(strip.(split(strip(readline(io)), ',')))
+        iid_c = _col(header, "isotope_id")
+        ax_c  = _col(header, "anh_x_mm"); ay_c = _col(header, "anh_y_mm"); az_c = _col(header, "anh_z_mm")
+        for line in eachline(io)
+            isempty(line) && continue
+            f = split(line, ',')
+            iid = parse(Int, f[iid_c])
+            (0 <= iid < n_iso) || error("emitter isotope_id $iid out of range [0, $(n_iso-1)] in $path")
+            p = (parse(Float64, f[ax_c]) / 10, parse(Float64, f[ay_c]) / 10, parse(Float64, f[az_c]) / 10)
+            n_total[iid + 1] += 1
+            (keep_escaped || is_inside(phantom, p)) && push!(pools[iid + 1], p)
+        end
+    end
+    (pools, n_total)
+end
+
+"""
+    Scenario
+
+A parsed frozen `ptcryspg4` scenario (the API source). Holds the phantom (the single source of
+truth, from `phantom_regions.csv`), the per-isotope annihilation-point pools (cm, escaped positrons
+dropped), the isotopes, the per-isotope expected decay budget `N_expected` (rescaled to `dose_Gy`),
+the measurement window `t_meas_s` (the truncated-exponential timing window), the per-isotope kept
+fraction `f_inside` and dropped count (the escaped positrons), and the provenance to stamp into
+outputs. Pools/isotopes/budget/f_inside are indexed by `isotope_id + 1`.
+"""
+struct Scenario
+    name::String
+    budget::String
+    phantom::PhysicalVolume
+    pools::Vector{Vector{NTuple{3,Float64}}}
+    isotopes::Vector{Isotope}
+    n_expected::Vector{Float64}
+    t_meas_s::Float64
+    dose_Gy::Float64
+    target_dose_Gy::Float64
+    f_inside::Vector{Float64}
+    n_dropped::Vector{Int}
+    provenance::Dict{String,Any}
+end
+
+"""
+    load_scenario(dir, materials; budget="fast", dose_Gy=1.0, keep_escaped=false) -> Scenario
+
+Read a frozen `ptcryspg4` scenario directory into a `Scenario`. Builds the phantom from the
+scenario's own `phantom_regions.csv`; streams `emitters.csv` into per-isotope `anh` pools (mm → cm),
+dropping escaped positrons (outside the phantom) unless `keep_escaped`; reads `isotopes.csv`,
+`sampling_budget_<budget>.csv` (+ meta) and `run_meta.csv`. `N_expected` is rescaled linearly from
+the budget's reference dose to `dose_Gy`. The escaped loss is *reported* here (`f_inside`,
+`n_dropped`); the source (`APISource`, step 5) applies it as `M_j ~ Poisson(N_expected_j · f_inside_j)`.
+`isotopes.csv` carries no β⁺ (the budget already counts annihilations), so `Isotope.beta_plus = 1`
+here and is unused in API mode.
+"""
+function load_scenario(dir::AbstractString, materials::Dict{String,Material};
+                       budget::AbstractString="fast", dose_Gy::Real=1.0,
+                       keep_escaped::Bool=false)::Scenario
+    phantom = load_phantom_regions(joinpath(dir, "phantom_regions.csv"), materials)
+
+    ih, ir = _read_csv(joinpath(dir, "isotopes.csv"))
+    idc = _col(ih, "isotope_id"); nc = _col(ih, "name"); hc = _col(ih, "half_life_s")
+    n_iso = maximum(parse(Int, r[idc]) for r in ir) + 1
+    isos  = Vector{Isotope}(undef, n_iso)
+    for r in ir
+        id = parse(Int, r[idc])
+        isos[id + 1] = Isotope(r[nc], parse(Float64, r[hc]), 1.0)   # β⁺ unused in API
+    end
+
+    pools, n_total = _read_emitter_pools(joinpath(dir, "emitters.csv"), n_iso, phantom, keep_escaped)
+    f_inside  = [n_total[j] > 0 ? length(pools[j]) / n_total[j] : 1.0 for j in 1:n_iso]
+    n_dropped = [n_total[j] - length(pools[j]) for j in 1:n_iso]
+
+    bh, br = _read_csv(joinpath(dir, "sampling_budget_$(budget).csv"))
+    bidc = _col(bh, "isotope_id"); nec = _col(bh, "N_expected")
+    bmeta   = _read_meta_row(joinpath(dir, "sampling_budget_$(budget)_meta.csv"))
+    ref_dose = parse(Float64, bmeta["dose_Gy"])
+    t_meas   = parse(Float64, bmeta["t_meas_s"])
+    tgt_dose = parse(Float64, bmeta["target_dose_Gy"])
+    scale = Float64(dose_Gy) / ref_dose
+    n_exp = zeros(Float64, n_iso)
+    for r in br
+        n_exp[parse(Int, r[bidc]) + 1] = parse(Float64, r[nec]) * scale
+    end
+
+    rmeta = _read_meta_row(joinpath(dir, "run_meta.csv"))
+    sname = basename(rstrip(dir, '/'))
+    prov = Dict{String,Any}(
+        "scenario" => sname, "budget" => budget, "dose_Gy" => Float64(dose_Gy),
+        "geometry" => get(rmeta, "geometry", ""), "phantom_material" => get(rmeta, "phantom_material", ""),
+        "geant4_version" => get(rmeta, "geant4_version", ""), "physics_list" => get(rmeta, "physics_list", ""),
+        "upstream_seed" => get(rmeta, "random_seed", ""), "n_protons" => get(rmeta, "n_protons", ""),
+        "keep_escaped" => keep_escaped, "prompt_gamma_modeled" => false,
+        "n_escaped_dropped" => sum(n_dropped))
+
+    Scenario(sname, budget, phantom, pools, isos, n_exp, t_meas,
+             Float64(dose_Gy), tgt_dose, f_inside, n_dropped, prov)
+end
