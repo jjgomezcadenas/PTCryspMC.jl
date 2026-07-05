@@ -422,6 +422,71 @@ end
         rm(dir; recursive=true)
     end
 
+    @testset "APISource — Poisson materialization (phase 1)" begin
+        mats = load_materials(DATA_DIR)
+
+        # _rand_poisson: mean = var = μ across the Knuth (small) and normal (large) regimes.
+        rp = MersenneTwister(3)
+        for μ in (5.0, 10000.0)
+            N = 40000; s = 0.0; s2 = 0.0
+            for _ in 1:N
+                k = PTCryspMC._rand_poisson(rp, μ); s += k; s2 += (k - μ)^2
+            end
+            @test isapprox(s / N, μ; rtol = 0.03)
+            @test isapprox(s2 / N, μ; rtol = 0.10)          # variance ≈ mean
+        end
+        @test PTCryspMC._rand_poisson(rp, 0.0) == 0
+
+        # A minimal Scenario: iso0 pool of 2 points (μ=1000), iso1 pool of 1 (μ=500).
+        ph = PhysicalVolume(LogicalVolume("p", Sphere(10.0), mats["Water"]), (0.0, 0.0, 0.0))
+        pools = [[(0.0, 0.0, 0.0), (1.0, 0.0, 0.0)], [(0.0, 2.0, 0.0)]]
+        isos  = [Isotope("O15", 122.24, 1.0), Isotope("C11", 1223.4, 1.0)]
+        scn = Scenario("t", "fast", ph, pools, isos, [1000.0, 500.0], 1200.0, 1.0, 0.01,
+                       [1.0, 1.0], [0, 0], Dict{String,Any}())
+
+        src = materialize_api_source(scn; master_seed=7, realization=0)
+        @test src isa APISource && src isa Source
+        @test isapprox(length(src.points), 1500; rtol=0.12)        # ΣM_j ~ Poisson(1500)
+        @test length(src.points) == length(src.isotope)
+        @test isapprox(src.lambdas[1], log(2.0) / 122.24) && isapprox(src.lambdas[2], log(2.0) / 1223.4)
+
+        # Reproducible per (master_seed, realization) — this is the "identical source" contract,
+        # and (having no nchunks argument) it is independent of the transport chunking by construction.
+        src_a = materialize_api_source(scn; master_seed=7, realization=0)
+        @test src_a.points == src.points && src_a.isotope == src.isotope
+        src_b = materialize_api_source(scn; master_seed=7, realization=1)
+        @test src_b.points != src.points                          # a different realization differs
+
+        # Every drawn point comes from its isotope's pool; the isotope mix ≈ the μ ratio (2:1).
+        pool0 = Set(pools[1]); pool1 = Set(pools[2]); membership = true
+        for i in eachindex(src.points)
+            membership &= src.isotope[i] == 0 ? (src.points[i] in pool0) : (src.points[i] in pool1)
+        end
+        @test membership
+        n0 = count(==(Int8(0)), src.isotope); n1 = count(==(Int8(1)), src.isotope)
+        @test isapprox(n0 / n1, 2.0; rtol=0.15)
+
+        # f_inside folds into M_j: halving f_inside halves the expected count.
+        scn_half = Scenario("t", "fast", ph, pools, isos, [1000.0, 500.0], 1200.0, 1.0, 0.01,
+                            [0.5, 0.5], [0, 0], Dict{String,Any}())
+        @test isapprox(length(materialize_api_source(scn_half; master_seed=7).points), 750; rtol=0.15)
+
+        # event_point / event_isotope: indexed for the API source, drawn for the others.
+        @test event_point(src, 5, MersenneTwister(1)) == src.points[5]
+        @test event_isotope(src, 5) == src.isotope[5]
+        @test event_isotope(PointSource((0.0,0.0,0.0)), 5) == Int8(0)   # drawn source: single isotope
+
+        # The transport consumes an APISource through event_point (the point is the array's, not drawn).
+        geom = load_geometry(GEOM_JSON, mats)
+        c = geom.phantom.position
+        apis = APISource(fill(c, 60), fill(Int8(0), 60), [log(2.0) / 122.24])
+        captured = NTuple{3,Float64}[]
+        singles_chunk!(geom, apis, 0.511, 0.010, 0.5, 1:60, MersenneTwister(9), mats["CsI"]) do ev, g, s, pos0, t_rel
+            push!(captured, pos0)
+        end
+        @test !isempty(captured) && all(p -> p == c, captured)     # pos0 from the array, every time
+    end
+
     @testset "logical volume" begin
         w  = load_material(DATA_DIR, "Water")
         lv = LogicalVolume("phantom", Cylinder(8.0, 8.0), w)

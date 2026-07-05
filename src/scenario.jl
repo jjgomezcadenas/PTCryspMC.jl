@@ -191,3 +191,55 @@ function load_scenario(dir::AbstractString, materials::Dict{String,Material};
     Scenario(sname, budget, phantom, pools, isos, n_exp, t_meas,
              Float64(dose_Gy), tgt_dose, f_inside, n_dropped, prov)
 end
+
+# Poisson draw without a Distributions dependency: Knuth for a small mean (exact, O(mean), no
+# exp(-mean) underflow below ~700), the normal approximation for a large mean (≥ 50 → the error is
+# negligible and Knuth would be needlessly long). Only a handful of draws per realization (one per
+# isotope), so correctness across the mean range — not speed — is the point.
+function _rand_poisson(rng::AbstractRNG, mean::Float64)::Int
+    mean <= 0.0 && return 0
+    if mean < 50.0
+        L = exp(-mean); k = 0; p = 1.0
+        while true
+            k += 1; p *= rand(rng)
+            p <= L && return k - 1
+        end
+    else
+        n = round(Int, mean + sqrt(mean) * randn(rng))
+        return n < 0 ? 0 : n
+    end
+end
+
+"""
+    materialize_api_source(scn; master_seed=1, realization=0) -> APISource
+
+Phase 1 of the API source: draw the whole annihilation-point array from a `Scenario`, seeded ONLY
+by `(master_seed, realization)` — independent of the transport chunking, so every detector config
+sees the identical source. For each isotope j draw `M_j ~ Poisson(N_expected_j · f_inside_j)` (the
+escaped-positron loss folded in), then sample `M_j` points with replacement from that isotope's pool.
+Events are numbered `1..N = 1..ΣM_j` in isotope-id order.
+"""
+function materialize_api_source(scn::Scenario; master_seed::Integer=1, realization::Integer=0)::APISource
+    rng  = MersenneTwister(UInt64(master_seed) + UInt64(realization))
+    niso = length(scn.pools)
+    M = Vector{Int}(undef, niso)
+    for j in 1:niso
+        M[j] = _rand_poisson(rng, scn.n_expected[j] * scn.f_inside[j])
+        (M[j] == 0 || !isempty(scn.pools[j])) ||
+            error("isotope $(scn.isotopes[j].name): M_j=$(M[j]) but empty pool (cannot sample)")
+    end
+    N = sum(M)
+    points  = Vector{NTuple{3,Float64}}(undef, N)
+    isotope = Vector{Int8}(undef, N)
+    e = 0
+    for j in 1:niso
+        pool = scn.pools[j]; npool = length(pool)
+        @inbounds for _ in 1:M[j]
+            e += 1
+            points[e]  = pool[rand(rng, 1:npool)]
+            isotope[e] = Int8(j - 1)
+        end
+    end
+    lambdas = [log(2.0) / iso.half_life_s for iso in scn.isotopes]
+    APISource(points, isotope, lambdas)
+end

@@ -35,7 +35,8 @@ function singles_chunk!(emit, geom::Geometry, src::Source, E0::Float64, cut_MeV:
                         acol::Float64, range::UnitRange{Int}, rng::AbstractRNG, mat::Material)::Int
     nr = 0
     for ev in range
-        pos0, d1, d2 = emit_pair(src, rng; acol_fwhm_deg=acol)
+        pos0   = event_point(src, ev, rng)          # drawn (count/clinic) or indexed (API)
+        d1, d2 = emit_directions(rng, acol)          # same rng draw order as emit_pair
         for (g, dir) in ((1, d1), (2, d2))
             s = navigate_single_photons(geom, E0, pos0, dir, rng; egamma_cut=cut_MeV)
             s.reached || continue

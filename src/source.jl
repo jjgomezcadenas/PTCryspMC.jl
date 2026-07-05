@@ -88,6 +88,17 @@ sample_position(src::PointSource, ::AbstractRNG) = src.position
     rotate_to_global_t(local_dir[1], local_dir[2], local_dir[3], axis)
 end
 
+# The two ~back-to-back unit directions of one annihilation: `d1` isotropic, `d2` the partner of
+# `-d1` tilted by the acollinearity. Split out of `emit_pair` so the transport can draw directions
+# for a point that came from elsewhere (the API source array) with the SAME rng draw order as the
+# drawn-point sources.
+@inline function emit_directions(rng::AbstractRNG, acol_fwhm_deg::Float64)
+    d1 = rand_direction(rng)
+    σ  = deg2rad(acol_fwhm_deg) / 2.3548200450309493      # FWHM -> sigma (2*sqrt(2 ln 2))
+    d2 = _acollinear((-d1[1], -d1[2], -d1[3]), σ, rng)
+    (d1, d2)
+end
+
 """
     emit_pair(src, rng; acol_fwhm_deg=0.5) -> (pos, dir1, dir2)
 
@@ -96,12 +107,20 @@ One annihilation from `src`: a world-frame point and two ~back-to-back unit dire
 acollinearity of `acol_fwhm_deg` FWHM per transverse projection (0 = exactly 180 deg).
 """
 function emit_pair(src::Source, rng::AbstractRNG; acol_fwhm_deg::Float64=0.5)
-    pos = sample_position(src, rng)
-    d1  = rand_direction(rng)
-    σ   = deg2rad(acol_fwhm_deg) / 2.3548200450309493     # FWHM -> sigma (2*sqrt(2 ln 2))
-    d2  = _acollinear((-d1[1], -d1[2], -d1[3]), σ, rng)
+    pos    = sample_position(src, rng)
+    d1, d2 = emit_directions(rng, acol_fwhm_deg)
     (pos, d1, d2)
 end
+
+"""
+    event_point(src, ev, rng) -> NTuple{3,Float64}
+
+The world-frame annihilation point of event `ev`. Drawn sources (count-driven, clinical) sample it
+from `rng` (ignoring `ev`); the API source reads it from its pre-built array (ignoring `rng`), so
+the source is identical across detectors and independent of the transport chunking. Keeping the
+draw order identical (point, then `emit_directions`) leaves the drawn-source rng streams unchanged.
+"""
+@inline event_point(src::Source, ::Int, rng::AbstractRNG) = sample_position(src, rng)
 
 # ── Clinical source (activity-driven) ───────────────────────────────────────────────────────────
 # Conventional PET: a tracer distribution at a known activity. The source carries one or more placed
@@ -205,3 +224,31 @@ function load_clinic_source(cfg::AbstractDict, geom::Geometry)::ClinicSource
     end
     ClinicSource(regions, conc)
 end
+
+# ── API source (Proton Activity, count-driven) ────────────────────────────────────────────────
+# The materialized frozen-scenario source: the annihilation points already DRAWN (phase 1, seeded
+# only by master_seed+realization → identical across detectors and independent of the transport
+# chunking), one per event, each tagged with its isotope. The transport INDEXES the point by event
+# via `event_point` instead of drawing it, so the chunk rng is spent only on directions/transport.
+# Built by `materialize_api_source` (in scenario.jl, which has the `Scenario`).
+
+"""
+    APISource(points, isotope, lambdas) <: Source
+
+A materialized Proton-Activity source: `points[ev]` the annihilation point [cm] of event `ev`,
+`isotope[ev]` its isotope id, and `lambdas[id+1]` the per-isotope decay constant λ=ln2/T½ (for the
+randoms timing). See `materialize_api_source`.
+"""
+struct APISource <: Source
+    points::Vector{NTuple{3,Float64}}
+    isotope::Vector{Int8}
+    lambdas::Vector{Float64}
+end
+
+Base.length(src::APISource) = length(src.points)
+
+@inline event_point(src::APISource, ev::Int, ::AbstractRNG) = @inbounds src.points[ev]
+
+"The isotope id of event `ev`: the per-event value for the API source (a fixed 0 for the single-isotope drawn sources)."
+@inline event_isotope(::Source, ::Int)::Int8 = Int8(0)
+@inline event_isotope(src::APISource, ev::Int)::Int8 = @inbounds src.isotope[ev]
