@@ -18,7 +18,7 @@
         "material": "G4_BRAIN_ICRP"
     },
     "scanner": {
-        "name": "CRYSP_CSI_1M",
+        "name": "crysp_ring_1m",
         "shape": "cyl_shell",
         "r_inner_cm": 38.7,
         "wall_thickness_cm": 3.7,
