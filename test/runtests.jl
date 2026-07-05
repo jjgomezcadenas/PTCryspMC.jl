@@ -71,6 +71,16 @@ end
 
         # An unknown name is an error, not a silent miss.
         @test_throws ErrorException load_material(DATA_DIR, "Nonexistent")
+
+        # G4_BRAIN_ICRP (the ptcrysp head-phantom medium): its transported total
+        # cross section at 511 keV must reproduce the scenario's stated attenuation
+        # μ = 0.09913 cm⁻¹ (μ/ρ 0.09532 × ρ 1.04, from phantom_material_*_meta.csv).
+        b = load_material(DATA_DIR, "G4_BRAIN_ICRP")
+        @test b.density == 1.04
+        Cb, Phb, Pb = sigma_macro(b, 0.511)
+        @test isapprox(Cb + Phb + Pb, 0.09913, rtol = 0.01)   # matches the meta μ to <1%
+        @test Pb == 0.0                                        # pair below threshold at 511 keV
+        @test Cb > Phb                                         # Compton dominates
     end
 
     @testset "CsI crystal material" begin
@@ -262,6 +272,67 @@ end
         # Loaded from JSON like the other shapes.
         sl = load_solid(Dict("shape" => "sphere", "radius_cm" => 8.0))
         @test sl isa Sphere && isapprox(sl.radius_cm, 8.0)
+    end
+
+    @testset "ellipsoid solid" begin
+        e = Ellipsoid(3.0, 4.0, 5.0)
+        @test e isa Solid
+        @test isapprox(volume(e), (4 / 3) * π * 3.0 * 4.0 * 5.0)
+
+        @test is_inside(e, (0.0, 0.0, 0.0))       # centre
+        @test is_inside(e, (3.0, 0.0, 0.0))       # on the x semi-axis (inclusive)
+        @test is_inside(e, (0.0, 4.0, 0.0))       # on the y semi-axis
+        @test is_inside(e, (0.0, 0.0, 5.0))       # on the z semi-axis
+        @test !is_inside(e, (3.1, 0.0, 0.0))      # just outside along x
+        @test !is_inside(e, (0.0, 4.1, 0.0))      # just outside along y
+
+        # From the centre, the exit is the semi-axis length along each axis; no entry.
+        @test isapprox(distance_to_exit((0.0, 0.0, 0.0), (1.0, 0.0, 0.0), e), 3.0)
+        @test isapprox(distance_to_exit((0.0, 0.0, 0.0), (0.0, 1.0, 0.0), e), 4.0)
+        @test isapprox(distance_to_exit((0.0, 0.0, 0.0), (0.0, 0.0, 1.0), e), 5.0)
+        @test distance_to_entry((0.0, 0.0, 0.0), (1.0, 0.0, 0.0), e) == Inf
+
+        # From outside heading at the centre along y: enter the near face, exit the far.
+        @test isapprox(distance_to_entry((0.0, -10.0, 0.0), (0.0, 1.0, 0.0), e), 6.0)
+        @test isapprox(distance_to_exit((0.0, -10.0, 0.0), (0.0, 1.0, 0.0), e), 14.0)
+
+        # Heading away, and a clean miss (offset beyond the y semi-axis) → Inf.
+        @test distance_to_entry((10.0, 0.0, 0.0), (1.0, 0.0, 0.0), e) == Inf
+        @test distance_to_entry((-10.0, 4.1, 0.0), (1.0, 0.0, 0.0), e) == Inf
+
+        # Equal semi-axes reproduce the sphere (same crossings, to FP — the ellipsoid
+        # divides by the axes so it is not bit-identical to the sphere's direct formula).
+        es = Ellipsoid(5.0, 5.0, 5.0); s = Sphere(5.0)
+        for (p, d) in (((0.0,0.0,0.0),(1.0,0.0,0.0)), ((-10.0,0.0,0.0),(1.0,0.0,0.0)),
+                       ((-10.0,3.0,0.0),(1.0,0.0,0.0)), ((2.0,1.0,-3.0),(0.3,-0.5,0.8)))
+            dn = d ./ sqrt(sum(abs2, d))
+            @test isapprox(distance_to_entry(p, dn, es), distance_to_entry(p, dn, s))
+            @test isapprox(distance_to_exit(p, dn, es),  distance_to_exit(p, dn, s))
+        end
+
+        # Loaded from JSON like the other shapes.
+        el = load_solid(Dict("shape" => "ellipsoid", "a_cm" => 7.2, "b_cm" => 8.7, "c_cm" => 10.2))
+        @test el isa Ellipsoid && isapprox(el.a_cm, 7.2) && isapprox(el.b_cm, 8.7) && isapprox(el.c_cm, 10.2)
+        @test_throws ErrorException load_solid(Dict("shape" => "banana"))
+    end
+
+    @testset "head phantom — escaped-positron drop criterion" begin
+        # The API source drops annihilation points outside the phantom — escaped /
+        # surface-pinned positrons annihilate tens of cm away in air, not at the pinned
+        # point, so they are lost, not a boundary source (dev/api_plan.md). The drop
+        # criterion is `is_inside(phantom, anh)` false on the real head ellipsoid at its
+        # scenario placement (uniform_headep: axes (7.2,8.7,10.2) cm, centre (0,-3,0) cm).
+        # Validated here; the pool filter that applies it lands with the scenario reader.
+        brain = load_material(DATA_DIR, "G4_BRAIN_ICRP")
+        head  = PhysicalVolume(LogicalVolume("head", Ellipsoid(7.2, 8.7, 10.2), brain), (0.0, -3.0, 0.0))
+
+        @test is_inside(head, (0.0, -3.0, 0.0))        # placement centre — kept
+        @test is_inside(head, (0.0, -3.0, 5.0))        # interior — kept
+        @test is_inside(head, (7.2, -3.0, 0.0))        # exactly on the x semi-axis — kept (inclusive)
+        # Escaped points → dropped: just beyond the entrance-face tip (z=-10.2 cm, where
+        # the pinned population clusters) and just beyond the lateral x semi-axis.
+        @test !is_inside(head, (0.0, -3.0, -10.3))
+        @test !is_inside(head, (7.3, -3.0, 0.0))
     end
 
     @testset "logical volume" begin

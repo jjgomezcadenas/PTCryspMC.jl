@@ -12,6 +12,13 @@
         "xcom": "xcom_water.csv"
     },
 
+    "G4_BRAIN_ICRP": {
+        "_note": "ICRP brain, the ptcrysp head-phantom medium; name matches phantom_regions.csv for direct lookup",
+        "density": 1.04,
+        "components": {"H": 0.107, "C": 0.145, "N": 0.022, "O": 0.712, "Na": 0.002, "P": 0.004, "S": 0.002, "Cl": 0.003, "K": 0.003},
+        "xcom": "xcom_brain.csv"
+    },
+
     "CsI": {
         "_note": "cryogenic pure CsI",
         "density": 4.51,

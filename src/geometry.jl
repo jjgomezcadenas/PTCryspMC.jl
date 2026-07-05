@@ -207,6 +207,59 @@ function distance_to_entry(pos, dir, s::Sphere)::Float64
     t_near < t_far ? t_near : Inf
 end
 
+"An ellipsoid, semi-axes along x, y, z, centred at the origin [cm]."
+struct Ellipsoid <: Solid
+    a_cm::Float64
+    b_cm::Float64
+    c_cm::Float64
+end
+
+volume(e::Ellipsoid)::Float64 = (4.0 / 3.0) * π * e.a_cm * e.b_cm * e.c_cm
+
+is_inside(e::Ellipsoid, p)::Bool =
+    (p[1] / e.a_cm)^2 + (p[2] / e.b_cm)^2 + (p[3] / e.c_cm)^2 <= 1.0
+
+"""
+    _ellipsoid_crossings(pos, dir, e) -> (t_near, t_far)
+
+Nearest and farthest distances [cm] at which the ray from `pos` along `dir` crosses
+the ellipsoid surface. Substituting `u_i = pos_i/s_i`, `v_i = dir_i/s_i` into
+`Σ((pos_i + t·dir_i)/s_i)² = 1` gives a quadratic in the **physical** ray parameter
+`t` (dir is unit → `t` is a distance in cm): `A·t² + B·t + C = 0` with `A = Σv_i²`,
+`B = 2Σu_iv_i`, `C = Σu_i² − 1`. Counts only crossings ahead (`t > SURFACE_EPS`).
+`(Inf, -Inf)` when there is none. Allocation-free hot path; reduces to
+`_sphere_crossings` when the axes are equal.
+"""
+@inline function _ellipsoid_crossings(pos, dir, e::Ellipsoid)::Tuple{Float64,Float64}
+    ux = pos[1] / e.a_cm; uy = pos[2] / e.b_cm; uz = pos[3] / e.c_cm
+    vx = dir[1] / e.a_cm; vy = dir[2] / e.b_cm; vz = dir[3] / e.c_cm
+    A  = vx^2 + vy^2 + vz^2
+    t_near = Inf; t_far = -Inf
+    A > PARALLEL_EPS || return (t_near, t_far)
+    B  = 2.0 * (ux * vx + uy * vy + uz * vz)
+    C  = ux^2 + uy^2 + uz^2 - 1.0
+    disc = B^2 - 4.0 * A * C
+    if disc >= 0.0
+        sq = sqrt(disc)
+        for t in ((-B + sq) / (2A), (-B - sq) / (2A))
+            if t > SURFACE_EPS
+                t_near = min(t_near, t); t_far = max(t_far, t)
+            end
+        end
+    end
+    (t_near, t_far)
+end
+
+function distance_to_exit(pos, dir, e::Ellipsoid)::Float64
+    _, t_far = _ellipsoid_crossings(pos, dir, e)
+    t_far > 0.0 ? t_far : Inf
+end
+
+function distance_to_entry(pos, dir, e::Ellipsoid)::Float64
+    t_near, t_far = _ellipsoid_crossings(pos, dir, e)
+    t_near < t_far ? t_near : Inf
+end
+
 "A cylindrical shell (hollow cylinder), axis along z, centred at the origin [cm]."
 struct CylShell <: Solid
     r_inner_cm::Float64
@@ -398,8 +451,9 @@ end
 
 Build a solid from a JSON dict, dispatching on its `shape` field: `"cylinder"`
 (radius_cm, half_length_cm), `"box"` (half_x_cm, half_y_cm, half_z_cm),
-`"cyl_shell"` (r_inner_cm, wall_thickness_cm, half_length_cm) or `"sphere"`
-(radius_cm). Any other shape is rejected rather than silently mis-loaded.
+`"cyl_shell"` (r_inner_cm, wall_thickness_cm, half_length_cm), `"sphere"`
+(radius_cm) or `"ellipsoid"` (a_cm, b_cm, c_cm). Any other shape is rejected rather
+than silently mis-loaded.
 """
 function load_solid(d)::Solid
     shape = get(d, "shape", "cylinder")
@@ -412,8 +466,10 @@ function load_solid(d)::Solid
                  Float64(d["half_length_cm"]))
     elseif shape == "sphere"
         Sphere(Float64(d["radius_cm"]))
+    elseif shape == "ellipsoid"
+        Ellipsoid(Float64(d["a_cm"]), Float64(d["b_cm"]), Float64(d["c_cm"]))
     else
-        error("unsupported solid shape '$shape' (cylinder, box, cyl_shell, sphere)")
+        error("unsupported solid shape '$shape' (cylinder, box, cyl_shell, sphere, ellipsoid)")
     end
 end
 

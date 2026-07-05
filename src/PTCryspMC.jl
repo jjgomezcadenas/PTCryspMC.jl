@@ -27,7 +27,7 @@ include("randoms.jl")      # cross-decay accidental pairing (sort by absolute ti
 
 export XCOMData, load_xcom,
        Material, load_material, load_materials, sigma_macro, mfp,
-       Solid, Cylinder, Box, CylShell, Sphere, LogicalVolume, PhysicalVolume, Geometry,
+       Solid, Cylinder, Box, CylShell, Sphere, Ellipsoid, LogicalVolume, PhysicalVolume, Geometry,
        Scanner, r_outer, block_index, block_id, nblocks,
        solid, material, name, volume, mass,
        load_solid, load_geometry,
