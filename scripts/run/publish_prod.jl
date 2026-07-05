@@ -55,7 +55,7 @@ function main()
     crystal  = sanitize(cfg_get(cfg, "transport", "crystal_material", "CsI"))
     budget   = String(cfg_get(cfg, "source", "budget", "fast"))
     dose     = dose_tag(Float64(cfg_get(cfg, "source", "dose_Gy", 1.0)))
-    realiz   = Int(cfg_get(cfg, "source", "realization", 0))
+    realiz   = Int(singles_hdf5_attr(lors, "realization", cfg_get(cfg, "source", "realization", 0)))  # what was actually run
     geomfile = rp(cfg_get(cfg, "geometry", "file", "geometry/geometry_head.json"))
     scanner  = sanitize(get(get(JSON.parsefile(geomfile), "scanner", Dict()), "name", "scanner"))
 

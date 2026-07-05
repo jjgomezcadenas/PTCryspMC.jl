@@ -39,6 +39,7 @@ function parse_cli()
         "--nevents"; help = "override [source].nevents"; arg_type = Int; default = -1
         "--seed";    help = "override [transport].seed"; arg_type = Int; default = -1
         "--nchunks"; help = "number of event chunks (default [transport].nchunks, else 8·nthreads)"; arg_type = Int; default = -1
+        "--realization"; help = "override [source].realization (API mode; the shard index)"; arg_type = Int; default = -1
         "--format";  help = "override [output].format (csv | hdf5)"; default = ""
     end
     parse_args(s)
@@ -144,7 +145,7 @@ function main()
         dose    = Float64(cfg_get(cfg, "source", "dose_Gy", 1.0))
         keepesc = Bool(cfg_get(cfg, "source", "keep_escaped", false))
         mseed   = Int(cfg_get(cfg, "source", "master_seed", 1))
-        realz   = Int(cfg_get(cfg, "source", "realization", 0))
+        realz   = a["realization"] >= 0 ? a["realization"] : Int(cfg_get(cfg, "source", "realization", 0))
         tseed   = Int(cfg_get(cfg, "source", "time_seed", 1234))
         scn     = load_scenario(scndir, mats; budget=budget, dose_Gy=dose, keep_escaped=keepesc)
         geom    = Geometry(geom.world, scn.phantom, sc)      # phantom from the scenario (single source of truth)
