@@ -50,8 +50,9 @@ for cfg in $configs; do
   tag=${cfg:t:r}
   dir=prod/$tag
   print "=== $tag ==="
-  # Clinic mode derives N from the activity → don't pin with --nevents; count-driven configs do.
-  if grep -qE '^[[:space:]]*mode[[:space:]]*=[[:space:]]*"clinic"' $cfg; then
+  # Clinic (activity) and API (materialized scenario) both derive N internally → don't pin with
+  # --nevents; count-driven configs do.
+  if grep -qE '^[[:space:]]*mode[[:space:]]*=[[:space:]]*"(clinic|api)"' $cfg; then
     nevarg=()
   else
     nevarg=(--nevents $NEV)

@@ -123,8 +123,11 @@ function main()
     cut_MeV = cutoff / 1000.0
 
     # Source + event count. Clinic (activity-driven): N = β⁺·∫A dt derived from the regions' activity
-    # and the isotope, points drawn ∝ region activity. Else count-driven: N given, uniform/point draw.
-    # A CLI --nevents always pins N (the validation knob).
+    # and the isotope, points drawn ∝ region activity. API (Proton Activity, count-driven): a frozen
+    # ptcryspg4 scenario supplies the phantom + per-isotope emitter pools + budget; the source is
+    # materialized (M_j ~ Poisson) seeded by (master_seed, realization), independent of the transport
+    # seed. Else count-driven: N given, uniform/point draw. A CLI --nevents pins N (clinic/count only).
+    extra_meta = Dict{String,Any}()
     if mode == "clinic"
         iso     = isotope(String(cfg_get(cfg, "source", "isotope", "F18")))
         t0_s    = Float64(cfg_get(cfg, "source", "t0_s", 0.0))
@@ -133,6 +136,27 @@ function main()
         src     = length(clinic.regions) == 1 ? UniformVolumeSource(clinic.regions[1]) : clinic
         nevents = a["nevents"] >= 0 ? a["nevents"] : n_annihilations(clinic, iso, t0_s, t1_s)
         srcdesc = "clinic $(iso.name), A0=$(round(clinic.A0/1e3, digits=1)) kBq over [$(t0_s),$(t1_s)]s, $(length(clinic.regions)) region(s)"
+    elseif mode == "api"
+        scndir  = rp(String(cfg_get(cfg, "source", "scenario_dir", "")))
+        isempty(scndir) && error("[source].scenario_dir required for mode=\"api\"")
+        isdir(scndir)   || error("scenario_dir '$scndir' not found")
+        budget  = String(cfg_get(cfg, "source", "budget", "fast"))
+        dose    = Float64(cfg_get(cfg, "source", "dose_Gy", 1.0))
+        keepesc = Bool(cfg_get(cfg, "source", "keep_escaped", false))
+        mseed   = Int(cfg_get(cfg, "source", "master_seed", 1))
+        realz   = Int(cfg_get(cfg, "source", "realization", 0))
+        tseed   = Int(cfg_get(cfg, "source", "time_seed", 1234))
+        scn     = load_scenario(scndir, mats; budget=budget, dose_Gy=dose, keep_escaped=keepesc)
+        geom    = Geometry(geom.world, scn.phantom, sc)      # phantom from the scenario (single source of truth)
+        src     = materialize_api_source(scn; master_seed=mseed, realization=realz)
+        nevents = length(src.points)                          # fixed by the source (‑‑nevents ignored)
+        extra_meta = Dict{String,Any}("source_mode"=>"api", "scenario"=>scn.name, "budget"=>budget,
+            "dose_Gy"=>dose, "realization"=>realz, "master_seed"=>mseed, "keep_escaped"=>keepesc,
+            "prompt_gamma_modeled"=>false, "t_meas_s"=>scn.t_meas_s, "time_seed"=>tseed,
+            "isotope_half_lives"=>Float64[iso.half_life_s for iso in scn.isotopes],
+            "isotope_names"=>String[iso.name for iso in scn.isotopes],
+            "n_escaped_dropped"=>scn.provenance["n_escaped_dropped"])
+        srcdesc = "API $(scn.name)/$budget $(dose)Gy real=$realz, N=$nevents, $(length(scn.pools)) isotope(s)"
     else
         kind    = String(cfg_get(cfg, "source", "kind", "point"))
         kind in ("point", "phantom") || error("[source].kind must be 'point' or 'phantom'")
@@ -179,6 +203,7 @@ function main()
             "nchunks"=>nchunks, "crystal"=>crystal, "phantom_material"=>material(geom.phantom).name,
             "energy_keV"=>energy, "acol_fwhm_deg"=>acol, "cutoff_keV"=>cutoff,
             "geometry_file"=>basename(geomfile), "n_phi"=>sc.n_phi, "n_z"=>sc.n_z)
+        merge!(meta, extra_meta)        # API mode adds scenario/budget/dose/realization + per-isotope timing
         pack_singles_hdf5(out, parts, rows, meta)
     else
         open(out, "w") do io

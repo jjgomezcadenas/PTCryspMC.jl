@@ -1,0 +1,31 @@
+{
+    "_doc": "Head-phantom geometry for the API (Proton Activity) source mode: the Air world and the CRYSP ring (scanner axis along the beam, +z). The phantom section is a PLACEHOLDER — in mode=\"api\" the driver replaces it with the phantom built from the scenario's phantom_regions.csv (the single source of truth), so its dimensions/material here are not used. Dimensions in cm; material keys into data/materials.json.",
+    "world": {
+        "name": "world",
+        "shape": "cylinder",
+        "radius_cm": 60.0,
+        "half_length_cm": 60.0,
+        "position_cm": [0.0, 0.0, 0.0],
+        "material": "Air"
+    },
+    "phantom": {
+        "name": "head_placeholder",
+        "shape": "ellipsoid",
+        "a_cm": 7.2,
+        "b_cm": 8.7,
+        "c_cm": 10.2,
+        "position_cm": [0.0, -3.0, 0.0],
+        "material": "G4_BRAIN_ICRP"
+    },
+    "scanner": {
+        "name": "CRYSP_CSI_1M",
+        "shape": "cyl_shell",
+        "r_inner_cm": 38.7,
+        "wall_thickness_cm": 3.7,
+        "half_length_cm": 51.2,
+        "n_phi": 48,
+        "n_z": 20,
+        "position_cm": [0.0, 0.0, 0.0],
+        "material": "CsI"
+    }
+}

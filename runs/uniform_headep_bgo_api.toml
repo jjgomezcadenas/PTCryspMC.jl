@@ -1,0 +1,34 @@
+# API (Proton Activity) production: the positron activity a SOBP proton field leaves in a uniform
+# brain head, imaged by the cryogenic-BGO CRYSP ring. Source = a frozen ptcryspg4 scenario
+# (phantom + per-isotope emitter pools + decay budget); the phantom comes from the scenario's
+# phantom_regions.csv, so [geometry].file supplies only the world + ring. The source is materialized
+# (M_j ~ Poisson) seeded by (master_seed, realization), independent of [transport].seed — so every
+# detector config at the same (master_seed, realization) sees the identical source.
+
+[source]
+mode          = "api"
+scenario_dir  = "../ptcrysp-scenarios/scenarios/uniform_headep_sobp_1e8"   # relative to the repo root
+budget        = "fast"        # acquisition timing: fast | inroom | offline
+dose_Gy       = 1.0           # clinical dose (linear rescale of the per-isotope budget)
+master_seed   = 1             # with realization, fixes the source draw (the identical-source contract)
+realization   = 0             # realization index (bump for an independent σ_R realization)
+time_seed     = 1234          # per-isotope decay-time seed (randoms timing)
+keep_escaped  = false         # drop escaped positrons (outside the phantom) — the physical default
+
+[geometry]
+file = "geometry/geometry_head.json"
+
+[transport]
+crystal_material = "BGO"
+seed             = 1234        # transport-chunk RNG (directions + interactions), separate from master_seed
+nchunks          = 144         # pinned for reproducibility
+
+[timing]
+tau_ns = 3.0                   # coincidence window (crystal-independent; from the DT study)
+
+[reco]
+reco_emin_keV = 450            # photopeak lower cut for the detector LORs
+
+[output]
+format   = "hdf5"
+prod_dir = "prod"

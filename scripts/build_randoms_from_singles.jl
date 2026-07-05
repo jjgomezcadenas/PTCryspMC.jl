@@ -45,37 +45,40 @@ RandSingles() = RandSingles(Int32[], Float64[], Float32[], Int16[], Int16[], Int
                             Int16[], Int16[], Int8[], Int16[], Int16[], Int16[])
 Base.length(r::RandSingles) = length(r.ev)
 
-@inline function push_contained!(r::RandSingles, act, ev, x, y, z, e, iz, iphi, nb, x0, y0, z0, t_rel, nscat)
+# `acts` is a per-isotope model vector (API) or length-1 (clinic/count, isotope always 0). The single's
+# isotope column picks the model → its λ times the absolute-clock restore.
+@inline function push_contained!(r::RandSingles, acts, ev, iso, x, y, z, e, iz, iphi, nb, x0, y0, z0, t_rel, nscat)
     nb == 1 || return                                    # contained hits only (same as the trues)
-    t_abs = event_time(act, ev) * 1.0e9 + t_rel          # absolute clock [ns] (in memory only)
+    t_abs = event_time(acts[iso + 1], ev) * 1.0e9 + t_rel # absolute clock [ns] with the isotope's λ
     push!(r.ev, Int32(ev)); push!(r.t_abs, t_abs); push!(r.t_rel, Float32(t_rel))
     push!(r.x, x); push!(r.y, y); push!(r.z, z); push!(r.e, e); push!(r.iz, iz); push!(r.iphi, iphi)
     push!(r.nscat, Int8(min(nscat, 127)))
     push!(r.x0, x0); push!(r.y0, y0); push!(r.z0, z0)
 end
 
-function collect_hdf5!(r::RandSingles, act, path)
+function collect_hdf5!(r::RandSingles, acts, path)
     foreach_singles_hdf5(path) do b
         for i in 1:length(b)
-            push_contained!(r, act, Int(b.event[i]), b.x[i], b.y[i], b.z[i], b.e[i],
+            push_contained!(r, acts, Int(b.event[i]), Int(b.isotope[i]), b.x[i], b.y[i], b.z[i], b.e[i],
                             b.iz[i], b.iphi[i], Int(b.nblocks[i]), b.x0[i], b.y0[i], b.z0[i],
                             Float64(b.t_rel[i]), Int(b.n_scatter[i]))
         end
     end
 end
 
-function collect_csv!(r::RandSingles, act, path)
+function collect_csv!(r::RandSingles, acts, path)
     open(path, "r") do io
         header = split(strip(readline(io)), ','); col = Dict(String(h) => i for (i, h) in enumerate(header))
-        for c in ("event_number","gamma","x_mm","y_mm","z_mm","e_keV","iz","iphi","nblocks","n_scatter","x0_mm","y0_mm","z0_mm","t_rel_ns")
+        for c in ("event_number","gamma","x_mm","y_mm","z_mm","e_keV","iz","iphi","nblocks","n_scatter","isotope","x0_mm","y0_mm","z0_mm","t_rel_ns")
             haskey(col, c) || error("singles stack is missing column '$c'")
         end
         ie=col["event_number"]; ix=col["x_mm"]; iy=col["y_mm"]; iz=col["z_mm"]; iee=col["e_keV"]
-        iiz=col["iz"]; iip=col["iphi"]; inb=col["nblocks"]; ins=col["n_scatter"]; ix0=col["x0_mm"]; iy0=col["y0_mm"]; iz0=col["z0_mm"]; it=col["t_rel_ns"]
+        iiz=col["iz"]; iip=col["iphi"]; inb=col["nblocks"]; ins=col["n_scatter"]; iis=col["isotope"]
+        ix0=col["x0_mm"]; iy0=col["y0_mm"]; iz0=col["z0_mm"]; it=col["t_rel_ns"]
         for line in eachline(io)
             isempty(line) && continue
             f = split(line, ',')
-            push_contained!(r, act, parse(Int, f[ie]),
+            push_contained!(r, acts, parse(Int, f[ie]), parse(Int, f[iis]),
                 encode_xyz_mm(parse(Float64, f[ix])), encode_xyz_mm(parse(Float64, f[iy])), encode_xyz_mm(parse(Float64, f[iz])),
                 encode_e_keV(parse(Float64, f[iee])), Int16(parse(Int, f[iiz])), Int16(parse(Int, f[iip])), parse(Int, f[inb]),
                 encode_xyz_mm(parse(Float64, f[ix0])), encode_xyz_mm(parse(Float64, f[iy0])), encode_xyz_mm(parse(Float64, f[iz0])),
@@ -110,7 +113,6 @@ function main()
 
     tau = Float64(cfg_get(cfg, "timing", "tau_ns", 0.0))
     tau > 0.0 || error("[timing].tau_ns must be set (> 0) — choose it from the DT study (examine_dt.jl)")
-    act = ActivityModel(cfg)
     crystal = String(cfg_get(cfg, "transport", "crystal_material", "CsI"))
 
     fmt = String(cfg_get(cfg, "output", "format", "csv"))
@@ -119,16 +121,30 @@ function main()
     ishdf5 = endswith(singles, ".h5")
     out = isempty(a["out"]) ? joinpath(outdir, "randoms.h5") : rp(a["out"])
 
-    println("run '$tag' randoms: τ=$tau ns, crystal $crystal")
+    # Timing: per-isotope when the singles carry `isotope_half_lives` (API — one truncated-exponential
+    # model per isotope over [0, t_meas]), else the single config `ActivityModel` (clinic/count; the
+    # isotope column is all 0, so acts[1] is used for every single).
+    hls = ishdf5 ? Vector{Float64}(singles_hdf5_attr(singles, "isotope_half_lives", Float64[])) : Float64[]
+    if !isempty(hls)
+        tmeas = Float64(singles_hdf5_attr(singles, "t_meas_s", 600.0))
+        tseed = Int(singles_hdf5_attr(singles, "time_seed", 1234))
+        acts  = ActivityModel[ActivityModel(; t0=0.0, t1=tmeas, half_life_s=h, seed=tseed) for h in hls]
+        tdesc = "per-isotope ($(length(acts)) isotopes, t_meas=$(tmeas)s)"
+    else
+        acts  = ActivityModel[ActivityModel(cfg)]
+        tdesc = "single-isotope (t½=$(round(log(2.0)/acts[1].λ, digits=1))s, window [$(acts[1].t0),$(acts[1].t1)]s)"
+    end
+
+    println("run '$tag' randoms: τ=$tau ns, crystal $crystal, timing $tdesc")
     println("  singles ($(ishdf5 ? "hdf5" : "csv")): $singles")
 
     r = RandSingles()
-    ishdf5 ? collect_hdf5!(r, act, singles) : collect_csv!(r, act, singles)
+    ishdf5 ? collect_hdf5!(r, acts, singles) : collect_csv!(r, acts, singles)
     println("  contained singles kept: $(length(r))")
 
     meta = Dict{String,Any}("scenario_tag" => tag, "mode" => "randoms", "has_randoms" => true,
         "crystal" => crystal, "tau_ns" => tau, "t_relative_to_decay" => true,
-        "t0_s" => act.t0, "t1_s" => act.t1, "half_life_s" => log(2.0) / act.λ, "time_seed" => Int(act.seed))
+        "t0_s" => acts[1].t0, "t1_s" => acts[1].t1, "n_isotopes" => length(acts), "time_seed" => Int(acts[1].seed))
     w = CoincidenceWriter(out, meta)
 
     # Emit one random LOR per cross-event pair (i earlier, j later), referenced to i's decay.

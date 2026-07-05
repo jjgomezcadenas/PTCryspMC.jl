@@ -167,7 +167,22 @@ via `event_isotope`; `scenario_activity_models` gives the right per-isotope trun
 
 ---
 
-## Step 7 — `mode="api"` driver branch + config  (driver)
+## Step 7 — `mode="api"` driver branch + config  (driver)  ✅ DONE
+
+Built and verified end-to-end. `simulate_source_mt` has a `mode="api"` branch: load scenario →
+phantom from the scenario (overrides the JSON placeholder) → materialize the `APISource`
+(master_seed+realization, separate from the transport seed) → transport. The singles carry the
+`isotope` column and the run stamps `source_mode/scenario/budget/dose/realization/master_seed` +
+the per-isotope timing (`isotope_half_lives`, `isotope_names`, `t_meas_s`, `time_seed`) into the
+HDF5 attrs. `build_randoms` reads those attrs → per-isotope `ActivityModel`s, times each single by
+its isotope's λ (falls back to the single config model when the attr is absent — clinic/count
+unchanged). `runs/uniform_headep_bgo_api.toml` + `geometry/geometry_head.json` (world+ring; the
+phantom section is a placeholder the driver replaces). `run_prod.sh` skips `--nevents` for `api`
+(N is materialized). Verified: the full chain (simulate → truth → randoms → reco) runs and
+`check_lors` PASSes on the API `lors_det.h5`; the isotope column populates in the budget
+proportions (O15:C11 ≈ 2.86 vs 2.89 expected); randoms 2τS² validation at full dose is step 8.
+
+### original step 7 notes
 
 `scripts/simulate_source_mt.jl`: a third branch alongside clinic/count-driven. `[source].mode=
 "api"` with `scenario_dir`, `budget` (fast|inroom|offline), `dose_Gy`, `master_seed`,
