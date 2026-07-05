@@ -26,8 +26,11 @@ nchunks          = 144         # pinned for reproducibility
 [timing]
 tau_ns = 3.0                   # coincidence window (crystal-independent; from the DT study)
 
-[reco]
-reco_emin_keV = 450            # photopeak lower cut for the detector LORs
+[detector]
+sigma_xyz_mm  = 1.7            # CRYSP position/DOI resolution (Gaussian σ per axis)
+eres          = 0.10           # 10% FWHM @ 511 keV (cryogenic BGO)
+emin_keV      = 300.0          # spectrum-study lower cut (Compton shoulder visible)
+reco_emin_keV = 450.0          # photopeak lower cut for the detector LORs
 
 [output]
 format   = "hdf5"

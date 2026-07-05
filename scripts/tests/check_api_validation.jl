@@ -120,7 +120,9 @@ function main()
     tot = nt + ns + nr
     @printf("\nD. lors_det: %d LORs — %d true (%.1f%%) / %d scatter (%.1f%%) / %d random (%.2f%%)\n",
             tot, nt, 100nt/tot, ns, 100ns/tot, nr, 100nr/tot)
-    (0.10 <= nt/tot <= 0.60) || error("true fraction $(nt/tot) implausible for a brain head (expect ~0.15–0.50)")
+    # True fraction depends on whether the photopeak cut is applied: ~0.3 without it (full Compton
+    # shoulder kept), ~0.8 with it (scatter rejected). Accept both; just require it plausible.
+    (0.10 <= nt/tot <= 0.95) || error("true fraction $(nt/tot) implausible for a brain head")
     (nr / max(nt + ns, 1) <= 0.05) || error("randoms/(true+scatter) = $(nr/(nt+ns)) > 5% — unexpected at this dose")
 
     println("\n  OK: all API validation gates passed.")
