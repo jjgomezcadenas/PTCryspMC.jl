@@ -335,6 +335,38 @@ end
         @test !is_inside(head, (7.3, -3.0, 0.0))
     end
 
+    @testset "phantom from phantom_regions.csv" begin
+        mats = load_materials(DATA_DIR)
+        hdr = "region,priority,material,solid,a_mm,b_mm,c_mm,cx_mm,cy_mm,cz_mm,euler_x_deg,euler_y_deg,euler_z_deg"
+        p = tempname() * ".csv"
+
+        # Single ellipsoid region (the real uniform_headep head): mm → cm, placed at its centre.
+        write(p, hdr * "\nhead,0,G4_BRAIN_ICRP,ellipsoid,72,87,102,0,-30,0,0,0,0\n")
+        ph = load_phantom_regions(p, mats)
+        @test ph isa PhysicalVolume && solid(ph) isa Ellipsoid
+        @test isapprox(solid(ph).a_cm, 7.2) && isapprox(solid(ph).b_cm, 8.7) && isapprox(solid(ph).c_cm, 10.2)
+        @test ph.position == (0.0, -3.0, 0.0)          # centre mm → cm
+        @test material(ph).name == "G4_BRAIN_ICRP" && name(ph) == "head"
+
+        # Cylinder region: a_mm==b_mm=radius, c_mm=half-length; axis along z (the beam).
+        write(p, hdr * "\nphantom,0,Water,cylinder,80,80,90,0,0,0,0,0,0\n")
+        cy = load_phantom_regions(p, mats)
+        @test solid(cy) isa Cylinder && isapprox(solid(cy).radius_cm, 8.0) && isapprox(solid(cy).half_length_cm, 9.0)
+
+        # Deferred / invalid → clear errors (multi-region, rotation, bad material, bad shape).
+        write(p, hdr * "\nbrain,0,G4_BRAIN_ICRP,ellipsoid,60,65,90,0,-40,0,0,0,0\nskull,1,Water,ellipsoid,68,83,98,0,-30,0,0,0,0\n")
+        @test_throws ErrorException load_phantom_regions(p, mats)   # multi-region deferred
+        write(p, hdr * "\nhead,0,G4_BRAIN_ICRP,ellipsoid,72,87,102,0,-30,0,0,15,0\n")
+        @test_throws ErrorException load_phantom_regions(p, mats)   # nonzero Euler
+        write(p, hdr * "\nhead,0,Unobtainium,ellipsoid,72,87,102,0,-30,0,0,0,0\n")
+        @test_throws ErrorException load_phantom_regions(p, mats)   # unknown material
+        write(p, hdr * "\nphantom,0,Water,cylinder,80,70,90,0,0,0,0,0,0\n")
+        @test_throws ErrorException load_phantom_regions(p, mats)   # cylinder a != b
+        write(p, hdr * "\nx,0,Water,torus,1,1,1,0,0,0,0,0,0\n")
+        @test_throws ErrorException load_phantom_regions(p, mats)   # unsupported solid
+        rm(p)
+    end
+
     @testset "logical volume" begin
         w  = load_material(DATA_DIR, "Water")
         lv = LogicalVolume("phantom", Cylinder(8.0, 8.0), w)
