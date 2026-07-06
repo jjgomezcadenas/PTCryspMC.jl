@@ -174,8 +174,8 @@ returns the existing single `PhysicalVolume` (back-compat), N>1 returns a `Multi
 
 ## Instructions for a future instance
 
-1. Read `dev/api_plan.md` (surrounding work) and this file. The single-region foundation
-   (`Ellipsoid`, `load_phantom_regions`, `G4_BRAIN_ICRP`) is committed on branch `api-scenario`.
+1. Read `dev/api_plan.md` (surrounding work, now built) and this file. The single-region foundation
+   (`Ellipsoid`, `load_phantom_regions`, `G4_BRAIN_ICRP`) is committed on `main`.
 2. **Confirm the prerequisite** with the user: are `data/xcom_bone_cortical.csv` and
    `data/xcom_tissue_soft.csv` present (NIST-fetched)? If not, either they fetch them or generate
    from the compositions above. Do not proceed without the tables.

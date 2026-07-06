@@ -141,6 +141,11 @@ for dose in dose_grid:
   `range_endpoint.py` (migrating into this repo). Reconstruction inputs beyond the LORs: the
   **scanner geometry** (system model) and the **phantom μ-map** (attenuation correction) — both
   shipped in the products tree (`PtCryspProds/PRODUCTS.md`).
+- **Scoring reference (truth):** `<scenario>/truth/` ships the detector-independent ground truth —
+  `activity_profile_<budget>.csv` (the clean β⁺ activity(z) → activity-R50, the recon target) and
+  `depth_dose.csv` (the physical dose edge → dose-R80). Score each fitted endpoint against these; the
+  activity-R50-to-dose-R80 offset is the locked reference. The activity profile carries the same
+  `N_expected·f_inside` scaling as the shards, so it composes with the pooled LORs directly.
 - **Fix everything except geometry** across arms: same voxel grid, same ROI, same MLEM iteration
   count, same endpoint code. These live in one `config/` and are consumed unchanged — a per-arm
   inconsistency here silently corrupts the comparison.
@@ -188,9 +193,9 @@ is wrong. Cheap (ten fits) and worth running as a standing gate.
 - One shard at 1 Gy (fast) = **80.18M decays** → **17.4M photopeak-selected LORs** (BGO, closed
   ring), 81% true / 19% scatter / 0.18% random. Full detector response applied (σ_xyz 1.7 mm, 10%
   energy FWHM, 450 keV photopeak cut, τ = 3 ns).
-- A full master = **10 such shards** (~50 min/detector, or run in parallel). Currently **one shard
-  exists** (shard 0, BGO). The rest (shards 1–9, the CsI arm, other scanners) are additional
-  production runs into the same tree — no new machinery.
+- A full master = **10 such shards**. The **BGO master is complete** (`crysp_ring_1m/bgo/fast_1Gy/`,
+  shards 0–9, ΣM = 8.02e8) plus the shared `truth/` bundle. The CsI arm and other scanners are
+  additional production runs into the same tree — no new machinery.
 
 ---
 

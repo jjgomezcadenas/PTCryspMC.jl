@@ -4,13 +4,13 @@ A one-page snapshot of where the simulation stands, plus the **deferred-work reg
 Companion docs: the *method* is in `docs/PTCryspMC_phys.tex` (engine) and `docs/PTCryspMC_app.tex` (modes); the
 decisions + code layout in `CLAUDE.md`.
 
-_Last updated: 2026-07-05._
+_Last updated: 2026-07-06._
 
 ## What it does
 
-A fast, photon-only Monte Carlo: from a **source** (a clinical tracer distribution, or — planned —
-the positron activity a proton field leaves) + a detector description, write the list-mode
-coincidence/LOR file a PET scanner would record. It never runs proton transport.
+A fast, photon-only Monte Carlo: from a **source** (a clinical tracer distribution, or the positron
+activity a proton field leaves) + a detector description, write the list-mode coincidence/LOR file a
+PET scanner would record. It never runs proton transport. Both source modes are built & validated.
 
 ## The pipeline (built & validated)
 
@@ -35,7 +35,7 @@ simulate_source_mt.jl  (multi-threaded, alloc-free) ──► prod/<tag>/singles
   `py/plot_dt.py`); `compare_crystal_timing.jl` explains why τ is crystal-independent.
 - **Reco lower energy cut** `reco_emin_keV = 450` (photopeak region; the spectrum studies keep
   `emin_keV = 300` to see the Compton shoulder). No upper cut (it's an analysis-time choice).
-- **Validated:** `Pkg.test` **902**; randoms match the analytic `2τS²` (CsI 1248 vs 1291, ratio 0.97;
+- **Validated:** `Pkg.test` **1009**; randoms match the analytic `2τS²` (CsI 1248 vs 1291, ratio 0.97;
   the clinical Vacuum/BGO 10⁸ runs at fixed N over 100× in rate — 100 kHz×1000 s: 52694 vs 52708;
   1 MBq×100 s: 579705 vs 578399; 10 MBq×10 s: 5837886 vs 5839021 — all ratio 1.00, so 2τS² holds across
   three orders of magnitude in activity, with randoms reaching ~10% of trues at the 10 MBq end);
@@ -62,37 +62,11 @@ selected by `[source].mode`:
   `sphere_water_f18_csi`, the sphere/cylinder × air/water BGO set, and the NEMA quartet
   (`nema_{air,water}_bgo`, `nema_la_{air,water}_bgo`). `run_prod.sh` derives N for clinic
   configs (no `--nevents`) and runs NAMED configs only.
-- **Proton Activity (API)** (count-driven) — **BUILT & VALIDATED** (see the "API source + products
-  handoff" section above; `dev/api_plan.md`). A frozen `ptcryspg4` scenario supplies the emitters and
-  the per-isotope decay budget. (The "API build plan" section below is the original build order, now
-  historical.)
-
-### API build plan (the next feature — continuity notes)
-
-Parallels Clinical (same source abstraction → N annihilations, per-event point, per-event isotope→λ),
-but count-driven and multi-isotope. **Blocked on the upstream `ptcrysp-scenarios` format** — the
-reader columns can't be fixed until it is (see `CLAUDE.md` "Input — a scenario"). Build order:
-
-1. **Scenario reader** (format-pending): `emitters.csv` (annihilation point + isotope tag, positron
-   range already applied), `sampling_budget_<scn>.csv` (`N_j` per isotope, given), `isotopes.csv`
-   (code → `T½`, `β⁺`), `run_meta.csv` (normalization). Stamp the scenario name into every output.
-2. **Per-scenario isotopes**: feed `isotopes.csv` into the `Isotope` table (already `(T½, β⁺)`, in
-   `src/activity.jl`).
-3. **`APISource <: Source`** (in `src/source.jl`, mirroring `ClinicSource`): holds the emitters +
-   budgets; `sample_position` draws an emitter (with replacement) per isotope to `N_j`, returning the
-   point and its isotope; `N = Σ N_j` (apply `β⁺` per isotope if the `N_j` are nuclear decays —
-   format-dependent).
-4. **Per-isotope timing + an isotope column on the singles** (a singles-schema add, exactly like
-   `n_scatter` was): `simulate_source_mt` records each single's isotope; `event_time`/`ActivityModel`
-   generalize to use the emitter's isotope λ; `build_randoms` pairs cross-decay singles with the
-   per-single λ. `SCHEMA.md` regenerates from the code.
-5. **Driver**: a `[source].mode="api"` branch in `simulate_source_mt` (load scenario → `APISource` →
-   per-isotope `ActivityModel`), alongside the existing clinic/count-driven branches.
-6. **Validate** against a real scenario; reuse the seed/`nchunks` reproducibility (the emitter draw
-   must be seeded per chunk).
-
-Buildable now regardless of format: the per-isotope `ActivityModel`, the singles `isotope` column, the
-`APISource` shape. Format-blocked: the reader (1–2) and whether `N_j` carry `β⁺`.
+- **Proton Activity (API)** (count-driven) — *built & validated.* A frozen `ptcryspg4` scenario
+  supplies the emitters and the per-isotope decay budget; the source materializes as
+  `M_j ~ Poisson(N_j·f_inside)`, seeded by `(master_seed, realization)` independent of the transport
+  chunking. Full detail in the "API source + products handoff" section below; the historical 8-step
+  build record is `dev/api_plan.md`.
 
 ## Detector configs
 
@@ -131,12 +105,8 @@ _(The former #1 — the `first_photon_jitter` `-log(1-rand)` guard — is now fi
 
 ### Deferred by scope (not from the review)
 
-- **API source scenario** — the second source branch (Clinical is built; see "Source scenarios").
-  `[source].mode="api"`, `scenario=…` → a frozen `ptcryspg4` scenario: `emitters.csv` (points +
-  isotope, range pre-applied), the measured per-isotope budget `N_j` (given, not derived),
-  `isotopes.csv` (per-isotope `T½`). Needs the scenario reader; adds an isotope column to the singles
-  + per-isotope `event_time`. Multi-region clinic spatial draw uses dynamic dispatch per event — worth
-  a glance if a clinic run ever goes to 10⁸ with many regions.
+- Multi-region clinic spatial draw uses dynamic dispatch per event — worth a glance if a clinic run
+  ever goes to 10⁸ with many regions.
 - Refine the per-crystal **PDE** (0.45 placeholder for CsI and BGO; should differ by emission colour).
 - Threshold / CFD timing (the "first photon" model is the leading-edge idealization).
 - **Open dual-head geometry** (the CRYSP-open arm of the range-verification study,
@@ -161,14 +131,21 @@ _(The former #1 — the `first_photon_jitter` `-log(1-rand)` guard — is now fi
   **`dev/api_plan.md`**; engine pieces: `Ellipsoid` solid, `G4_BRAIN_ICRP` material + `xcom_brain.csv`,
   `src/scenario.jl` (reader + `APISource` + `materialize_api_source`), isotope singles column,
   per-isotope randoms timing. QA: `scripts/tests/check_scenario.jl`, `check_api_source.jl`,
-  `check_api_validation.jl`. **`Pkg.test` 992.**
+  `check_api_validation.jl`. **`Pkg.test` 1009.**
 - **Products handoff (`PtCryspProds`)** — `scripts/run/publish_prod.jl` exports a run into the tree
   `<scenario>/<scanner>/<crystal>/<budget>_<dose>/lors_shardNNN.h5` (+ shared `scanner_geometry.json`,
   `phantom/`, `README.md`); `scripts/run/run_shards.sh` generates shards sequentially (chain →
   publish → gates → prune all `.h5`). Layout contract in **`dev/PRODUCTS.md`**, the downstream
   recipe (shards vs realizations, `thin_lm`, σ_R) in **`dev/data_generation_strategy.md`**.
+- **Truth bundle (`truth/`)** — `publish_prod` also exports a detector-independent `<scenario>/truth/`
+  (shared like `phantom/`): the dose-side truth (`depth_dose.csv` → dose-R80, `sobp_layers`, `run_meta`,
+  `sampling_budget_<budget>`) plus the derived `activity_profile_<budget>.csv` (binned true activity(z)
+  per isotope → activity-R50, on the `depth_dose` z-frame, scaled `N_expected·f_inside` so it composes
+  with the shards). Runnable stand-alone (`publish_prod --truth-only`) to backfill. Requested by the
+  downstream repo in `CryspBrainSim/dev/upstream_request_truth_bundle.md`.
 - **First master produced:** `~/Projects/PtCryspProds/uniform_headep_sobp_1e8/crysp_ring_1m/bgo/
-  fast_1Gy/` — 10 shards (realizations 0–9, ΣM = 8.02e8, all validated). `runs/uniform_headep_bgo_api.toml`.
+  fast_1Gy/` — 10 shards (realizations 0–9, ΣM = 8.02e8, all validated) + the `truth/` bundle.
+  `runs/uniform_headep_bgo_api.toml`.
 
 ## Next
 

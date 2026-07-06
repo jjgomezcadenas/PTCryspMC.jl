@@ -12,13 +12,13 @@ AskUserQuestion option-list format). State what you need to know directly.
 Simulate how a PET scanner detects the positron activity left by a proton field, and
 write the list of coincidences it would record — the list-mode LOR file (`lors_det.h5`) for a
 given detector. The proton transport is done upstream by `ptcryspg4`; this repo begins from the
-annihilation points. It runs in two modes (Clinical — a tracer distribution at a known activity,
-built & validated; Proton Activity — a `ptcryspg4` scenario, the target — see "The guide" below).
+annihilation points. It runs in two modes, both built & validated (Clinical — a tracer distribution
+at a known activity; Proton Activity (API) — a `ptcryspg4` scenario — see "The guide" below).
 
 The simulation runs once per detector, and every detector reads the identical scenario, so
 differences come from the detector alone. The analysis that consumes the coincidence list
-— range precision, comparing detectors — is separate from the simulation, deferred, and
-may live in its own repo. It is not described here.
+— range precision, comparing detectors — is separate from the simulation and lives in its own repo
+(`CryspBrainSim`, which vendors this repo's `docs/`+`dev/` contracts). It is not described here.
 
 ## The guide
 
@@ -26,18 +26,16 @@ Two LaTeX manuals in `docs/` describe the simulator. `PTCryspMC_phys.tex` is the
 the physics, geometry, transport, and detector response (shared by both modes).
 `PTCryspMC_app.tex` is the **application** — the two modes the engine is driven by:
 **Clinical** (a radiotracer distribution at a known activity — regions, isotope, acquisition
-window: the validated, currently running mode) and **Proton Activity (API)** (the positron
-activity a proton dose leaves, via a `ptcryspg4` scenario: the eventual target, not yet built).
+window) and **Proton Activity (API)** (the positron activity a proton dose leaves, via a
+`ptcryspg4` scenario). Both are built & validated.
 Read these for the method; this file records the decisions, parameters, and build notes.
 
 ## Input — a scenario from ptcrysp-scenarios
 
-This is the **Proton Activity (API) mode** — the eventual target, not yet implemented. What
-currently runs and is validated is the **Clinical mode** (`runs/*.toml` with an activity-driven
-tracer distribution; see `docs/PTCryspMC_app.tex`). When built, the scenario will be the source
-for the API mode:
-clone `ptcrysp-scenarios` and point the code at one scenario directory by name (config or env var;
-scenarios are append-only, so the name is the version). A scenario carries:
+The **Proton Activity (API) mode** (`[source].mode="api"`, built & validated) reads a frozen
+`ptcryspg4` scenario as its source; the **Clinical mode** (`runs/*.toml` with an activity-driven
+tracer distribution) reads none. Point the API driver at one scenario directory by
+`[source].scenario_dir` (scenarios are append-only, so the name is the version). A scenario carries:
 
 - `emitters.csv` — annihilation points + isotope per emitter (the spatial source).
 - `run_meta.csv` — normalization (target dose, Np per Gy, …).
@@ -167,16 +165,19 @@ output dir `output/<tag>/`, which holds the stack, the coincidence file(s), the 
 copy of the config. `src/config.jl` reads it (`read_config`, `run_tag`, `cfg_get`).
 
 The full chain — source injection, the block/wheel grid, transport, hit formation + selection,
-and the randoms pass — is built and validated in Clinical mode. See `dev/status.md` for the current
-state and what remains (the Proton Activity (API) scenario source; the Documenter doc-site).
+and the randoms pass — is built and validated in **both** modes. See `dev/status.md` for the current
+state and what remains.
 
-**API (Proton Activity) source — in progress on branch `api-scenario`.** Reads a frozen
-`ptcryspg4` scenario (emitters + per-isotope decay budget + phantom) and drives the engine from it.
-`dev/api_plan.md` is the step-by-step build plan (Ellipsoid solid, brain material, phantom loader,
-scenario reader, APISource + Poisson materialization, isotope column, driver). Multi-region
-(non-uniform, layered soft-tissue/brain/bone) head phantoms are deferred and fully scoped in
-`dev/multiregion_phantom_plan.md` — a self-contained brief (data, prerequisites, navigator design,
-tests) for a future instance; the single-region uniform phantom path is built.
+**API (Proton Activity) source — BUILT & VALIDATED** (`[source].mode="api"`). Reads a frozen
+`ptcryspg4` scenario (emitters + per-isotope decay budget + phantom) and drives the engine from it:
+`src/scenario.jl` (reader + `APISource` + `materialize_api_source`), `Ellipsoid` solid,
+`G4_BRAIN_ICRP` material, the isotope singles column, per-isotope randoms timing. The historical
+8-step build record is `dev/api_plan.md`. Runs export to the `PtCryspProds/` products tree via
+`scripts/run/publish_prod.jl` (+ `run_shards.sh`); layout contract `dev/PRODUCTS.md`, downstream
+recipe `dev/data_generation_strategy.md`. Multi-region (non-uniform, layered soft-tissue/brain/bone)
+head phantoms are deferred and fully scoped in `dev/multiregion_phantom_plan.md` — a self-contained
+brief (data, prerequisites, navigator design, tests) for a future instance; the single-region
+uniform phantom path is built.
 
 ## Tech stack
 
@@ -186,16 +187,16 @@ tests) for a future instance; the single-region uniform phantom path is built.
   the singles stack): O(1) memory, no whole-file load, so it scales to the
   large stacks a full run produces (this is why it is Julia, not Python — see the note
   below).
-- **Python** — scenario reading (API mode, to come), the control plots and the
-  documentation figures (`py/fig_*.py`), and lighter downstream analysis.
+- **Python** — the control plots and the documentation figures (`py/fig_*.py`), and lighter
+  downstream analysis. (Scenario reading is in Julia — `src/scenario.jl`.)
 - **CSV and HDF5** in and out (CSV for dev/inspection; HDF5 — quantized Int16, compressed —
   for the production singles stack: ~6× smaller, typed/partial fast reads for the write-once,
   read-many singles list).
 
 Originally the selection/coincidence step was slated for Python; it was moved to a Julia
-streaming reader for the memory/throughput on large stacks. Hit formation, the energy
-window and the randoms pass will follow the same Julia-streaming approach; Python stays
-for scenario reading and plotting.
+streaming reader for the memory/throughput on large stacks. Hit formation, the energy window,
+the randoms pass, and the scenario reader all followed the same Julia approach; Python stays
+for plotting and lighter downstream analysis.
 
 ## Reference material
 
@@ -207,21 +208,15 @@ for scenario reading and plotting.
 **`dev/status.md` is the concise current snapshot + the deferred-work / known-nits register —
 read it first for "where are we."** In brief:
 
-**Built and validated:** the foundations — the Geant4-style geometry, the materials / XCOM
-cross sections, and the photon physics core (`propagate_photon`) — plus the first result:
-511 keV photons transported through the water phantom to a photon stack, reproducing
-Beer–Lambert (unscattered fraction 0.215 vs 0.216). `Pkg.test` passes.
+**Built and validated:** the whole list-mode chain in **both** source modes — the Geant4-style
+geometry, the materials / XCOM cross sections, the photon core (`propagate_photon`); source
+injection (Clinical activity-driven + API scenario-driven), the block/wheel ring, transport →
+singles → `lors_truth` + `randoms` → `lors_det`; hit formation + smear + energy window + two-block
+selection; the randoms pass; and the `PtCryspProds/` products export (per scenario/scanner/crystal,
++ the detector-independent `truth/` bundle). `Pkg.test` passes (**1009**).
 
-**Done (1–5):** scenario injection, phantom + block/wheel ring, transport → singles +
-same-annihilation coincidences, hit formation + smear + energy window + two-block selection,
-**and the randoms pass** — the full list-mode chain `singles → lors_truth + randoms → lors_det`
-(per-photon time `t_rel` stamped once in the singles; trues reuse it, randoms restore the absolute
-clock to pair cross-decay singles within τ; reco merges + smears + cuts + flags). See the chain
-description above.
+**Remaining** (all mechanical or downstream): the CsI arm + other scanner variants (copy a config,
+re-run `run_shards`); the Documenter doc-site; and the deferred-but-scoped engine gates (multi-region
+phantom, open dual-head, mixed crystal). See `dev/status.md` for the full register.
 
-**Remaining:**
-
-6. The monolithic detector configs (CsI/CsI(Tl)/BGO sweep) + benchmark/MT for the 10⁸ production
-   (external sort / τ-bin streaming where the in-memory passes don't scale).
-
-Downstream (separate, deferred): range precision and detector comparison; reconstruction.
+Downstream (separate repo, `CryspBrainSim`): reconstruction, range precision, detector comparison.

@@ -1,6 +1,11 @@
 # API source scenario — implementation plan
 
-Branch `api-scenario`. Builds the **Proton Activity (API)** source mode: read a frozen
+**✅ BUILT & VALIDATED — historical build record.** All 8 steps below are done and merged to `main`
+(the `api-scenario` branch is gone). This file is kept as the design rationale (escaped-positron
+handling, prompt-gamma deferral, the phase-1/phase-2 seed split); for the current state see
+`dev/status.md`. Each step's ✅ note records what shipped.
+
+Builds the **Proton Activity (API)** source mode: read a frozen
 `ptcryspg4` scenario (emitters + per-isotope decay budget + phantom) and drive the existing
 photon engine from it. Target scenario: `uniform_headep_sobp_1e8` (single-region brain
 ellipsoid). Design context in `docs/PTCryspMC_app.tex` §3 and `dev/status.md` "API build plan".
@@ -182,19 +187,6 @@ phantom section is a placeholder the driver replaces). `run_prod.sh` skips `--ne
 `check_lors` PASSes on the API `lors_det.h5`; the isotope column populates in the budget
 proportions (O15:C11 ≈ 2.86 vs 2.89 expected); randoms 2τS² validation at full dose is step 8.
 
-### original step 7 notes
-
-`scripts/simulate_source_mt.jl`: a third branch alongside clinic/count-driven. `[source].mode=
-"api"` with `scenario_dir`, `budget` (fast|inroom|offline), `dose_Gy`, `master_seed`,
-`realization`. Flow: load scenario → build phantom-from-regions + world/scanner from
-`geometry_head.json` → phase-1 `APISource` (seed master_seed+realization) → existing phase-2
-chunked transport (transport_seed, pinned nchunks). Provenance attrs gain scenario/budget/dose/
-realization/prompt_gamma_modeled. A `runs/headep_bgo_api.toml` + a `geometry_head.json`
-(world Air + the standing scanner; phantom section unused, comes from the scenario).
-
-`run_prod.sh`: API configs derive N internally (like clinic — no `--nevents`); the tau_ns gate
-still applies.
-
 ---
 
 ## Step 8 — Validation  ✅ DONE
@@ -216,19 +208,6 @@ gates it, all green:
 
 The reference `prod/uniform_headep_bgo_api/lors_det.h5` is the first end-to-end API deliverable —
 ready for the downstream reconstruction / R study.
-
-### original step 8 checks
-
-- **N**: ΣM_j vs the budget arithmetic (fast: ~8.0e7 at 1 Gy); per-isotope within Poisson.
-- **Spatial**: the singles' annihilation-point z-profile vs the scenario's `figures/activity.png`
-  / `depth_dose.csv` (the SOBP activity plateau).
-- **μ**: transported unscattered fraction through the brain ellipsoid vs Beer–Lambert with
-  μ=0.09913 (the water-phantom validation, redone for brain).
-- **Reproducibility**: same (master_seed, realization) → identical points across two runs at
-  different nchunks / thread counts.
-
-Cross-check option (statistical, not bitwise): `budget_gen.py … --seed S` realizations vs our
-Julia M_j distribution (mean N_j, var N_j) — numpy PCG64 ≠ Julia MT, so distributional only.
 
 ---
 

@@ -18,9 +18,10 @@ selected by `[source].mode` in the run config:
   from the decay curve. Structured phantoms (e.g. NEMA-IQ) need no geometry change. **Built and
   validated** — the currently-running mode; the count-driven uniform phantom survives as its
   special case. Detectors so far: pure CsI and cryogenic BGO.
-- **Proton Activity** (`mode = "api"`) — the eventual target: the positron activity a proton dose
-  leaves behind (β⁺ emitters from nuclear fragmentation), read from a frozen `ptcryspg4` scenario
-  with its per-isotope decay budgets. Outlined; not yet built.
+- **Proton Activity** (`mode = "api"`) — the positron activity a proton dose leaves behind (β⁺
+  emitters from nuclear fragmentation), read from a frozen `ptcryspg4` scenario with its per-isotope
+  decay budgets. **Built and validated.** Runs export to the `PtCryspProds/` products tree
+  (`scripts/run/publish_prod.jl`) for the downstream reconstruction / range-precision repo.
 
 ## Running
 
