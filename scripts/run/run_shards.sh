@@ -47,9 +47,13 @@ for N in $(seq $LO $HI); do
   prev_nev=$nev
 
   # --- prune ALL heavy .h5: the shard is exported, so prod/ keeps no .h5 (only config.toml).
-  # Guard: delete the source lors_det.h5 only once the published shard is confirmed on disk.
-  published=$(ls $PRODS/*/*/*/*/lors_shard$s3.h5 2>/dev/null | head -1)
-  if [[ -n $published && -f $published ]]; then
+  # Guard: delete the source lors_det.h5 only once THIS run's published shard is confirmed on
+  # disk. The leaf comes from the publish log ("  leaf: <scenario>/<scanner>/<crystal>/<bd>/"),
+  # NOT from a tree glob — a glob matches every master in the tree and picks the alphabetically
+  # first (the frozen reference), silently validating the wrong leaf once several masters exist.
+  leafrel=$(grep -oE 'leaf: [^ ]+' $log | head -1); leafrel=${leafrel#leaf: }; leafrel=${leafrel%/}
+  published=$PRODS/$leafrel/lors_shard$s3.h5
+  if [[ -n $leafrel && -f $published ]]; then
     rm -f $dir/singles.h5 $dir/lors_truth.h5 $dir/randoms.h5 $dir/lors_det.h5
   else
     print "  WARN: published shard $s3 not found — keeping lors_det.h5"
@@ -58,9 +62,10 @@ for N in $(seq $LO $HI); do
 done
 
 # --- master check: all shards present, self-describing, with distinct realizations ---
+# $leafrel survives the loop (same leaf every shard) — the check runs on THIS run's leaf.
 print "\n=== master check ==="
-leaf=$(dirname $(ls $PRODS/*/*/*/*/lors_shard${LO:+$(printf %03d $LO)}.h5 2>/dev/null | head -1))
-[[ -d $leaf ]] || { print "  no shards found under $PRODS"; exit 1 }
+leaf=$PRODS/$leafrel
+[[ -n $leafrel && -d $leaf ]] || { print "  no published leaf (no 'leaf:' line in the publish log)"; exit 1 }
 julia --project=. -e '
 using HDF5
 d = ARGS[1]
