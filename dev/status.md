@@ -4,7 +4,7 @@ A one-page snapshot of where the simulation stands, plus the **deferred-work reg
 Companion docs: the *method* is in `docs/PTCryspMC_phys.tex` (engine) and `docs/PTCryspMC_app.tex` (modes); the
 decisions + code layout in `CLAUDE.md`.
 
-_Last updated: 2026-07-06._
+_Last updated: 2026-07-09._
 
 ## What it does
 
@@ -28,24 +28,34 @@ simulate_source_mt.jl  (multi-threaded, alloc-free) ──► prod/<tag>/singles
   true (`==0`), single (`nscat1+nscat2==1`) and multiple (`≥2`) scatter for scatter correction.
 
 - **Timing model.** Each single carries `t_rel` = TOF + scintillation first-photon jitter
-  (`jitter = −ln u / (N_det·r0)`, `N_det = yield·E·pde`, `r0 = Σ wₖ/τₖ`), stamped **once** at
-  generation, **relative to the decay** so it stays small (Float32). Absolute time =
-  `event_time(ev)·1e9 + t_rel`, reconstructed only where randoms need a common clock.
+  (`jitter = −ln u / (N_det·r0)`, `N_det = yield·E·pde`, `r0 = Σ wₖ/τₖ`) **+ a per-crystal
+  Gaussian readout floor σ_t** (`sigma_t_ns` on the crystal: trigger/threshold + SPTR + optics —
+  the first-photon term alone is the photostatistics floor, ~40× too good for CsI vs the
+  measured 1.84 ns CTR of Soleti et al. 2024; calibration + references in `latex/ctr_note.tex`),
+  stamped **once** at generation, **relative to the decay** so it stays small (Float32).
+  Absolute time = `event_time(ev)·1e9 + t_rel`, reconstructed only where randoms need a common clock.
 - **Absolute decay time on every LOR.** All three LOR files carry `t_decay_s` (Float32 s, zero =
   acquisition start; gamma 1's decay for randoms, the `x0` convention) — the `event_time(ev)` of
   the annihilation, so downstream can emulate any delayed acquisition start as the pure cut
   `t_decay ≥ t_start` (CryspBrainSim request `upstream_request_lor_decay_time.md`; ~3.5 B/row
   compressed, ~10% file growth). Attr `t_decay_zero = "acquisition_start"`.
-- **Coincidence window τ = 3 ns** (CsI and BGO), read off the DT study (`examine_dt.jl` +
-  `py/plot_dt.py`); `compare_crystal_timing.jl` explains why τ is crystal-independent.
-- **Reco lower energy cut** `reco_emin_keV = 450` (photopeak region; the spectrum studies keep
-  `emin_keV = 300` to see the Compton shoulder). No upper cut (it's an analysis-time choice).
-- **Validated:** `Pkg.test` **1010**; randoms match the analytic `2τS²` (CsI 1248 vs 1291, ratio 0.97;
+- **Coincidence window τ per scanner**, at ~3σ of the raw `t1−t2` from the CTR study
+  (`scripts/studies/ctr_study.jl`, photopeak-conditioned — uncut few-keV deposits have
+  1/E-divergent jitter): **CsI 1.5 ns** (raw σ 0.51 ns, keeps 99.7% of trues), **BGO 5 ns**
+  (raw σ 1.77 ns, keeps 99.3%; both temperatures timing-identical). With σ_t dominant, τ is
+  crystal-DEPENDENT — the old crystal-independent τ = 3 ns (and `compare_crystal_timing.jl`'s
+  rationale) predates the readout floor. Windows anchored: CsI to the Soleti bench CTR, BGO to
+  the ~5 ns window of commercial BGO systems (GE Omni Legend).
+- **Reco lower energy cut** `reco_emin_keV = 511 − 3σ_E` per crystal (CsI 472 / BGO_77K 446 /
+  BGO_195K 413 keV; the spectrum studies keep `emin_keV = 300` to see the Compton shoulder).
+  Applied ONLY in the reco merge — `lors_truth`/`randoms` stay uncut. No upper cut (analysis-time).
+- **Validated:** `Pkg.test` **1024**; randoms match the analytic `2τS²` (CsI 1248 vs 1291, ratio 0.97;
   the clinical Vacuum/BGO 10⁸ runs at fixed N over 100× in rate — 100 kHz×1000 s: 52694 vs 52708;
   1 MBq×100 s: 579705 vs 578399; 10 MBq×10 s: 5837886 vs 5839021 — all ratio 1.00, so 2τS² holds across
   three orders of magnitude in activity, with randoms reaching ~10% of trues at the 10 MBq end);
-  reco acceptance CsI 8.98% / BGO 23.75%;
-  corrected residual median|dt| (CsI 0.059 / BGO 0.200 ns) matches the analytic single-photon jitter;
+  reco acceptance CsI 8.98% / BGO 23.75% (historical, pre-2X₀/pre-σ_t numbers);
+  the corrected-residual medians matched the analytic single-photon jitter in the pre-σ_t model,
+  and the CTR study validates the calibrated model (CsI CTR 1.17 ns / BGO 4.1 ns FWHM);
   the clinical N-from-activity matches the analytic to the event.
 - **Scale.** `scripts/tests/bench_chain.jl`: the full chain at 10⁸ runs **~3 min serial, ~14 GB
   peak** (`build_randoms`, the only N-scaling stage) — fits 48 GB, no rework needed. (The clinical
@@ -75,8 +85,24 @@ selected by `[source].mode`:
 
 ## Detector configs
 
-CsI (5% FWHM @ 511 keV) and cryogenic BGO (10%) — sphere-water scenarios, validated. CsI(Tl) (7%)
-and the pixelated detectors (LYSO, standard BGO) are still to add.
+Three crystal systems in `data/materials.json`, each carrying its full response (yield, decay,
+eres_a, pde 0.40, σ_t, σ_xyz — configs override only deliberately):
+
+| | CsI (cryo plateau, ~100 K) | BGO_195K (dry ice) | BGO_77K (LN2) |
+|---|---|---|---|
+| yield / decay | 100k ph/MeV / 800 ns | 14k / 1768 ns | 29k / 1400+8700 ns (26/74%) |
+| eres → reco cut | 6% → 472 keV | 15% → 413 keV | 10% → 446 keV |
+| σ_t / τ | 0.35 ns / 1.5 ns | 1.1 ns / 5 ns | 1.1 ns / 5 ns |
+
+σ_xyz = 3.5 mm FWHM per axis for all (CRYSP SiPM measurement on 2X₀ crystals). **Depth
+standard: 2X₀** (CsI 3.72 cm / BGO 2.236 cm — resolution measured at 2X₀; 3X₀ would degrade it
+and raise cost; 3X₀ geometries kept for a thick-crystal study). Scanners named with the depth:
+`crysp_ring_1m_{bgo,csi}_{2x0,3x0}`. The BGO temperatures are timing-degenerate → **the two
+representative production scanners are BGO_195K and CsI** (`runs/uniform_headep_{bgo195k,csi}_api.toml`;
+`bgo77k` config ready but not scheduled). Rationale + findings: `latex/ctr_note.tex`. The old
+hybrid "BGO" material is removed; `runs/uniform_headep_bgo_api.toml` is the frozen reference of
+the existing `crysp_ring_1m/bgo` master. CsI(Tl) (7%) and the pixelated detectors (LYSO,
+standard BGO) are still to add.
 
 ## Documentation
 
@@ -136,7 +162,7 @@ _(The former #1 — the `first_photon_jitter` `-log(1-rand)` guard — is now fi
   **`dev/api_plan.md`**; engine pieces: `Ellipsoid` solid, `G4_BRAIN_ICRP` material + `xcom_brain.csv`,
   `src/scenario.jl` (reader + `APISource` + `materialize_api_source`), isotope singles column,
   per-isotope randoms timing. QA: `scripts/tests/check_scenario.jl`, `check_api_source.jl`,
-  `check_api_validation.jl`. **`Pkg.test` 1010.**
+  `check_api_validation.jl`. **`Pkg.test` 1024.**
 - **Products handoff (`PtCryspProds`)** — `scripts/run/publish_prod.jl` exports a run into the tree
   `<scenario>/<scanner>/<crystal>/<budget>_<dose>/lors_shardNNN.h5` (+ shared `scanner_geometry.json`,
   `phantom/`, `README.md`); `scripts/run/run_shards.sh` generates shards sequentially (chain →

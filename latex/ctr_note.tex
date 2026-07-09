@@ -46,8 +46,11 @@ $511\keV$ annihilation gammas, forms per-crystal hits, and writes the list-mode 
 detected gamma is produced by an analytic model evaluated once per hit. Three crystal systems
 are simulated (table~\ref{tab:systems}): pure CsI at ${\sim}100$\,K, and BGO at two cryogenic
 operating points, 195\,K (dry ice) and 77\,K (liquid nitrogen). All three share the same ring
-(transverse block size, $48\times20$ blocks) with a per-crystal depth of three radiation
-lengths.
+(transverse block size, $48\times20$ blocks) with a per-crystal depth of \textbf{two radiation
+lengths} --- the standard adopted because the CRYSP position/DOI resolution of
+$3.5$\,mm FWHM per axis is measured on $2X_0$ crystals with the SiPM readout (deeper crystals
+would degrade the light-based position estimate and raise cost; a $3X_0$ variant is kept in
+the repository for a future thick-crystal study).
 
 Two time-difference quantities must be kept distinct:
 \begin{itemize}
@@ -68,7 +71,7 @@ Two time-difference quantities must be kept distinct:
 \centering
 \caption{The three simulated crystal systems. Light yield $Y$, decay components
 $\tau_k$ with weights $w_k$, energy resolution $a$ (FWHM at $511\keV$), effective photon
-detection efficiency (PDE), depth (3\,$X_0$), photopeak selection
+detection efficiency (PDE), depth (2\,$X_0$), position/DOI resolution, photopeak selection
 ($E_{\mathrm{min}} = 511 - 3\sigma_E$), and the calibrated readout floor $\sigma_t$
 (section~\ref{sec:model}). CsI constants follow the measurements of ref.~\cite{Soleti2024}
 ($\,{\sim}90{,}000$ photons/MeV, single ${\sim}800\ns$ component at 104\,K, $6.3\%$ FWHM);
@@ -87,7 +90,8 @@ $\tau_k$ (ns)                & 800           & 1768       & 1400 / 8700 \\
 $w_k$                        & 1.0           & 1.0        & 0.26 / 0.74 \\
 $a$ (FWHM at 511 keV)        & 6\%           & 15\%       & 10\% \\
 PDE                          & 0.40          & 0.40       & 0.40 \\
-depth $= 3X_0$ (cm)          & 5.580         & 3.354      & 3.354 \\
+depth $= 2X_0$ (cm)          & 3.720         & 2.236      & 2.236 \\
+$\sigma_{xyz}$ (FWHM, per axis) & 3.5\,mm    & 3.5\,mm    & 3.5\,mm \\
 $E_{\mathrm{min}}$ (keV)     & 472           & 413        & 446 \\
 $\sigma_t$ (ns)              & 0.35          & 1.1        & 1.1 \\
 coincidence window $\tau$ (ns) & 1.5         & 5.0        & 5.0 \\
@@ -219,7 +223,10 @@ chain.
 The model was validated with one full production shard per scanner ($8\times10^7$ decays of a
 1\,Gy proton-therapy activity scenario in a head phantom; $8.7$--$19$~million
 energy-selected true coincidences each). Table~\ref{tab:results} shows the measured widths and
-the containment at the pinned windows.
+the containment at the pinned windows. (These validation shards were run with the earlier
+$3X_0$ depths; the $2X_0$ standard slightly \emph{narrows} the DOI contribution to
+$\Delta t_{\mathrm{raw}}$, so the windows quoted are marginally conservative. The study is
+re-run with the production geometry before each production.)
 
 \begin{table}[ht]
 \centering
@@ -262,6 +269,35 @@ Findings:
   parts; the photostatistics term ($39\ps$) is negligible. Any further sensor improvement
   changes CsI's window only marginally --- the head geometry is already visible in it.
 \end{enumerate}
+
+\section{The two representative scanners}
+\label{sec:twoscanners}
+
+The first production campaign simulates two of the three systems: \textbf{BGO at 195\,K} and
+\textbf{cryogenic CsI}. The choice follows directly from the findings above:
+
+\begin{itemize}
+\item \textbf{BGO 77\,K adds no timing information over 195\,K.} The two BGO operating points
+  are timing-degenerate at every level of modelling (section~\ref{sec:results}); they differ
+  only in energy resolution ($10\%$ vs.\ $15\%$) and cryogenic cost (liquid nitrogen vs.\ dry
+  ice, plus a ${\sim}4\times$ longer integration window at 77\,K from the $8.7\,\mu$s slow
+  component). BGO 195\,K is therefore the representative BGO: the cheaper operating point,
+  with the 77\,K configuration kept ready should the energy-resolution margin matter.
+\item \textbf{CsI vs.\ BGO 195\,K spans the physics contrast cleanly.} CsI buys energy
+  resolution ($6\%$ vs.\ $15\%$ FWHM $\to$ a photopeak cut at $472$ vs.\ $413\keV$, i.e.\
+  stronger scatter rejection) and timing ($\tau = 1.5$ vs.\ $5\ns$ $\to$ ${\sim}3\times$ fewer
+  randoms at equal rate); BGO buys sensitivity ($87\%$ vs.\ $78\%$ per-gamma interaction
+  probability at $2X_0$, i.e.\ ${\sim}24\%$ more coincidences at equal source) at a lower
+  cryogenic operating cost. Position resolution and ring geometry are identical by
+  construction, so the downstream range-precision comparison isolates exactly these two axes.
+\end{itemize}
+
+Per-SiPM light levels support both choices: with an $8\times8$ SiPM array per block, the mean
+photopeak signal is ${\sim}45$ photoelectrons per SiPM for BGO 195\,K and ${\sim}320$ for CsI.
+With dark counts frozen out at cryogenic temperatures (the rate halves every ${\sim}5$\,K
+\cite{Soleti2024}), ${\sim}45$\,pe per SiPM is comfortable statistics; BGO's larger
+photoelectric fraction at $511\keV$ (high-$Z$ bismuth) additionally yields cleaner single-site
+deposits for the light-based position estimator.
 
 \section{Deferred refinements}
 \label{sec:deferred}

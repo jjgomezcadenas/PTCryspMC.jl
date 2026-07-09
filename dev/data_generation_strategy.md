@@ -192,10 +192,15 @@ is wrong. Cheap (ten fits) and worth running as a standing gate.
   points in the pool; 5 isotopes (O15, C11, N13, C10, O14); budgets fast / inroom / offline.
 - One shard at 1 Gy (fast) = **80.18M decays** → **17.4M photopeak-selected LORs** (BGO, closed
   ring), 81% true / 19% scatter / 0.18% random. Full detector response applied (σ_xyz 1.7 mm, 10%
-  energy FWHM, 450 keV photopeak cut, τ = 3 ns).
-- A full master = **10 such shards**. The **BGO master is complete** (`crysp_ring_1m/bgo/fast_1Gy/`,
-  shards 0–9, ΣM = 8.02e8) plus the shared `truth/` bundle. The CsI arm and other scanners are
-  additional production runs into the same tree — no new machinery.
+  energy FWHM, 450 keV photopeak cut, τ = 3 ns — the FROZEN-REFERENCE parameters; the master at
+  `crysp_ring_1m/bgo/fast_1Gy/` predates the 2026-07-09 detector standard).
+- A full master = **10 such shards**. The **reference BGO master is complete**
+  (`crysp_ring_1m/bgo/fast_1Gy/`, shards 0–9, ΣM = 8.02e8) plus the shared `truth/` bundle.
+  The current standard (see `dev/status.md` "Detector configs" + `latex/ctr_note.tex`): 2X₀
+  depth, per-crystal σ_t/σ_xyz(3.5 mm FWHM)/eres/τ, two representative scanners — **BGO_195K**
+  (`crysp_ring_1m_bgo_2x0/bgo_195k`, τ 5 ns, cut 413 keV) and **CsI**
+  (`crysp_ring_1m_csi_2x0/csi`, τ 1.5 ns, cut 472 keV) — additional production runs into the
+  same tree, no new machinery.
 
 ---
 

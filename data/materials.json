@@ -1,5 +1,5 @@
 {
-    "_doc": "Materials for PTCryspMC. density [g/cm^3]; components = element mass fractions (informational); xcom = NIST XCOM mass-attenuation table [cm^2/g], path relative to data/. Transport uses incoherent + photoelectric + pair channels: Sigma = (mu/rho) * density. Scintillators also carry, keyed to the crystal name: light_yield_per_MeV [photons/MeV], scint_decay_ns + scint_decay_w (decay-component lifetimes [ns] and weights summing to 1), eres_a (fractional energy-resolution FWHM at 511 keV), pde (effective photon-detection efficiency for the crystal emission spectrum), sigma_t_ns (per-gamma Gaussian readout timing floor: trigger/threshold + SPTR + optics, calibrated so the simulated CTR matches measurement — CsI anchored to Soleti et al. 2024 scaled to this PDE; BGO to the ~5 ns window of commercial BGO systems).",
+    "_doc": "Materials for PTCryspMC. density [g/cm^3]; components = element mass fractions (informational); xcom = NIST XCOM mass-attenuation table [cm^2/g], path relative to data/. Transport uses incoherent + photoelectric + pair channels: Sigma = (mu/rho) * density. Scintillators also carry, keyed to the crystal name: light_yield_per_MeV [photons/MeV], scint_decay_ns + scint_decay_w (decay-component lifetimes [ns] and weights summing to 1), eres_a (fractional energy-resolution FWHM at 511 keV), pde (effective photon-detection efficiency for the crystal emission spectrum), sigma_xyz_mm (position/DOI resolution, Gaussian sigma per axis; CRYSP measures 3.5 mm FWHM = 1.486 mm sigma with the SiPM readout on 2X0 crystals), sigma_t_ns (per-gamma Gaussian readout timing floor: trigger/threshold + SPTR + optics, calibrated so the simulated CTR matches measurement — CsI anchored to Soleti et al. 2024 scaled to this PDE; BGO to the ~5 ns window of commercial BGO systems).",
 
     "Vacuum": {
         "density": 0.0,
@@ -29,7 +29,8 @@
         "scint_decay_w": [1.0],
         "eres_a": 0.06,
         "pde": 0.40,
-        "sigma_t_ns": 0.35
+        "sigma_t_ns": 0.35,
+        "sigma_xyz_mm": 1.486
     },
 
     "BGO_195K": {
@@ -42,7 +43,8 @@
         "scint_decay_w": [1.0],
         "eres_a": 0.15,
         "pde": 0.40,
-        "sigma_t_ns": 1.1
+        "sigma_t_ns": 1.1,
+        "sigma_xyz_mm": 1.486
     },
 
     "BGO_77K": {
@@ -55,7 +57,8 @@
         "scint_decay_w": [0.26, 0.74],
         "eres_a": 0.10,
         "pde": 0.40,
-        "sigma_t_ns": 1.1
+        "sigma_t_ns": 1.1,
+        "sigma_xyz_mm": 1.486
     },
 
     "Air": {

@@ -110,12 +110,14 @@ end
         @test csi.scint_decay_ns == [800.0] && csi.scint_decay_w == [1.0]
         @test csi.eres_a == 0.06 && csi.pde == 0.40
         @test csi.sigma_t_ns == 0.35                    # readout floor (Soleti 2024 anchor, scaled)
+        @test csi.sigma_xyz_mm == 1.486                 # CRYSP 3.5 mm FWHM (SiPM readout, 2X0 crystal)
 
         bgo195 = load_material(DATA_DIR, "BGO_195K")    # dry ice — single component
         @test bgo195.light_yield == 1.4e4
         @test bgo195.scint_decay_ns == [1768.0] && bgo195.scint_decay_w == [1.0]
         @test bgo195.eres_a == 0.15 && bgo195.pde == 0.40
         @test bgo195.sigma_t_ns == 1.1
+        @test bgo195.sigma_xyz_mm == 1.486
 
         bgo = load_material(DATA_DIR, "BGO_77K")        # liquid nitrogen — two decay components
         @test bgo.light_yield == 2.9e4
@@ -123,6 +125,7 @@ end
         @test bgo.scint_decay_w == [0.26, 0.74] && isapprox(sum(bgo.scint_decay_w), 1.0)
         @test bgo.eres_a == 0.10 && bgo.pde == 0.40
         @test bgo.sigma_t_ns == 1.1
+        @test bgo.sigma_xyz_mm == 1.486
 
         # Non-scintillators get zero/empty defaults.
         w = load_material(DATA_DIR, "Water")

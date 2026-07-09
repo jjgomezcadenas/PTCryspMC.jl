@@ -23,6 +23,8 @@ struct Material
                                       # emission spectrum (per-crystal: depends on emission colour)
     sigma_t_ns::Float64               # per-gamma readout timing floor [ns] (Gaussian σ: trigger/
                                       # threshold + SPTR + optics), calibrated to measured CTR
+    sigma_xyz_mm::Float64             # position/DOI resolution [mm], Gaussian σ per axis
+                                      # (CRYSP: 3.5 mm FWHM = 1.486 mm σ, measured on 2X0 crystals)
     E::Vector{Float64}                # nudged energy grid [MeV]
     log_E::Vector{Float64}
     incoherent::Vector{Float64}       # mu/rho [cm^2/g]
@@ -51,6 +53,7 @@ function _build_material(data_dir::AbstractString, name::AbstractString, d)::Mat
     eres_a  = Float64(get(d, "eres_a", 0.0))
     pde     = Float64(get(d, "pde", 0.0))
     sigma_t = Float64(get(d, "sigma_t_ns", 0.0))
+    sigma_xyz = Float64(get(d, "sigma_xyz_mm", 0.0))
     length(decay) == length(w) ||
         error("material '$name': scint_decay_ns and scint_decay_w must have equal length")
     (isempty(w) || isapprox(sum(w), 1.0; atol=1e-6)) ||
@@ -58,13 +61,14 @@ function _build_material(data_dir::AbstractString, name::AbstractString, d)::Mat
 
     xf = get(d, "xcom", nothing)
     if xf === nothing
-        return Material(name, density, yield, decay, w, eres_a, pde, sigma_t, Float64[], Float64[],
+        return Material(name, density, yield, decay, w, eres_a, pde, sigma_t, sigma_xyz,
+                        Float64[], Float64[],
                         Float64[], Float64[], Float64[], Float64[], Float64[], Float64[])
     end
     xc = load_xcom(joinpath(data_dir, xf))
     E = _prepare_xcom_energy(xc)
     pair = xc.pair_nuclear .+ xc.pair_electron
-    Material(name, density, yield, decay, w, eres_a, pde, sigma_t,
+    Material(name, density, yield, decay, w, eres_a, pde, sigma_t, sigma_xyz,
              E, log.(E), xc.incoherent, xc.photoelectric, pair,
              prelog_data(xc.incoherent), prelog_data(xc.photoelectric), prelog_data(pair))
 end

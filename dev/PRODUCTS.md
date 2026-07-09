@@ -27,7 +27,9 @@ PtCryspProds/
       run_meta.csv                          target-box depths, Np/Gy, normalization
       sampling_budget_<budget>.csv (+_meta) per-isotope N_expected for the acquisition timing
       activity_profile_<budget>.csv (+_meta) binned true activity(z), per isotope + total → activity-R50
-    <scanner>/                           ── SCANNER GEOMETRY (closed_1m, head, children, open_dualhead, mixed…)
+    <scanner>/                           ── SCANNER GEOMETRY, named incl. crystal depth in X0 when it matters
+                                            (crysp_ring_1m_bgo_2x0, crysp_ring_1m_csi_2x0, …; also head,
+                                            children, open_dualhead, mixed…)
       scanner_geometry.json                 the ring/panel geometry (+ per-block crystal map if heterogeneous)
       <crystal>/                         ── CRYSTAL (bgo, csi) — ONLY for homogeneous scanners
         <budget>_<dose>/                 ── acquisition timing budget + the master's TOP dose

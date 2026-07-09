@@ -68,8 +68,9 @@ function main()
     crystal = String(cfg_get(cfg, "transport", "crystal_material", "CsI"))
     mat = load_material(joinpath(REPO, "data"), crystal)
 
-    sigma_xyz = Float64(cfg_get(cfg, "detector", "sigma_xyz_mm", 0.0))
+    sigma_cfg = Float64(cfg_get(cfg, "detector", "sigma_xyz_mm", NaN)) # NaN = absent → crystal default
     eres_cfg  = Float64(cfg_get(cfg, "detector", "eres", NaN))         # NaN = absent → crystal default
+    sigma_xyz = isnan(sigma_cfg) ? mat.sigma_xyz_mm : sigma_cfg        # per-crystal σ (CRYSP 3.5 mm FWHM)
     # The reconstructed LORs use a HIGHER lower energy cut than the spectrum studies (which keep
     # emin_keV low to see the Compton shoulder): reco_emin_keV selects the photopeak region (~a few σ
     # below 511 for the worst-resolution crystal) and shrinks the file. Falls back to emin_keV if unset.

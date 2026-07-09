@@ -68,15 +68,20 @@ A fast, photon-only Monte Carlo. Full method in `docs/PTCryspMC_phys.tex`; the d
 - **Hits.** Per block: energy = sum, position = **first interaction point** (not the
   centroid — it is the LOR point and the target a CNN recovers when separating 1- from
   2-Compton events), time = earliest. Smear the position by σ_xyz (incl. DOI) and the energy
-  by FWHM(E) = a·√(511 keV / E); the time is the scintillation first-photon arrival (TOF +
-  jitter = −ln u/(N_det·r0)), a physical distribution rather than a Gaussian σ_t. Keep the
-  per-interaction truth in the singles for later CNN work.
+  by FWHM(E) = a·√(511 keV / E); the time is TOF + the scintillation first-photon arrival
+  (jitter = −ln u/(N_det·r0), the photostatistics floor) **plus a per-crystal Gaussian readout
+  floor σ_t** (trigger/threshold + SPTR + optics) calibrated to measured CTR — the first-photon
+  term alone is far too good (CsI: 49 ps FWHM vs 1.84 ns measured; the full story, calibration
+  and references in `latex/ctr_note.tex`). Keep the per-interaction truth in the singles for
+  later CNN work.
 - **Selection.** A lower cut on the (smeared) energy: `emin` for the spectrum studies (low, so
-  the Compton shoulder shows), raised to the photopeak region (`reco_emin_keV`) for the
-  reconstruction. A symmetric window about 511 keV (half-width scaling with the resolution → a
+  the Compton shoulder shows), raised to the photopeak (`reco_emin_keV` = 511 − 3σ_E per
+  crystal) for the reconstruction — applied only in the reco merge, so `lors_truth`/`randoms`
+  stay uncut. A symmetric window about 511 keV (half-width scaling with the resolution → a
   sharper detector rejects more scatter) is also available, off by default. A clean coincidence =
   each gamma contained in one block (no overspill); the two hits emerge roughly opposite (observed,
-  not enforced). Plus the coincidence-window cut |t1 − t2| ≤ τ.
+  not enforced). Plus the coincidence-window cut |t1 − t2| ≤ τ, with τ **per scanner** at ~3σ of
+  the raw t1−t2 from the CTR study (`scripts/studies/ctr_study.jl`): CsI 1.5 ns, BGO 5 ns.
 - **Randoms.** A separate pass over the singles, no re-transport: time-tag each single from the
   activity model (the config's single isotope — F-18 default — in clinic mode; the per-isotope
   scenario activity in API mode), restore the absolute clock, sort, pair cross-annihilation singles within the
@@ -86,10 +91,25 @@ A fast, photon-only Monte Carlo. Full method in `docs/PTCryspMC_phys.tex`; the d
 
 ## Current detectors (scope)
 
-Monolithic crystals with continuous 3-D readout: pure CsI (a = 5% FWHM @ 511 keV) and
-cryogenic BGO (10%), both validated; position/DOI σ_xyz ~1.7 mm (CRYSP). CsI(Tl) (7%) is
-still to add. Pixelated detectors (LYSO, standard BGO, a = 15–20%) report a fixed crystal
-rather than a continuous position, and come later.
+Monolithic crystals with continuous 3-D readout, three systems in `data/materials.json`
+(each entry carries yield, decay mixture, eres_a, pde, σ_t, σ_xyz — the crystal name pulls
+everything; configs override only deliberately):
+
+| | CsI (cryo, ~100 K plateau) | BGO_195K (dry ice) | BGO_77K (LN2) |
+|---|---|---|---|
+| yield (ph/MeV) / decay (ns) | 100k / 800 | 14k / 1768 | 29k / 1400+8700 (26/74%) |
+| eres FWHM @511 → reco cut | 6% → 472 keV | 15% → 413 keV | 10% → 446 keV |
+| σ_t per gamma / window τ | 0.35 ns / 1.5 ns | 1.1 ns / 5 ns | 1.1 ns / 5 ns |
+
+Shared: pde 0.40 (Hamamatsu S14160-6050HS), σ_xyz 3.5 mm FWHM per axis (= 1.486 mm σ; the
+CRYSP SiPM measurement, made on 2X₀ crystals — hence the depth standard below). **Depth = 2X₀**
+(CsI 3.72 cm, BGO 2.236 cm; same transverse block everywhere), scanners named with the depth
+(`crysp_ring_1m_{bgo,csi}_2x0`; 3X₀ variants kept for a future thick-crystal study). The two
+BGO temperatures are timing-degenerate (yield loss ↔ faster decay); they differ only in eres
+and cryogenic cost. **The two representative scanners for production: BGO_195K and CsI**
+(rationale + all timing findings: `latex/ctr_note.tex`). CsI(Tl) (7%) is still to add;
+pixelated detectors (LYSO, standard BGO) report a fixed crystal rather than a continuous
+position, and come later.
 
 ## Output — `lors_det.h5`
 
@@ -146,11 +166,13 @@ directly via the shared `src/coincidences.jl`) → `prod/<tag>/lors_truth.h5` �
 coincidences (true + scatter), **truth-only**: no detector smearing, no energy cut, but carrying the
 per-gamma timestamps `t1,t2` and the residual `dt = |Δt0| − TOF_diff`. HDF5 stores quantized Int16
 columns (0.1 mm / 0.1 keV — lossless at detector resolution), chunked + shuffle+deflate (~6× smaller
-than float CSV, typed/partial fast reads). `lors_truth.h5` is the clean input to the DT study
-(`examine_dt.jl` → `studies/dt/<tag>_dt.csv`, `py/plot_dt.py`) that picks the coincidence window τ
-(set in `[timing].tau_ns`; τ=3 ns for CsI & BGO — the dT tail is TOF/geometry-set, crystal-independent).
-The singles carry `t_rel` (TOF + scintillation jitter, decay-relative, stamped ONCE in
-`simulate_source_mt`); both LOR builders reuse it (no jitter recomputed). Then:
+than float CSV, typed/partial fast reads). `lors_truth.h5` is the clean input to the CTR study
+(`scripts/studies/ctr_study.jl`, photopeak-conditioned; the older `examine_dt.jl` + `py/plot_dt.py`
+remain for dT dumps) that picks the coincidence window τ (set in `[timing].tau_ns`) **per scanner**
+at ~3σ of the raw t1−t2: CsI 1.5 ns, BGO 5 ns (the readout floor σ_t dominates, so τ is
+crystal-DEPENDENT — the old crystal-independent τ=3 ns predates σ_t; see `latex/ctr_note.tex`).
+The singles carry `t_rel` (TOF + scintillation jitter + Gaussian σ_t, decay-relative, stamped ONCE
+in `simulate_source_mt`); both LOR builders reuse it (no jitter recomputed). Then:
 `build_randoms_from_singles.jl` → `randoms.h5` (truth=2): restore the absolute clock per single
 (`event_time(ev)·1e9 + t_rel`, in memory only), sort, pair cross-decay singles within τ
 (`src/randoms.jl pair_randoms`); and `reco_lors.jl` → **`lors_det.h5`** (`mode=det`,
@@ -202,7 +224,8 @@ for plotting and lighter downstream analysis.
 
 ## Reference material
 
-- CRYSP detector numbers: Soleti et al. 2024.
+- CRYSP detector numbers: Soleti et al. 2024 (arXiv:2406.13598 — cryo CsI constants + the
+  measured 1.84 ns CTR that anchors the σ_t calibration; see `latex/ctr_note.tex`).
 - Upstream source method: `ptcryspg4/docs/simulate_pt_pet.tex`, `handoff.tex`.
 
 ## Status / next
@@ -214,11 +237,15 @@ read it first for "where are we."** In brief:
 geometry, the materials / XCOM cross sections, the photon core (`propagate_photon`); source
 injection (Clinical activity-driven + API scenario-driven), the block/wheel ring, transport →
 singles → `lors_truth` + `randoms` → `lors_det`; hit formation + smear + energy window + two-block
-selection; the randoms pass; and the `PtCryspProds/` products export (per scenario/scanner/crystal,
-+ the detector-independent `truth/` bundle). `Pkg.test` passes (**1010**).
+selection; the randoms pass; the `t_decay_s` column (delayed-start emulation downstream); the
+three crystal systems with the CTR-calibrated timing (σ_t) and per-crystal σ_xyz/eres/τ; and the
+`PtCryspProds/` products export (per scenario/scanner/crystal, + the detector-independent
+`truth/` bundle; the ten-shard `crysp_ring_1m/bgo/fast_1Gy` master is a **frozen reference** —
+its config uses the removed hybrid "BGO" entry). `Pkg.test` passes (**1024**).
 
-**Remaining** (all mechanical or downstream): the CsI arm + other scanner variants (copy a config,
-re-run `run_shards`); the Documenter doc-site; and the deferred-but-scoped engine gates (multi-region
-phantom, open dual-head, mixed crystal). See `dev/status.md` for the full register.
+**Remaining** (all mechanical or downstream): the two representative productions — BGO_195K and
+CsI at 2X₀ (configs ready; one-shard CTR re-check at the 2X₀ geometry first, then `run_shards`);
+the Documenter doc-site; and the deferred-but-scoped engine gates (multi-region phantom, open
+dual-head, mixed crystal, standalone optical MC). See `dev/status.md` for the full register.
 
 Downstream (separate repo, `CryspBrainSim`): reconstruction, range precision, detector comparison.
