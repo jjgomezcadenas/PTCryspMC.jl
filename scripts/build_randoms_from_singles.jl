@@ -36,21 +36,23 @@ end
 # stay quantized (Int16, as in the file) — decoded only when a pair is written.
 struct RandSingles
     ev::Vector{Int32}
-    t_abs::Vector{Float64}; t_rel::Vector{Float32}
+    t_abs::Vector{Float64}; t_rel::Vector{Float32}; t_dec::Vector{Float32}
     x::Vector{Int16}; y::Vector{Int16}; z::Vector{Int16}; e::Vector{Int16}
     iz::Vector{Int16}; iphi::Vector{Int16}; nscat::Vector{Int8}
     x0::Vector{Int16}; y0::Vector{Int16}; z0::Vector{Int16}
 end
-RandSingles() = RandSingles(Int32[], Float64[], Float32[], Int16[], Int16[], Int16[], Int16[],
+RandSingles() = RandSingles(Int32[], Float64[], Float32[], Float32[], Int16[], Int16[], Int16[], Int16[],
                             Int16[], Int16[], Int8[], Int16[], Int16[], Int16[])
 Base.length(r::RandSingles) = length(r.ev)
 
 # `acts` is a per-isotope model vector (API) or length-1 (clinic/count, isotope always 0). The single's
-# isotope column picks the model → its λ times the absolute-clock restore.
+# isotope column picks the model → its λ times the absolute-clock restore. The decay time [s] is
+# also kept per single (t_dec) — the earlier single's becomes the pair's t_decay_s.
 @inline function push_contained!(r::RandSingles, acts, ev, iso, x, y, z, e, iz, iphi, nb, x0, y0, z0, t_rel, nscat)
     nb == 1 || return                                    # contained hits only (same as the trues)
-    t_abs = event_time(acts[iso + 1], ev) * 1.0e9 + t_rel # absolute clock [ns] with the isotope's λ
-    push!(r.ev, Int32(ev)); push!(r.t_abs, t_abs); push!(r.t_rel, Float32(t_rel))
+    t_dec = event_time(acts[iso + 1], ev)                 # decay time [s] with the isotope's λ
+    push!(r.ev, Int32(ev)); push!(r.t_abs, t_dec * 1.0e9 + t_rel) # absolute clock [ns]
+    push!(r.t_rel, Float32(t_rel)); push!(r.t_dec, Float32(t_dec))
     push!(r.x, x); push!(r.y, y); push!(r.z, z); push!(r.e, e); push!(r.iz, iz); push!(r.iphi, iphi)
     push!(r.nscat, Int8(min(nscat, 127)))
     push!(r.x0, x0); push!(r.y0, y0); push!(r.z0, z0)
@@ -147,12 +149,13 @@ function main()
         "t0_s" => acts[1].t0, "t1_s" => acts[1].t1, "n_isotopes" => length(acts), "time_seed" => Int(acts[1].seed))
     w = CoincidenceWriter(out, meta)
 
-    # Emit one random LOR per cross-event pair (i earlier, j later), referenced to i's decay.
+    # Emit one random LOR per cross-event pair (i earlier, j later), referenced to i's decay
+    # (times, x0 AND t_decay_s — the gamma-1 convention).
     emit = function (i, j, Δ)
         push_coincidence!(w, r.ev[i],
             decode_xyz(r.x[i]), decode_xyz(r.y[i]), decode_xyz(r.z[i]), decode_e(r.e[i]), r.t_rel[i], r.iz[i], r.iphi[i], Int(r.nscat[i]),
             decode_xyz(r.x[j]), decode_xyz(r.y[j]), decode_xyz(r.z[j]), decode_e(r.e[j]), r.t_rel[i] + Δ, r.iz[j], r.iphi[j], Int(r.nscat[j]),
-            NaN32, decode_xyz(r.x0[i]), decode_xyz(r.y0[i]), decode_xyz(r.z0[i]), TRUTH_RANDOM)
+            NaN32, decode_xyz(r.x0[i]), decode_xyz(r.y0[i]), decode_xyz(r.z0[i]), TRUTH_RANDOM, r.t_dec[i])
     end
     nrand = pair_randoms(emit, r.t_abs, r.ev, tau)
 

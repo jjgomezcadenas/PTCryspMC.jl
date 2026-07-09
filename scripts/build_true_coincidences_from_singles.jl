@@ -35,20 +35,24 @@ end
 mutable struct LorState
     cur_ev::Int; maxev::Int
     ev_x0::Float64; ev_y0::Float64; ev_z0::Float64
+    ev_tdec::Float64                 # this event's absolute decay time [s] (event_time)
     n_pair::Int; n_true::Int
 end
-LorState() = LorState(-1, 0, 0.0, 0.0, 0.0, 0, 0)
+LorState() = LorState(-1, 0, 0.0, 0.0, 0.0, 0.0, 0, 0)
 
 # Feed one singles row: close the previous event at a boundary (finish_event! → writer), then
 # fill the gamma's accumulator directly. `g` = (GammaAcc, GammaAcc).
 # `g` = (GammaAcc, GammaAcc); `gt`/`gps` carry the per-gamma timestamp / phantom-scatter count (not
-# stored on the accumulator) until finish_event! at the event boundary.
-function feed_row!(st::LorState, g, gt, gps, w, resp, rng, ev::Int, gi::Int,
+# stored on the accumulator) until finish_event! at the event boundary. `acts` is the per-isotope
+# activity-model vector (API) or length-1 (clinic/count, isotope always 0); the row's isotope picks
+# the model whose event_time stamps the event's t_decay (finish_event! is decay-time-agnostic —
+# the sink closure appends it).
+function feed_row!(st::LorState, g, gt, gps, w, resp, rng, acts, ev::Int, gi::Int, iso::Int,
                    x::Float64, y::Float64, z::Float64, e::Float64, iz::Int, iphi::Int,
                    nblocks::Int, nscat::Int, t_rel::Float64, x0::Float64, y0::Float64, z0::Float64)
     if ev != st.cur_ev
         if st.cur_ev != -1
-            emitted, is_true = finish_event!((a...) -> push_coincidence!(w, a...),
+            emitted, is_true = finish_event!((a...) -> push_coincidence!(w, a..., st.ev_tdec),
                                              st.cur_ev, g[1], g[2], gt[1], gt[2], gps[1], gps[2],
                                              st.ev_x0, st.ev_y0, st.ev_z0, resp, rng)
             st.n_pair += emitted; st.n_true += (emitted && is_true)
@@ -57,27 +61,29 @@ function feed_row!(st::LorState, g, gt, gps, w, resp, rng, ev::Int, gi::Int,
     end
     ev > st.maxev && (st.maxev = ev)
     st.ev_x0 = x0; st.ev_y0 = y0; st.ev_z0 = z0
+    st.ev_tdec = event_time(acts[iso + 1], ev)
     (gi == 1 || gi == 2) || return
     fill_singles!(g[gi], x, y, z, e, iz, iphi, nblocks)
     gt[gi] = t_rel; gps[gi] = nscat
     return
 end
 
-function feed_singles_csv!(st, g, gt, gps, w, resp, rng, path)
+function feed_singles_csv!(st, g, gt, gps, w, resp, rng, acts, path)
     open(path, "r") do io
         header = split(strip(readline(io)), ',')
         col = Dict(String(h) => i for (i, h) in enumerate(header))
         for c in ("event_number", "gamma", "x_mm", "y_mm", "z_mm", "e_keV", "iz", "iphi",
-                  "nblocks", "n_scatter", "x0_mm", "y0_mm", "z0_mm", "t_rel_ns")
+                  "nblocks", "n_scatter", "isotope", "x0_mm", "y0_mm", "z0_mm", "t_rel_ns")
             haskey(col, c) || error("singles stack is missing column '$c'")
         end
         ie = col["event_number"]; ig = col["gamma"]; ix = col["x_mm"]; iy = col["y_mm"]; iz = col["z_mm"]
         iee = col["e_keV"]; iiz = col["iz"]; iip = col["iphi"]; inb = col["nblocks"]; iph = col["n_scatter"]
-        ix0 = col["x0_mm"]; iy0 = col["y0_mm"]; iz0 = col["z0_mm"]; it = col["t_rel_ns"]
+        iis = col["isotope"]; ix0 = col["x0_mm"]; iy0 = col["y0_mm"]; iz0 = col["z0_mm"]; it = col["t_rel_ns"]
         for line in eachline(io)
             isempty(line) && continue
             f = split(line, ',')
-            feed_row!(st, g, gt, gps, w, resp, rng, parse(Int, f[ie]), parse(Int, f[ig]),
+            feed_row!(st, g, gt, gps, w, resp, rng, acts, parse(Int, f[ie]), parse(Int, f[ig]),
+                      parse(Int, f[iis]),
                       parse(Float64, f[ix]), parse(Float64, f[iy]), parse(Float64, f[iz]),
                       parse(Float64, f[iee]), parse(Int, f[iiz]), parse(Int, f[iip]),
                       parse(Int, f[inb]), parse(Int, f[iph]), parse(Float64, f[it]),
@@ -86,10 +92,11 @@ function feed_singles_csv!(st, g, gt, gps, w, resp, rng, path)
     end
 end
 
-function feed_singles_hdf5!(st, g, gt, gps, w, resp, rng, path)
+function feed_singles_hdf5!(st, g, gt, gps, w, resp, rng, acts, path)
     foreach_singles_hdf5(path) do b
         for i in 1:length(b)
-            feed_row!(st, g, gt, gps, w, resp, rng, Int(b.event[i]), Int(b.gamma[i]),
+            feed_row!(st, g, gt, gps, w, resp, rng, acts, Int(b.event[i]), Int(b.gamma[i]),
+                      Int(b.isotope[i]),
                       decode_xyz(b.x[i]), decode_xyz(b.y[i]), decode_xyz(b.z[i]), decode_e(b.e[i]),
                       Int(b.iz[i]), Int(b.iphi[i]), Int(b.nblocks[i]), Int(b.n_scatter[i]),
                       Float64(b.t_rel[i]),
@@ -108,8 +115,9 @@ function main()
     outdir = joinpath(rp(prod_base(cfg)), tag)
 
     # Per-photon timestamps `t_rel` are already stamped in the singles; this just reads them. The
-    # activity model is kept only for provenance (the absolute clock is reconstructed downstream as
-    # event_time(ev)+t_rel by the randoms pass). Crystal name is recorded for the attrs.
+    # activity model stamps each event's absolute decay time `t_decay_s` (event_time(ev), the same
+    # per-isotope clock the randoms pass uses to restore the absolute time). Crystal name is
+    # recorded for the attrs.
     crystal = String(cfg_get(cfg, "transport", "crystal_material", "CsI"))
     act     = ActivityModel(cfg)
 
@@ -125,23 +133,37 @@ function main()
     ishdf5 = endswith(singles, ".h5")
     out = isempty(a["out"]) ? joinpath(outdir, "lors_truth.h5") : rp(a["out"])
 
+    # Decay-time clock for t_decay_s: per-isotope when the singles carry `isotope_half_lives`
+    # (API — one truncated-exponential model per isotope over [0, t_meas]), else the single config
+    # `ActivityModel` (clinic/count; the isotope column is all 0, so acts[1] is used for every
+    # single). Identical construction to build_randoms_from_singles — the two passes MUST share
+    # the clock so t_decay_s and the randoms pairing agree.
+    hls = ishdf5 ? Vector{Float64}(singles_hdf5_attr(singles, "isotope_half_lives", Float64[])) : Float64[]
+    if !isempty(hls)
+        tmeas = Float64(singles_hdf5_attr(singles, "t_meas_s", 600.0))
+        tseed = Int(singles_hdf5_attr(singles, "time_seed", 1234))
+        acts  = ActivityModel[ActivityModel(; t0=0.0, t1=tmeas, half_life_s=h, seed=tseed) for h in hls]
+    else
+        acts  = ActivityModel[act]
+    end
+
     println("run '$tag' [truth]: same-annihilation coincidences, no smearing/cut")
     println("  crystal: $crystal  |  singles ($(ishdf5 ? "hdf5" : "csv")): $singles")
 
     meta = Dict{String,Any}("scenario_tag" => tag, "mode" => "truth", "has_randoms" => false,
         "crystal" => crystal, "seed" => seed, "t_relative_to_decay" => true,
-        "t0_s" => act.t0, "t1_s" => act.t1,
-        "half_life_s" => log(2.0) / act.λ, "time_seed" => Int(act.seed))
+        "t0_s" => acts[1].t0, "t1_s" => acts[1].t1, "n_isotopes" => length(acts),
+        "half_life_s" => log(2.0) / act.λ, "time_seed" => Int(acts[1].seed))
     w = CoincidenceWriter(out, meta)
     st = LorState()
     g = (GammaAcc(), GammaAcc())
     gt = [0.0, 0.0]; gps = [0, 0]                    # per-gamma timestamp / phantom-scatter count
     rng = MersenneTwister(seed)
 
-    ishdf5 ? feed_singles_hdf5!(st, g, gt, gps, w, resp, rng, singles) :
-             feed_singles_csv!(st, g, gt, gps, w, resp, rng, singles)
+    ishdf5 ? feed_singles_hdf5!(st, g, gt, gps, w, resp, rng, acts, singles) :
+             feed_singles_csv!(st, g, gt, gps, w, resp, rng, acts, singles)
     if st.cur_ev != -1                                   # the final event
-        emitted, is_true = finish_event!((a...) -> push_coincidence!(w, a...),
+        emitted, is_true = finish_event!((a...) -> push_coincidence!(w, a..., st.ev_tdec),
                                          st.cur_ev, g[1], g[2], gt[1], gt[2], gps[1], gps[2],
                                          st.ev_x0, st.ev_y0, st.ev_z0, resp, rng)
         st.n_pair += emitted; st.n_true += (emitted && is_true)

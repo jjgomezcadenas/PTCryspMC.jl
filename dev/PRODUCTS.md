@@ -16,6 +16,7 @@ simulated LOR data.
 ```
 PtCryspProds/
   README.md                              self-describing copy of this contract (written by publish_prod)
+  SCHEMA.md                              the shard column schema (docs/SCHEMA.md; refreshed on every publish)
   <scenario>/                            ── SCENARIO = proton run + phantom (fixes the SOURCE + phantom)
     phantom/                             ── shared by ALL scanners/crystals — the μ-map inputs
       phantom_regions.csv                   the region(s): shape, semi-axes, centre, material (from the scenario)
@@ -121,6 +122,7 @@ That is what makes the geometry and detector comparisons isolate a single axis.
 | `truth/activity_profile_<budget>.csv` | binned true activity(z), per isotope + `total` | activity-R50 (the recon target) |
 | `truth/{sobp_layers,run_meta,sampling_budget_<budget>}.csv` (+`_meta`) | beam design + normalization + per-isotope N_expected | scenario characterization |
 | `README.md` | this contract | anyone browsing the tree |
+| `SCHEMA.md` | the shard column schema (copy of `docs/SCHEMA.md`, refreshed each publish) | anyone reading the shards |
 
 `lors_shardNNN.h5` truth flag: `0` true, `1` scatter, `2` random. First-pass analysis is
 **trues-only** (flag 0).

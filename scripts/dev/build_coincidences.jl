@@ -50,13 +50,14 @@ end
 # mapped back to the "true"/"scatter" strings). The timestamps `t1,t2` [ns] and the per-pair
 # residual `dt` = |Δt0| − TOF_diff are now real (an `EventTiming` is passed to finish_event!).
 function write_lor_row(io, ev, x1, y1, z1, e1, t1, iz1, iphi1, nscat1,
-                       x2, y2, z2, e2, t2, iz2, iphi2, nscat2, dt, x0, y0, z0, truth)
+                       x2, y2, z2, e2, t2, iz2, iphi2, nscat2, dt, x0, y0, z0, truth, t_decay)
     ts = truth == TRUTH_TRUE ? "true" : (nscat1 + nscat2 == 1 ? "single" : "multiple")
     println(io, join((ev,
         round(x1, digits=4), round(y1, digits=4), round(z1, digits=4), round(e1, digits=4), round(t1, digits=4), iz1, iphi1, nscat1,
         round(x2, digits=4), round(y2, digits=4), round(z2, digits=4), round(e2, digits=4), round(t2, digits=4), iz2, iphi2, nscat2,
         round(dt, digits=6),
-        round(x0, digits=4), round(y0, digits=4), round(z0, digits=4), ts), ","))
+        round(x0, digits=4), round(y0, digits=4), round(z0, digits=4), ts,
+        round(t_decay, digits=6)), ","))
 end
 
 function main()
@@ -93,6 +94,9 @@ function main()
     cryst   = load_material(joinpath(REPO, "data"), crystal)
     stamp_t(acc, ex, ey, ez) = acc.reached ?
         tof_ns((ex, ey, ez), (acc.x, acc.y, acc.z)) + first_photon_jitter(cryst, acc.e * 1e-3, rng) : 0.0
+    # Absolute decay time per event (t_decay_s column) — the config's single-isotope activity clock
+    # (the dev chain has no per-isotope scenario timing; the production chain does).
+    act = ActivityModel(cfg)
 
     if mode == "det"
         ecut = resp.apply_window ? "window ±$(round(resp.win_half,digits=1)) keV" :
@@ -124,7 +128,7 @@ function main()
         mkpath(dirname(out))
         open(out, "w") do io
             println(io, "event,x1_mm,y1_mm,z1_mm,e1_keV,t1_ns,iz1,iphi1,nscat1," *
-                        "x2_mm,y2_mm,z2_mm,e2_keV,t2_ns,iz2,iphi2,nscat2,dt_ns,x0_mm,y0_mm,z0_mm,truth")
+                        "x2_mm,y2_mm,z2_mm,e2_keV,t2_ns,iz2,iphi2,nscat2,dt_ns,x0_mm,y0_mm,z0_mm,truth,t_decay_s")
             for line in eachline(fin)
                 isempty(line) && continue
                 f = split(line, ',')
@@ -133,7 +137,7 @@ function main()
                     if cur_ev != -1
                         n_ev += 1
                         t1 = stamp_t(g[1], ev_x0, ev_y0, ev_z0); t2 = stamp_t(g[2], ev_x0, ev_y0, ev_z0)
-                        emitted, is_true = finish_event!((a...) -> write_lor_row(io, a...),
+                        emitted, is_true = finish_event!((a...) -> write_lor_row(io, a..., event_time(act, cur_ev)),
                                                          cur_ev, g[1], g[2], t1, t2, gps[1], gps[2],
                                                          ev_x0, ev_y0, ev_z0, resp, rng)
                         n_pair += emitted; n_true += (emitted && is_true)
@@ -155,7 +159,7 @@ function main()
             if cur_ev != -1                              # the final event
                 n_ev += 1
                 t1 = stamp_t(g[1], ev_x0, ev_y0, ev_z0); t2 = stamp_t(g[2], ev_x0, ev_y0, ev_z0)
-                emitted, is_true = finish_event!((a...) -> write_lor_row(io, a...),
+                emitted, is_true = finish_event!((a...) -> write_lor_row(io, a..., event_time(act, cur_ev)),
                                                  cur_ev, g[1], g[2], t1, t2, gps[1], gps[2],
                                                  ev_x0, ev_y0, ev_z0, resp, rng)
                 n_pair += emitted; n_true += (emitted && is_true)

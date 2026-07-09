@@ -31,11 +31,16 @@ simulate_source_mt.jl  (multi-threaded, alloc-free) ──► prod/<tag>/singles
   (`jitter = −ln u / (N_det·r0)`, `N_det = yield·E·pde`, `r0 = Σ wₖ/τₖ`), stamped **once** at
   generation, **relative to the decay** so it stays small (Float32). Absolute time =
   `event_time(ev)·1e9 + t_rel`, reconstructed only where randoms need a common clock.
+- **Absolute decay time on every LOR.** All three LOR files carry `t_decay_s` (Float32 s, zero =
+  acquisition start; gamma 1's decay for randoms, the `x0` convention) — the `event_time(ev)` of
+  the annihilation, so downstream can emulate any delayed acquisition start as the pure cut
+  `t_decay ≥ t_start` (CryspBrainSim request `upstream_request_lor_decay_time.md`; ~3.5 B/row
+  compressed, ~10% file growth). Attr `t_decay_zero = "acquisition_start"`.
 - **Coincidence window τ = 3 ns** (CsI and BGO), read off the DT study (`examine_dt.jl` +
   `py/plot_dt.py`); `compare_crystal_timing.jl` explains why τ is crystal-independent.
 - **Reco lower energy cut** `reco_emin_keV = 450` (photopeak region; the spectrum studies keep
   `emin_keV = 300` to see the Compton shoulder). No upper cut (it's an analysis-time choice).
-- **Validated:** `Pkg.test` **1009**; randoms match the analytic `2τS²` (CsI 1248 vs 1291, ratio 0.97;
+- **Validated:** `Pkg.test` **1010**; randoms match the analytic `2τS²` (CsI 1248 vs 1291, ratio 0.97;
   the clinical Vacuum/BGO 10⁸ runs at fixed N over 100× in rate — 100 kHz×1000 s: 52694 vs 52708;
   1 MBq×100 s: 579705 vs 578399; 10 MBq×10 s: 5837886 vs 5839021 — all ratio 1.00, so 2τS² holds across
   three orders of magnitude in activity, with randoms reaching ~10% of trues at the 10 MBq end);
@@ -131,7 +136,7 @@ _(The former #1 — the `first_photon_jitter` `-log(1-rand)` guard — is now fi
   **`dev/api_plan.md`**; engine pieces: `Ellipsoid` solid, `G4_BRAIN_ICRP` material + `xcom_brain.csv`,
   `src/scenario.jl` (reader + `APISource` + `materialize_api_source`), isotope singles column,
   per-isotope randoms timing. QA: `scripts/tests/check_scenario.jl`, `check_api_source.jl`,
-  `check_api_validation.jl`. **`Pkg.test` 1009.**
+  `check_api_validation.jl`. **`Pkg.test` 1010.**
 - **Products handoff (`PtCryspProds`)** — `scripts/run/publish_prod.jl` exports a run into the tree
   `<scenario>/<scanner>/<crystal>/<budget>_<dose>/lors_shardNNN.h5` (+ shared `scanner_geometry.json`,
   `phantom/`, `README.md`); `scripts/run/run_shards.sh` generates shards sequentially (chain →

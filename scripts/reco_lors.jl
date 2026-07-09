@@ -49,7 +49,7 @@ function reco_file!(w, path, resp, tau::Float64, rng, counts::Vector{Int})::Int
             tr = Int(b.truth[i])
             push_coincidence!(w, Int(b.event[i]), x1, y1, z1, e1, t1, Int(b.iz1[i]), Int(b.iphi1[i]), Int(b.nscat1[i]),
                 x2, y2, z2, e2, t2, Int(b.iz2[i]), Int(b.iphi2[i]), Int(b.nscat2[i]), Float64(b.dt[i]),
-                decode_xyz(b.x0[i]), decode_xyz(b.y0[i]), decode_xyz(b.z0[i]), tr)
+                decode_xyz(b.x0[i]), decode_xyz(b.y0[i]), decode_xyz(b.z0[i]), tr, b.t_decay[i])
             counts[tr + 1] += 1
         end
     end

@@ -95,7 +95,9 @@ rather than a continuous position, and come later.
 
 Per accepted coincidence (one LOR): two 3-D hit positions (mm), two energies (keV), two times
 (ns), per-gamma phantom-scatter counts (`nscat1`, `nscat2`: 0 clean, 1 single, ≥2 multiple — so a
-LOR separates single from multiple scatter), the timing residual, and a truth flag (true / scatter /
+LOR separates single from multiple scatter), the timing residual, the absolute decay time
+`t_decay_s` (s from acquisition start; gamma 1's decay for randoms — lets downstream emulate a
+delayed acquisition start as the cut `t_decay ≥ t_start`), and a truth flag (true / scatter /
 random). The HDF5 root attributes carry the provenance: detector config, geometry, energy and time
 windows, the run tag, and the seed.
 
@@ -213,7 +215,7 @@ geometry, the materials / XCOM cross sections, the photon core (`propagate_photo
 injection (Clinical activity-driven + API scenario-driven), the block/wheel ring, transport →
 singles → `lors_truth` + `randoms` → `lors_det`; hit formation + smear + energy window + two-block
 selection; the randoms pass; and the `PtCryspProds/` products export (per scenario/scanner/crystal,
-+ the detector-independent `truth/` bundle). `Pkg.test` passes (**1009**).
++ the detector-independent `truth/` bundle). `Pkg.test` passes (**1010**).
 
 **Remaining** (all mechanical or downstream): the CsI arm + other scanner variants (copy a config,
 re-run `run_shards`); the Documenter doc-site; and the deferred-but-scoped engine gates (multi-region

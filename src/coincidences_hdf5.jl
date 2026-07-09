@@ -6,8 +6,11 @@
 #
 # Timestamps t1_ns/t2_ns are Float32 and stored RELATIVE TO THE DECAY (= TOF + scintillation
 # jitter, ~ns) — the common annihilation time is dropped so ns differences survive Float32.
-# Absolute time = event_time(activity, event) + t; the activity attrs (t0_s/half_life_s/time_seed)
-# are written alongside. dt_ns is the residual (t1−t2) − TOF_diff (signed, the timing resolution).
+# The decay's position in the acquisition window is carried separately as t_decay_s (Float32
+# seconds — ~0.1 ms resolution at 1200 s, ample for window cuts; the sub-ns physics stays in
+# t1_ns/t2_ns): absolute photon time = t_decay_s·1e9 + t_ns. The zero point is the acquisition
+# start (attr t_decay_zero; the activity attrs t0_s/half_life_s/time_seed are written alongside).
+# dt_ns is the residual (t1−t2) − TOF_diff (signed, the timing resolution).
 
 using HDF5
 
@@ -24,11 +27,12 @@ struct CoincidenceBuffer
     t2::Vector{Float32}; iz2::Vector{Int16}; iphi2::Vector{Int16}; nscat2::Vector{Int8}
     dt::Vector{Float32}                       # per-pair timing residual (t1−t2) − TOF_diff [ns], signed
     x0::Vector{Int16}; y0::Vector{Int16}; z0::Vector{Int16}
+    t_decay::Vector{Float32}                  # absolute decay time in the acquisition window [s]
 end
 CoincidenceBuffer() = CoincidenceBuffer(Int32[], Int8[],
     Int16[], Int16[], Int16[], Int16[], Float32[], Int16[], Int16[], Int8[],
     Int16[], Int16[], Int16[], Int16[], Float32[], Int16[], Int16[], Int8[],
-    Float32[], Int16[], Int16[], Int16[])
+    Float32[], Int16[], Int16[], Int16[], Float32[])
 Base.length(b::CoincidenceBuffer) = length(b.event)
 
 "The LOR columns in canonical order (name, vector) — the schema + dataset/IO ordering."
@@ -37,7 +41,8 @@ coinc_columns(b::CoincidenceBuffer) = (
     ("x1_mm", b.x1), ("y1_mm", b.y1), ("z1_mm", b.z1), ("e1_keV", b.e1), ("t1_ns", b.t1), ("iz1", b.iz1), ("iphi1", b.iphi1), ("nscat1", b.nscat1),
     ("x2_mm", b.x2), ("y2_mm", b.y2), ("z2_mm", b.z2), ("e2_keV", b.e2), ("t2_ns", b.t2), ("iz2", b.iz2), ("iphi2", b.iphi2), ("nscat2", b.nscat2),
     ("dt_ns", b.dt),
-    ("x0_mm", b.x0), ("y0_mm", b.y0), ("z0_mm", b.z0))
+    ("x0_mm", b.x0), ("y0_mm", b.y0), ("z0_mm", b.z0),
+    ("t_decay_s", b.t_decay))
 
 Base.empty!(b::CoincidenceBuffer) = (foreach(c -> empty!(c[2]), coinc_columns(b)); b)
 
@@ -67,11 +72,12 @@ const coinc_doc = Dict{String,Tuple{String,String}}(
     "x0_mm"  => ("mm",   "annihilation point (gamma 1's decay for randoms), x"),
     "y0_mm"  => ("mm",   "annihilation point, y"),
     "z0_mm"  => ("mm",   "annihilation point, z"),
+    "t_decay_s" => ("s", "absolute decay time within the acquisition window, zero = acquisition start (gamma 1's decay for randoms)"),
 )
 
-"Append one accepted LOR (the `finish_event!` emit args), quantized."
+"Append one accepted LOR (the `finish_event!` emit args + the event's `t_decay` [s]), quantized."
 function push_coincidence!(b::CoincidenceBuffer, ev, x1, y1, z1, e1, t1, iz1, iphi1, nscat1,
-                           x2, y2, z2, e2, t2, iz2, iphi2, nscat2, dt, x0, y0, z0, truth)
+                           x2, y2, z2, e2, t2, iz2, iphi2, nscat2, dt, x0, y0, z0, truth, t_decay)
     push!(b.event, Int32(ev)); push!(b.truth, Int8(truth))
     push!(b.x1, _enc_xyz_c(x1)); push!(b.y1, _enc_xyz_c(y1)); push!(b.z1, _enc_xyz_c(z1))
     push!(b.e1, _enc_e_c(e1)); push!(b.t1, Float32(t1)); push!(b.iz1, Int16(iz1)); push!(b.iphi1, Int16(iphi1)); push!(b.nscat1, Int8(min(nscat1, 127)))
@@ -79,6 +85,7 @@ function push_coincidence!(b::CoincidenceBuffer, ev, x1, y1, z1, e1, t1, iz1, ip
     push!(b.e2, _enc_e_c(e2)); push!(b.t2, Float32(t2)); push!(b.iz2, Int16(iz2)); push!(b.iphi2, Int16(iphi2)); push!(b.nscat2, Int8(min(nscat2, 127)))
     push!(b.dt, Float32(dt))
     push!(b.x0, _enc_xyz_c(x0)); push!(b.y0, _enc_xyz_c(y0)); push!(b.z0, _enc_xyz_c(z0))
+    push!(b.t_decay, Float32(t_decay))
     b
 end
 
@@ -112,6 +119,7 @@ function CoincidenceWriter(path::AbstractString, attrs::AbstractDict; block::Int
     end
     attributes(f)["xyz_scale_mm"] = XYZ_SCALE_MM
     attributes(f)["e_scale_keV"]  = E_SCALE_KEV
+    attributes(f)["t_decay_zero"] = "acquisition_start"
     CoincidenceWriter(f, dsets, proto, 0, block)
 end
 
@@ -192,7 +200,8 @@ function foreach_coincidences_hdf5(f, path::AbstractString; batch::Int = 1 << 20
                 rd("x1_mm"), rd("y1_mm"), rd("z1_mm"), rd("e1_keV"), rd("t1_ns"), rd("iz1"), rd("iphi1"), rd("nscat1"),
                 rd("x2_mm"), rd("y2_mm"), rd("z2_mm"), rd("e2_keV"), rd("t2_ns"), rd("iz2"), rd("iphi2"), rd("nscat2"),
                 rd("dt_ns"),
-                rd("x0_mm"), rd("y0_mm"), rd("z0_mm"))
+                rd("x0_mm"), rd("y0_mm"), rd("z0_mm"),
+                rd("t_decay_s"))
             f(b)
             lo = hi + 1
         end

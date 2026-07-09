@@ -39,7 +39,9 @@ function schema_markdown()::String
     println(io, "Positions and energies are stored as quantized `Int16`: position = ",
                 "`round(mm / $(XYZ_SCALE_MM))`, energy = `round(keV / $(E_SCALE_KEV))` — lossless at ",
                 "detector resolution; decode with `decode_xyz` / `decode_e`. Times are `Float32` ",
-                "nanoseconds **relative to the decay** (absolute = `event_time(activity, event)·1e9 + t`).")
+                "nanoseconds **relative to the decay**; the decay's absolute time in the acquisition ",
+                "window is the LOR column `t_decay_s` (`Float32` seconds, zero = acquisition start), ",
+                "so absolute photon time = `t_decay_s·1e9 + t`.")
     println(io)
 
     println(io, "## Singles — `prod/<tag>/singles.{h5,csv}`")
@@ -88,6 +90,7 @@ function schema_markdown()::String
     println(io, "| `tau_ns` | lors_det, randoms | coincidence window |")
     println(io, "| `sigma_xyz_mm`, `eres`, `emin_keV`, `window_fwhm` | lors_det | detector response + energy cut |")
     println(io, "| `t_relative_to_decay`, `t0_s`, `t1_s`, `half_life_s`, `time_seed` | LORs | the activity clock for absolute time |")
+    println(io, "| `t_decay_zero` | LORs | zero point of `t_decay_s` (`acquisition_start`) |")
     String(take!(io))
 end
 
