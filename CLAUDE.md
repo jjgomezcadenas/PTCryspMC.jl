@@ -72,7 +72,7 @@ A fast, photon-only Monte Carlo. Full method in `docs/PTCryspMC_phys.tex`; the d
   (jitter = −ln u/(N_det·r0), the photostatistics floor) **plus a per-crystal Gaussian readout
   floor σ_t** (trigger/threshold + SPTR + optics) calibrated to measured CTR — the first-photon
   term alone is far too good (CsI: 49 ps FWHM vs 1.84 ns measured; the full story, calibration
-  and references in `latex/ctr_note.tex`). Keep the per-interaction truth in the singles for
+  and references in `latex/scanner_prods.tex`). Keep the per-interaction truth in the singles for
   later CNN work.
 - **Selection.** A lower cut on the (smeared) energy: `emin` for the spectrum studies (low, so
   the Compton shoulder shows), raised to the photopeak (`reco_emin_keV` = 511 − 3σ_E per
@@ -107,7 +107,7 @@ CRYSP SiPM measurement, made on 2X₀ crystals — hence the depth standard belo
 (`crysp_ring_1m_{bgo,csi}_2x0`; 3X₀ variants kept for a future thick-crystal study). The two
 BGO temperatures are timing-degenerate (yield loss ↔ faster decay); they differ only in eres
 and cryogenic cost. **The two representative scanners for production: BGO_195K and CsI**
-(rationale + all timing findings: `latex/ctr_note.tex`). CsI(Tl) (7%) is still to add;
+(rationale + all timing findings: `latex/scanner_prods.tex`). CsI(Tl) (7%) is still to add;
 pixelated detectors (LYSO, standard BGO) report a fixed crystal rather than a continuous
 position, and come later.
 
@@ -170,7 +170,7 @@ than float CSV, typed/partial fast reads). `lors_truth.h5` is the clean input to
 (`scripts/studies/ctr_study.jl`, photopeak-conditioned; the older `examine_dt.jl` + `py/plot_dt.py`
 remain for dT dumps) that picks the coincidence window τ (set in `[timing].tau_ns`) **per scanner**
 at ~3σ of the raw t1−t2: CsI 1.5 ns, BGO 5 ns (the readout floor σ_t dominates, so τ is
-crystal-DEPENDENT — the old crystal-independent τ=3 ns predates σ_t; see `latex/ctr_note.tex`).
+crystal-DEPENDENT — the old crystal-independent τ=3 ns predates σ_t; see `latex/scanner_prods.tex`).
 The singles carry `t_rel` (TOF + scintillation jitter + Gaussian σ_t, decay-relative, stamped ONCE
 in `simulate_source_mt`); both LOR builders reuse it (no jitter recomputed). Then:
 `build_randoms_from_singles.jl` → `randoms.h5` (truth=2): restore the absolute clock per single
@@ -225,7 +225,7 @@ for plotting and lighter downstream analysis.
 ## Reference material
 
 - CRYSP detector numbers: Soleti et al. 2024 (arXiv:2406.13598 — cryo CsI constants + the
-  measured 1.84 ns CTR that anchors the σ_t calibration; see `latex/ctr_note.tex`).
+  measured 1.84 ns CTR that anchors the σ_t calibration; see `latex/scanner_prods.tex`).
 - Upstream source method: `ptcryspg4/docs/simulate_pt_pet.tex`, `handoff.tex`.
 
 ## Status / next

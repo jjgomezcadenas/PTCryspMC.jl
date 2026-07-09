@@ -127,6 +127,13 @@ function main()
     isfile(schema) && (cp(schema, joinpath(root, "SCHEMA.md"); force=true);
                        println("    + SCHEMA.md (column schema, refreshed)"))
 
+    # scanner_prods.pdf at the root (the scanner-productions note: systems, CTR calibration,
+    # deliverables). Also refreshed each publish; skipped silently if the PDF was not built
+    # (it is a gitignored latex/ build artifact — compile scanner_prods.tex to regenerate).
+    note = rp("latex/scanner_prods.pdf")
+    isfile(note) && (cp(note, joinpath(root, "scanner_prods.pdf"); force=true);
+                     println("    + scanner_prods.pdf (productions note, refreshed)"))
+
     println("  done.")
 end
 

@@ -31,7 +31,7 @@ simulate_source_mt.jl  (multi-threaded, alloc-free) ──► prod/<tag>/singles
   (`jitter = −ln u / (N_det·r0)`, `N_det = yield·E·pde`, `r0 = Σ wₖ/τₖ`) **+ a per-crystal
   Gaussian readout floor σ_t** (`sigma_t_ns` on the crystal: trigger/threshold + SPTR + optics —
   the first-photon term alone is the photostatistics floor, ~40× too good for CsI vs the
-  measured 1.84 ns CTR of Soleti et al. 2024; calibration + references in `latex/ctr_note.tex`),
+  measured 1.84 ns CTR of Soleti et al. 2024; calibration + references in `latex/scanner_prods.tex`),
   stamped **once** at generation, **relative to the decay** so it stays small (Float32).
   Absolute time = `event_time(ev)·1e9 + t_rel`, reconstructed only where randoms need a common clock.
 - **Absolute decay time on every LOR.** All three LOR files carry `t_decay_s` (Float32 s, zero =
@@ -99,7 +99,7 @@ standard: 2X₀** (CsI 3.72 cm / BGO 2.236 cm — resolution measured at 2X₀; 
 and raise cost; 3X₀ geometries kept for a thick-crystal study). Scanners named with the depth:
 `crysp_ring_1m_{bgo,csi}_{2x0,3x0}`. The BGO temperatures are timing-degenerate → **the two
 representative production scanners are BGO_195K and CsI** (`runs/uniform_headep_{bgo195k,csi}_api.toml`;
-`bgo77k` config ready but not scheduled). Rationale + findings: `latex/ctr_note.tex`. The old
+`bgo77k` config ready but not scheduled). Rationale + findings: `latex/scanner_prods.tex`. The old
 hybrid "BGO" material is removed; `runs/uniform_headep_bgo_api.toml` is the frozen reference of
 the existing `crysp_ring_1m/bgo` master. CsI(Tl) (7%) and the pixelated detectors (LYSO,
 standard BGO) are still to add.

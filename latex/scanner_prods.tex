@@ -1,6 +1,7 @@
-% Documentation note — coincidence time resolution (CTR) in PTCryspMC:
-% findings, calibration to measurement, and how the timing model handles it.
+% Documentation note — the PTCryspMC scanner productions: the two representative systems,
+% the CTR findings/calibration, and the deliverables for CryspBrainSim.
 % Self-contained: compiles with pdflatex (no external figures or .bib).
+% A copy of the built PDF is published at the PtCryspProds root by publish_prod.jl.
 \documentclass[11pt,a4paper]{article}
 
 \usepackage[margin=2.6cm]{geometry}
@@ -14,8 +15,9 @@
 \newcommand{\ps}{\,\mathrm{ps}}
 \newcommand{\keV}{\,\mathrm{keV}}
 
-\title{Coincidence time resolution in \textsc{PTCryspMC}:\\
-       findings, calibration to measurement, and the timing model}
+\title{The \textsc{PTCryspMC} scanner productions:\\
+       the two representative systems, the timing calibration (CTR),\\
+       and the deliverables for \textsc{CryspBrainSim}}
 \author{PTCryspMC.jl documentation note}
 \date{July 2026}
 
@@ -36,6 +38,10 @@ BGO systems. With the calibrated model, the simulated raw time-difference widths
 $\sigma \simeq 0.51\ns$ (CsI) and $1.77\ns$ (BGO at 77\,K and at 195\,K, indistinguishable),
 and the pinned coincidence windows $\tau = 1.5\ns$ (CsI) and $5\ns$ (BGO) sit at
 ${\sim}3\sigma$, keeping $99.7\%$ and $99.3\%$ of true coincidences respectively.
+The note closes with the production deliverables (section~\ref{sec:deliverables}): two
+ten-shard list-mode masters --- BGO 195\,K and cryogenic CsI on the same $2X_0$ ring, from the
+identical proton-activity source --- with the geometry, statistics, file layout and column
+semantics the downstream \textsc{CryspBrainSim} analysis consumes.
 \end{abstract}
 
 \section{Context and definitions}
@@ -221,20 +227,20 @@ chain.
 \label{sec:results}
 
 The model was validated with one full production shard per scanner ($8\times10^7$ decays of a
-1\,Gy proton-therapy activity scenario in a head phantom; $8.7$--$19$~million
-energy-selected true coincidences each). Table~\ref{tab:results} shows the measured widths and
-the containment at the pinned windows. (These validation shards were run with the earlier
-$3X_0$ depths; the $2X_0$ standard slightly \emph{narrows} the DOI contribution to
-$\Delta t_{\mathrm{raw}}$, so the windows quoted are marginally conservative. The study is
-re-run with the production geometry before each production.)
+1\,Gy proton-therapy activity scenario in a head phantom; $6$--$15$~million
+energy-selected true coincidences each), run at the production $2X_0$ geometry.
+Table~\ref{tab:results} shows the measured widths and the containment at the pinned windows.
+(The study was first run at $3X_0$ and repeated at $2X_0$: the widths agree within $0.3\%$ ---
+the DOI contribution to $\Delta t_{\mathrm{raw}}$ is negligible against the readout floor.)
 
 \begin{table}[ht]
 \centering
-\caption{Simulated timing with the calibrated model (one shard per scanner,
-photopeak-selected). $\sigma_{\mathrm{raw}}$ is the width of the window variable
-$\Delta t_{\mathrm{raw}}$ (it includes the TOF spread of the source across the head phantom
-and the DOI spread); the CTR column is the FWHM of the TOF-corrected residual (the
-bench-equivalent detector response). The pinned windows sit at ${\sim}3\sigma$.}
+\caption{Simulated timing with the calibrated model (one shard per scanner at the production
+$2X_0$ geometry, photopeak-selected). $\sigma_{\mathrm{raw}}$ is the width of the window
+variable $\Delta t_{\mathrm{raw}}$ (it includes the TOF spread of the source across the head
+phantom and the DOI spread); the CTR column is the FWHM of the TOF-corrected residual (the
+bench-equivalent detector response). The pinned windows sit at ${\sim}3\sigma$. BGO 77\,K
+(not scheduled for production) is timing-identical to 195\,K to three digits.}
 \label{tab:results}
 \vspace{2mm}
 \begin{tabular}{lccccc}
@@ -242,9 +248,8 @@ bench-equivalent detector response). The pinned windows sit at ${\sim}3\sigma$.}
 scanner & $\sigma_{\mathrm{raw}}$ & CTR (FWHM) & $\tau$ & $\tau/\sigma_{\mathrm{raw}}$ &
 trues kept at $\tau$ \\
 \midrule
-CsI       & $0.512\ns$ & $1.17\ns$ & $1.5\ns$ & $2.9$ & $99.66\%$ \\
-BGO 77\,K  & $1.77\ns$  & $4.08\ns$ & $5.0\ns$ & $2.8$ & $99.32\%$ \\
-BGO 195\,K & $1.77\ns$  & $4.08\ns$ & $5.0\ns$ & $2.8$ & $99.31\%$ \\
+CsI       & $0.510\ns$ & $1.16\ns$ & $1.5\ns$ & $2.9$ & $99.67\%$ \\
+BGO 195\,K & $1.77\ns$  & $4.10\ns$ & $5.0\ns$ & $2.8$ & $99.31\%$ \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -298,6 +303,103 @@ With dark counts frozen out at cryogenic temperatures (the rate halves every ${\
 \cite{Soleti2024}), ${\sim}45$\,pe per SiPM is comfortable statistics; BGO's larger
 photoelectric fraction at $511\keV$ (high-$Z$ bismuth) additionally yields cleaner single-site
 deposits for the light-based position estimator.
+
+\section{Production deliverables for \textsc{CryspBrainSim}}
+\label{sec:deliverables}
+
+Two ten-shard list-mode masters are produced, one per representative scanner, into the
+\texttt{PtCryspProds/} tree (layout contract: \texttt{PRODUCTS.md} = the tree's
+\texttt{README.md}; column schema: \texttt{SCHEMA.md} at the tree root, refreshed on every
+publish, as is this note's PDF):
+
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+BGO 195\,K & \texttt{uniform\_headep\_sobp\_1e8/crysp\_ring\_1m\_bgo\_2x0/bgo\_195k/fast\_1Gy/} \\
+CsI        & \texttt{uniform\_headep\_sobp\_1e8/crysp\_ring\_1m\_csi\_2x0/csi/fast\_1Gy/} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Each leaf holds \texttt{lors\_shard000.h5}\,\ldots\,\texttt{lors\_shard009.h5} plus
+\texttt{config.toml} (the regeneration recipe); \texttt{scanner\_geometry.json} sits at the
+scanner level, and the shared \texttt{phantom/} ($\mu$-map inputs) and \texttt{truth/}
+(dose-$R_{80}$ + activity-$R_{50}$) bundles at the scenario level.
+
+\subsection*{Scanner geometry}
+
+Both scanners are the same closed cylindrical ring, differing only in crystal and depth:
+
+\begin{center}
+\begin{tabular}{lcc}
+\toprule
+ & ring (shared) & \\
+\midrule
+inner radius            & \multicolumn{2}{c}{$387$\,mm} \\
+axial length            & \multicolumn{2}{c}{$1024$\,mm ($\pm 512$\,mm)} \\
+segmentation            & \multicolumn{2}{c}{$48$ blocks in $\varphi$ $\times$ $20$ wheels in $z$} \\
+block transverse size   & \multicolumn{2}{c}{$50.6$\,mm (arc at inner radius) $\times$ $51.2$\,mm ($z$)} \\
+\midrule
+ & BGO 195\,K & CsI \\
+\midrule
+crystal depth ($2X_0$)  & $22.36$\,mm & $37.20$\,mm \\
+outer radius            & $409.4$\,mm & $424.2$\,mm \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The phantom is the scenario's: a uniform G4\_BRAIN\_ICRP ellipsoid (semi-axes
+$7.2 \times 8.7 \times 10.2$\,cm, centred at $(0, -3, 0)$\,cm), inside an air world. Monolithic
+blocks, continuous 3-D readout; the detector response (table~\ref{tab:systems}) is already
+applied in the files --- do \emph{not} re-apply it.
+
+\subsection*{Source and statistics}
+
+The source is the frozen \texttt{uniform\_headep\_sobp\_1e8} scenario at 1\,Gy, \texttt{fast}
+budget (acquisition window $[0, 1200]$\,s): ${\approx}8.02\times10^7$ decays per shard,
+5 isotopes ($^{15}$O, $^{11}$C, $^{13}$N, $^{10}$C, $^{14}$O). Shard $R$ is seeded by
+(\texttt{master\_seed}=1, \texttt{realization}=$R$), $R = 0\ldots9$, and \textbf{the same $R$
+sees the identical annihilation set on both scanners} --- differences between the two masters
+are detector-only, event by event. Expected per-shard and pooled-master statistics (measured on
+shard~0):
+
+\begin{center}
+\begin{tabular}{lcc}
+\toprule
+ & BGO 195\,K & CsI \\
+\midrule
+detector LORs per shard (\texttt{lors\_det})  & $15.3$\,M & $6.1$\,M \\
+acceptance (of $8\times10^7$ annihilations)   & $19.0\%$  & $7.6\%$ \\
+true / scatter / random                       & $72.3 / 27.4 / 0.3\%$ & $86.6 / 13.3 / 0.1\%$ \\
+shard file size                               & ${\sim}490$\,MB & ${\sim}190$\,MB \\
+pooled master ($10$ shards)                   & ${\sim}153$\,M LORs & ${\sim}61$\,M LORs \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The contrast is the point of the pair: BGO delivers $2.5\times$ the statistics; CsI delivers
+purity (half the scatter fraction, $3\times$ fewer randoms) --- the range study arbitrates.
+
+\subsection*{Column semantics (highlights; full schema in \texttt{SCHEMA.md})}
+
+Per LOR: smeared 3-D hit positions and energies of both gammas (quantized Int16, $0.1$\,mm /
+$0.1\keV$), the block indices, per-gamma phantom-scatter counts (\texttt{nscat1/2}: 0 clean,
+1 single, $\ge 2$ multiple), times $t_1, t_2$ (Float32 ns, \emph{relative to the decay}), the
+truth-level timing residual \texttt{dt\_ns}, the true annihilation point
+(\texttt{x0/y0/z0\_mm}), the truth flag (0 true / 1 scatter / 2 random), and
+\texttt{t\_decay\_s} --- the absolute decay time in the acquisition window, so a delayed
+acquisition start is the pure cut $t_{\mathrm{decay}} \ge t_{\mathrm{start}}$ on the stored
+list (statistically exact, per-isotope decay laws included; randoms carry gamma~1's decay,
+matching the \texttt{x0} convention). Root attributes carry full provenance (scenario, dose,
+budget, seeds, detector windows, geometry segmentation).
+
+\subsection*{Relation to the existing reference master}
+
+The pre-existing master at \texttt{crysp\_ring\_1m/bgo/fast\_1Gy/} (ten shards) is
+\textbf{frozen}: it predates this standard (hybrid room/cryo BGO constants, $3.7$\,cm depth,
+no readout floor, $450\keV$ cut, $\tau = 3\ns$, $\sigma_{xyz} = 1.7$\,mm Gaussian $\sigma$).
+It remains valid as a methods reference but must not be pooled or compared quantitatively with
+the two new arms.
 
 \section{Deferred refinements}
 \label{sec:deferred}

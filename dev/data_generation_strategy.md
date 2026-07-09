@@ -196,7 +196,7 @@ is wrong. Cheap (ten fits) and worth running as a standing gate.
   `crysp_ring_1m/bgo/fast_1Gy/` predates the 2026-07-09 detector standard).
 - A full master = **10 such shards**. The **reference BGO master is complete**
   (`crysp_ring_1m/bgo/fast_1Gy/`, shards 0–9, ΣM = 8.02e8) plus the shared `truth/` bundle.
-  The current standard (see `dev/status.md` "Detector configs" + `latex/ctr_note.tex`): 2X₀
+  The current standard (see `dev/status.md` "Detector configs" + `latex/scanner_prods.tex`): 2X₀
   depth, per-crystal σ_t/σ_xyz(3.5 mm FWHM)/eres/τ, two representative scanners — **BGO_195K**
   (`crysp_ring_1m_bgo_2x0/bgo_195k`, τ 5 ns, cut 413 keV) and **CsI**
   (`crysp_ring_1m_csi_2x0/csi`, τ 1.5 ns, cut 472 keV) — additional production runs into the
