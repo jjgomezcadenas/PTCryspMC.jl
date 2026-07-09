@@ -12,7 +12,7 @@ energy_keV = 511.0
 nevents = 100000
 
 [transport]
-crystal_material = "BGO"
+crystal_material = "BGO_77K"
 cutoff_keV = 10.0
 seed = 1234
 

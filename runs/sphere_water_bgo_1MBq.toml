@@ -21,7 +21,7 @@ volume       = "phantom"
 activity_kBq = 1000.0            # 1 MBq total
 
 [transport]
-crystal_material = "BGO"
+crystal_material = "BGO_77K"
 cutoff_keV       = 10.0
 seed             = 1234
 nchunks          = 144           # pinned → reproducible singles

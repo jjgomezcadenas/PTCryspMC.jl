@@ -93,7 +93,7 @@ function main()
     crystal = String(cfg_get(cfg, "transport", "crystal_material", "CsI"))
     cryst   = load_material(joinpath(REPO, "data"), crystal)
     stamp_t(acc, ex, ey, ez) = acc.reached ?
-        tof_ns((ex, ey, ez), (acc.x, acc.y, acc.z)) + first_photon_jitter(cryst, acc.e * 1e-3, rng) : 0.0
+        tof_ns((ex, ey, ez), (acc.x, acc.y, acc.z)) + time_jitter(cryst, acc.e * 1e-3, rng) : 0.0
     # Absolute decay time per event (t_decay_s column) — the config's single-isotope activity clock
     # (the dev chain has no per-isotope scenario timing; the production chain does).
     act = ActivityModel(cfg)

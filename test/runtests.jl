@@ -107,14 +107,22 @@ end
         # The crystal name pulls its intrinsic scintillation/readout properties — no config cards.
         csi = load_material(DATA_DIR, "CsI")            # cryogenic pure CsI
         @test csi.light_yield == 1.0e5
-        @test csi.scint_decay_ns == [1000.0] && csi.scint_decay_w == [1.0]
-        @test csi.eres_a == 0.05 && csi.pde == 0.45
+        @test csi.scint_decay_ns == [800.0] && csi.scint_decay_w == [1.0]
+        @test csi.eres_a == 0.06 && csi.pde == 0.40
+        @test csi.sigma_t_ns == 0.35                    # readout floor (Soleti 2024 anchor, scaled)
 
-        bgo = load_material(DATA_DIR, "BGO")            # cryogenic BGO — two decay components
+        bgo195 = load_material(DATA_DIR, "BGO_195K")    # dry ice — single component
+        @test bgo195.light_yield == 1.4e4
+        @test bgo195.scint_decay_ns == [1768.0] && bgo195.scint_decay_w == [1.0]
+        @test bgo195.eres_a == 0.15 && bgo195.pde == 0.40
+        @test bgo195.sigma_t_ns == 1.1
+
+        bgo = load_material(DATA_DIR, "BGO_77K")        # liquid nitrogen — two decay components
         @test bgo.light_yield == 2.9e4
-        @test bgo.scint_decay_ns == [747.0, 2253.0]
-        @test bgo.scint_decay_w == [0.34, 0.66] && isapprox(sum(bgo.scint_decay_w), 1.0)
-        @test bgo.eres_a == 0.10 && bgo.pde == 0.45
+        @test bgo.scint_decay_ns == [1400.0, 8700.0]
+        @test bgo.scint_decay_w == [0.26, 0.74] && isapprox(sum(bgo.scint_decay_w), 1.0)
+        @test bgo.eres_a == 0.10 && bgo.pde == 0.40
+        @test bgo.sigma_t_ns == 1.1
 
         # Non-scintillators get zero/empty defaults.
         w = load_material(DATA_DIR, "Water")
@@ -128,7 +136,7 @@ end
     end
 
     @testset "BGO crystal material" begin
-        bgo = load_material(DATA_DIR, "BGO")             # Bi4Ge3O12
+        bgo = load_material(DATA_DIR, "BGO_77K")         # Bi4Ge3O12 (transport identical at 195 K)
         @test bgo.density == 7.13
         @test isapprox(first(bgo.E), 0.010)
         @test isapprox(last(bgo.E),  10.0)
@@ -1258,8 +1266,8 @@ end
     end
 
     @testset "scintillation timing — first-photon jitter + TOF + stamp" begin
-        csi = load_material(DATA_DIR, "CsI")            # single component, 1000 ns
-        bgo = load_material(DATA_DIR, "BGO")            # two components, 747 / 2253 ns
+        csi = load_material(DATA_DIR, "CsI")            # single component, 800 ns
+        bgo = load_material(DATA_DIR, "BGO_77K")        # two components, 1400 / 8700 ns
         w   = load_material(DATA_DIR, "Water")          # non-scintillator
         rng = MersenneTwister(2024)
         E = 0.511                                       # MeV
@@ -1276,10 +1284,23 @@ end
         end
         # BGO r0 is the explicit weighted sum (cross-check the mixture handling).
         @test isapprox(sum(bgo.scint_decay_w ./ bgo.scint_decay_ns),
-                       0.34/747.0 + 0.66/2253.0; rtol=1e-12)
+                       0.26/1400.0 + 0.74/8700.0; rtol=1e-12)
+
+        # time_jitter = first-photon + Gaussian readout floor sigma_t_ns: mean unchanged (Gaussian
+        # is centred), variance = exponential² + σ_t² (independent terms).
+        for mat in (csi, bgo)
+            r0 = sum(mat.scint_decay_w ./ mat.scint_decay_ns)
+            θ = 1.0 / (mat.light_yield * E * mat.pde * r0)      # exponential mean = its σ
+            ts = [time_jitter(mat, E, rng) for _ in 1:N]
+            m = sum(ts) / N
+            v = sum(x -> (x - m)^2, ts) / (N - 1)
+            @test isapprox(m, θ; atol=4 * sqrt(v / N) + 1e-3)
+            @test isapprox(v, θ^2 + mat.sigma_t_ns^2; rtol=0.05)
+        end
 
         # Non-scintillator (no yield / PDE) → exactly zero jitter.
         @test first_photon_jitter(w, E, rng) == 0.0
+        @test time_jitter(w, E, rng) == 0.0
 
         # TOF: a known separation over c.
         @test isapprox(tof_ns((0.0,0.0,0.0), (C_MM_PER_NS,0.0,0.0)), 1.0; rtol=1e-12)

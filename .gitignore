@@ -33,3 +33,4 @@ __pycache__/
 
 # Reference papers (external material; keep the repo to source + the two manuals)
 /papers/
+latex/*.pdf

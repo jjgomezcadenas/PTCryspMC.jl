@@ -1,3 +1,9 @@
+# FROZEN REFERENCE — do not re-run. This config produced the crysp_ring_1m/bgo/fast_1Gy master
+# (ten shards) with the historical hybrid "BGO" constants, since removed from data/materials.json
+# (re-running errors on the material name — intentional). The current productions are the three
+# crystal systems: uniform_headep_{bgo77k,bgo195k,csi}_api.toml (per-crystal 3 X0 depth, corrected
+# scintillation constants, CTR-derived tau).
+#
 # API (Proton Activity) production: the positron activity a SOBP proton field leaves in a uniform
 # brain head, imaged by the cryogenic-BGO CRYSP ring. Source = a frozen ptcryspg4 scenario
 # (phantom + per-isotope emitter pools + decay budget); the phantom comes from the scenario's

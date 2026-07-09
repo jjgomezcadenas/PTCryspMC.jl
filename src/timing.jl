@@ -31,6 +31,21 @@ return `0.0`. Allocation-free.
     -log1p(-rand(rng)) / (N_det * r0)
 end
 
+"""
+    time_jitter(mat, E_MeV, rng) -> Float64
+
+The full per-gamma timing jitter [ns]: the physical first-photon term (`first_photon_jitter`,
+energy-dependent photostatistics) plus the crystal's Gaussian READOUT floor `sigma_t_ns` — the
+trigger/threshold, SiPM SPTR and optical-transit contributions that dominate a real measurement
+(a leading-edge threshold cannot time the first photon; see Soleti et al. 2024: measured CsI CTR
+1.84 ns FWHM vs a ~0.24 ns first-photon bound at the same N_pe). `sigma_t_ns` is calibrated per
+crystal so the simulated CTR matches the measured/extrapolated one; it can make the jitter
+negative (a noisy timestamp), which is fine — only time differences matter downstream.
+"""
+@inline time_jitter(mat::Material, E_MeV::Float64, rng::AbstractRNG)::Float64 =
+    first_photon_jitter(mat, E_MeV, rng) +
+    (mat.sigma_t_ns > 0.0 ? mat.sigma_t_ns * randn(rng) : 0.0)
+
 "Time-of-flight [ns] from `emit` to `hit` (3-tuples, mm): ‖hit − emit‖ / c."
 @inline function tof_ns(emit, hit)::Float64
     dx = Float64(hit[1]) - Float64(emit[1])
@@ -49,5 +64,5 @@ columns — are uniformly nanoseconds.
 """
 @inline function photon_timestamp(t_annih_s::Float64, emit, hit, E_MeV::Float64,
                                   mat::Material, rng::AbstractRNG)::Float64
-    t_annih_s * 1.0e9 + tof_ns(emit, hit) + first_photon_jitter(mat, E_MeV, rng)
+    t_annih_s * 1.0e9 + tof_ns(emit, hit) + time_jitter(mat, E_MeV, rng)
 end

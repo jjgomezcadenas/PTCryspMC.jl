@@ -42,7 +42,7 @@ function singles_chunk!(emit, geom::Geometry, src::Source, E0::Float64, cut_MeV:
             s = navigate_single_photons(geom, E0, pos0, dir, rng; egamma_cut=cut_MeV)
             s.reached || continue
             t_rel = tof_ns((pos0[1]*10, pos0[2]*10, pos0[3]*10), (s.x*10, s.y*10, s.z*10)) +
-                    first_photon_jitter(mat, s.e, rng)
+                    time_jitter(mat, s.e, rng)
             emit(ev, g, s, pos0, t_rel, iso)
             nr += 1
         end

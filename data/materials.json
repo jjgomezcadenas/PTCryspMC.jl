@@ -1,5 +1,5 @@
 {
-    "_doc": "Materials for PTCryspMC. density [g/cm^3]; components = element mass fractions (informational); xcom = NIST XCOM mass-attenuation table [cm^2/g], path relative to data/. Transport uses incoherent + photoelectric + pair channels: Sigma = (mu/rho) * density. Scintillators also carry, keyed to the crystal name: light_yield_per_MeV [photons/MeV], scint_decay_ns + scint_decay_w (decay-component lifetimes [ns] and weights summing to 1), eres_a (fractional energy-resolution FWHM at 511 keV), pde (effective photon-detection efficiency for the crystal emission spectrum).",
+    "_doc": "Materials for PTCryspMC. density [g/cm^3]; components = element mass fractions (informational); xcom = NIST XCOM mass-attenuation table [cm^2/g], path relative to data/. Transport uses incoherent + photoelectric + pair channels: Sigma = (mu/rho) * density. Scintillators also carry, keyed to the crystal name: light_yield_per_MeV [photons/MeV], scint_decay_ns + scint_decay_w (decay-component lifetimes [ns] and weights summing to 1), eres_a (fractional energy-resolution FWHM at 511 keV), pde (effective photon-detection efficiency for the crystal emission spectrum), sigma_t_ns (per-gamma Gaussian readout timing floor: trigger/threshold + SPTR + optics, calibrated so the simulated CTR matches measurement — CsI anchored to Soleti et al. 2024 scaled to this PDE; BGO to the ~5 ns window of commercial BGO systems).",
 
     "Vacuum": {
         "density": 0.0,
@@ -25,22 +25,37 @@
         "components": {"Cs": 0.511549, "I": 0.488451},
         "xcom": "xcom_CSI.csv",
         "light_yield_per_MeV": 1.0e5,
-        "scint_decay_ns": [1000.0],
+        "scint_decay_ns": [800.0],
         "scint_decay_w": [1.0],
-        "eres_a": 0.05,
-        "pde": 0.45
+        "eres_a": 0.06,
+        "pde": 0.40,
+        "sigma_t_ns": 0.35
     },
 
-    "BGO": {
-        "_note": "cryogenic BGO",
+    "BGO_195K": {
+        "_note": "BGO at 195 K (dry ice). Faster single-component decay, lower yield than 77 K.",
+        "density": 7.13,
+        "components": {"Bi": 0.671004, "Ge": 0.174900, "O": 0.154096},
+        "xcom": "xcom_BGO.csv",
+        "light_yield_per_MeV": 1.4e4,
+        "scint_decay_ns": [1768.0],
+        "scint_decay_w": [1.0],
+        "eres_a": 0.15,
+        "pde": 0.40,
+        "sigma_t_ns": 1.1
+    },
+
+    "BGO_77K": {
+        "_note": "BGO at 77 K (liquid nitrogen). Two decay components; highest yield.",
         "density": 7.13,
         "components": {"Bi": 0.671004, "Ge": 0.174900, "O": 0.154096},
         "xcom": "xcom_BGO.csv",
         "light_yield_per_MeV": 2.9e4,
-        "scint_decay_ns": [747.0, 2253.0],
-        "scint_decay_w": [0.34, 0.66],
+        "scint_decay_ns": [1400.0, 8700.0],
+        "scint_decay_w": [0.26, 0.74],
         "eres_a": 0.10,
-        "pde": 0.45
+        "pde": 0.40,
+        "sigma_t_ns": 1.1
     },
 
     "Air": {

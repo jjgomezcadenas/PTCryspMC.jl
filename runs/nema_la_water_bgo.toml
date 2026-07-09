@@ -32,7 +32,7 @@ region = [
 ]
 
 [transport]
-crystal_material = "BGO"
+crystal_material = "BGO_77K"
 cutoff_keV       = 10.0
 seed             = 1234
 nchunks          = 144          # pinned → reproducible singles

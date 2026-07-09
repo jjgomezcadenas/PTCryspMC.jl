@@ -1,0 +1,314 @@
+% Documentation note — coincidence time resolution (CTR) in PTCryspMC:
+% findings, calibration to measurement, and how the timing model handles it.
+% Self-contained: compiles with pdflatex (no external figures or .bib).
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[margin=2.6cm]{geometry}
+\usepackage{amsmath}
+\usepackage{booktabs}
+\usepackage[colorlinks=true, linkcolor=blue!50!black, citecolor=blue!50!black, urlcolor=blue!50!black]{hyperref}
+\usepackage{xcolor}
+
+\newcommand{\Ndet}{N_{\mathrm{det}}}
+\newcommand{\ns}{\,\mathrm{ns}}
+\newcommand{\ps}{\,\mathrm{ps}}
+\newcommand{\keV}{\,\mathrm{keV}}
+
+\title{Coincidence time resolution in \textsc{PTCryspMC}:\\
+       findings, calibration to measurement, and the timing model}
+\author{PTCryspMC.jl documentation note}
+\date{July 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+\noindent
+The first version of the \textsc{PTCryspMC} timing model stamped each detected gamma with the
+arrival time of its \emph{first} scintillation photon. That model is internally consistent but
+represents only the photostatistics floor: for cryogenic CsI it predicts a coincidence time
+resolution (CTR) of $49\ps$ FWHM, a factor ${\sim}40$ better than the measured $1.84\ns$
+\cite{Soleti2024}. This note documents the finding, decomposes the discrepancy
+(photon statistics vs.\ optical transport vs.\ trigger electronics), and describes the adopted
+solution: a per-crystal Gaussian \emph{readout floor} $\sigma_t$, added to the physical
+first-photon term and calibrated to bench measurements and to the operating point of commercial
+BGO systems. With the calibrated model, the simulated raw time-difference widths are
+$\sigma \simeq 0.51\ns$ (CsI) and $1.77\ns$ (BGO at 77\,K and at 195\,K, indistinguishable),
+and the pinned coincidence windows $\tau = 1.5\ns$ (CsI) and $5\ns$ (BGO) sit at
+${\sim}3\sigma$, keeping $99.7\%$ and $99.3\%$ of true coincidences respectively.
+\end{abstract}
+
+\section{Context and definitions}
+
+\textsc{PTCryspMC} is a fast, photon-only Monte Carlo of a PET ring: it transports the two
+$511\keV$ annihilation gammas, forms per-crystal hits, and writes the list-mode coincidence
+(LOR) file. Scintillation light is \emph{not} tracked photon by photon; the timing of each
+detected gamma is produced by an analytic model evaluated once per hit. Three crystal systems
+are simulated (table~\ref{tab:systems}): pure CsI at ${\sim}100$\,K, and BGO at two cryogenic
+operating points, 195\,K (dry ice) and 77\,K (liquid nitrogen). All three share the same ring
+(transverse block size, $48\times20$ blocks) with a per-crystal depth of three radiation
+lengths.
+
+Two time-difference quantities must be kept distinct:
+\begin{itemize}
+\item $\Delta t_{\mathrm{raw}} = t_1 - t_2$, the \textbf{window variable}: the difference of the
+  two measured arrival times. It physically contains the time-of-flight (TOF) difference of the
+  two gammas --- including each gamma's depth-of-interaction (DOI) penetration --- convolved
+  with the detector timing response. A scanner cuts on
+  $|\Delta t_{\mathrm{raw}}| \le \tau$; nothing is, or can be, corrected for TOF, since the
+  emission point is unknown in a measurement.
+\item $dt = (t_1 - t_2) - \Delta\mathrm{TOF}$, the \textbf{TOF-corrected residual}: the
+  detector-only response, computable in the simulation because the true emission point is
+  known. It is what a bench measurement with a centred point source calls CTR (there the two
+  TOFs are equal and cancel). In the simulation output it is a truth-level diagnostic; it is
+  never used in any selection.
+\end{itemize}
+
+\begin{table}[ht]
+\centering
+\caption{The three simulated crystal systems. Light yield $Y$, decay components
+$\tau_k$ with weights $w_k$, energy resolution $a$ (FWHM at $511\keV$), effective photon
+detection efficiency (PDE), depth (3\,$X_0$), photopeak selection
+($E_{\mathrm{min}} = 511 - 3\sigma_E$), and the calibrated readout floor $\sigma_t$
+(section~\ref{sec:model}). CsI constants follow the measurements of ref.~\cite{Soleti2024}
+($\,{\sim}90{,}000$ photons/MeV, single ${\sim}800\ns$ component at 104\,K, $6.3\%$ FWHM);
+BGO cryogenic constants from the CRYSP programme. The PDE corresponds to the Hamamatsu
+S14160-6050HS ($\sim$40\% at the CsI 350\,nm cryogenic emission; the BGO band sits at longer
+wavelengths where the sensor response is similar or better), with light-collection efficiency
+taken as ${\approx}1$ for the large monolithic blocks pending a dedicated optical MC.}
+\label{tab:systems}
+\vspace{2mm}
+\begin{tabular}{lccc}
+\toprule
+ & CsI (${\sim}100$\,K) & BGO (195\,K) & BGO (77\,K) \\
+\midrule
+$Y$ (photons/MeV)            & $100{,}000$   & $14{,}000$ & $29{,}000$ \\
+$\tau_k$ (ns)                & 800           & 1768       & 1400 / 8700 \\
+$w_k$                        & 1.0           & 1.0        & 0.26 / 0.74 \\
+$a$ (FWHM at 511 keV)        & 6\%           & 15\%       & 10\% \\
+PDE                          & 0.40          & 0.40       & 0.40 \\
+depth $= 3X_0$ (cm)          & 5.580         & 3.354      & 3.354 \\
+$E_{\mathrm{min}}$ (keV)     & 472           & 413        & 446 \\
+$\sigma_t$ (ns)              & 0.35          & 1.1        & 1.1 \\
+coincidence window $\tau$ (ns) & 1.5         & 5.0        & 5.0 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{The first-photon model and why it is a floor}
+\label{sec:firstphoton}
+
+A deposit of energy $E$ is assumed to produce
+\begin{equation}
+  \Ndet = Y \, E \, \mathrm{PDE}
+\end{equation}
+detected scintillation photons. Each photon's emission time follows the decay mixture
+$f(t) = \sum_k (w_k/\tau_k)\, e^{-t/\tau_k}$, whose rate at early times is
+$r_0 = f(0) = \sum_k w_k/\tau_k$. Since the first arrival occurs at times far below the decay
+constants, the minimum of $\Ndet$ such draws is exponential with rate $\Ndet\, r_0$:
+\begin{equation}
+  t_{\mathrm{jitter}} = -\frac{\ln u}{\Ndet\, r_0}, \qquad u \sim \mathcal{U}(0,1),
+  \qquad \langle t_{\mathrm{jitter}} \rangle = \frac{1}{\Ndet\, r_0}.
+  \label{eq:firstphoton}
+\end{equation}
+For a full-energy $511\keV$ deposit this gives a mean jitter of $39\ps$ per gamma for CsI
+($\Ndet \approx 20{,}400$) and ${\approx}0.62\ns$ for both BGO systems
+($\Ndet \approx 5{,}900$ at 77\,K, $2{,}900$ at 195\,K --- the lower yield at 195\,K is almost
+exactly compensated by its faster decay, a degeneracy that persists throughout this note).
+The difference of two independent exponentials is Laplace-distributed, so the model predicted
+CTR values of $49\ps$ (CsI) and ${\approx}0.78\ns$ (BGO) FWHM.
+
+Two properties of eq.~\eqref{eq:firstphoton} are worth keeping: the correct scaling of the
+photostatistics term with deposited energy (a low-energy crystal deposit has few photons and
+poor timing --- the time spread grows as $1/E$), and its correct dependence on yield, PDE and
+decay mixture. What it omits is everything downstream of photon emission.
+
+\section{Confrontation with measurement}
+\label{sec:measurement}
+
+Soleti et al.~\cite{Soleti2024} measured pure CsI at 104\,K
+($3\times3\times20$\,mm$^3$ crystals, PTFE-wrapped, one $3\times3$\,mm$^2$ MPPC each):
+light yield ${\sim}90{,}000$ photons/MeV, a single ${\sim}800\ns$ decay component, energy
+resolution $6.3\%$ FWHM --- all in agreement with the constants of table~\ref{tab:systems} ---
+and a \textbf{CTR of $1.84 \pm 0.07\ns$ FWHM}, using leading-edge time pick-off at five times
+the electronic noise, in a photopeak energy window.
+
+The bench photoelectron count was $N_{\mathrm{pe}} \approx 4{,}600$ (PDE 17\% for that MPPC at
+the cryogenic emission spectrum, light-collection efficiency 58\% for the narrow crystal
+geometry). Even at that $N_{\mathrm{pe}}$, the ideal first-photon bound of
+eq.~\eqref{eq:firstphoton} is ${\sim}0.24\ns$ FWHM --- a factor $7$--$8$ below the measurement.
+The remainder is the readout: a fixed-voltage leading-edge threshold on a pulse that rises with
+an $800\ns$ decay constant crosses at an effective depth of order ten photoelectrons, with
+residual time walk on top. Tellingly, the authors observed that \emph{lowering} the threshold
+below $3\sigma$ of the noise \emph{worsened} the CTR: the noise floor forbids true first-photon
+timing. The measured CTR is therefore \textbf{electronics/trigger dominated}, and the
+first-photon term of section~\ref{sec:firstphoton} is a small correction to it.
+
+The intermediate contribution --- optical transport inside the crystal --- is small for the
+geometries simulated here. The bench's 58\% collection efficiency was the price of a $20{:}7$
+aspect-ratio needle with many wall reflections; the scanner's large monolithic blocks with
+full-face readout reflect far less (PTFE reflectivity is ${\sim}95\%$ \cite{Janecek2012}), and
+the DOI-dependent light-transit spread across the block depth amounts to
+$\sigma \approx 40$--$60\ps$ per gamma. The hierarchy of per-gamma contributions is then:
+
+\begin{center}
+\begin{tabular}{lcc}
+\toprule
+per-gamma term & CsI & BGO (both) \\
+\midrule
+photostatistics floor (modelled, eq.~\ref{eq:firstphoton}) & $39\ps$  & $620\ps$ \\
+optical transit (unmodelled)                               & ${\sim}50\ps$ & ${\sim}50\ps$ \\
+electronics / trigger (unmodelled)                         & \textbf{dominant} & subdominant \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+For BGO no equivalent cryogenic bench CTR exists yet. Extrapolating from the CsI anchor with
+the standard scintillator figure of merit $\mathrm{CTR} \propto \sqrt{\tau/N_{\mathrm{ph}}}$
+\cite{Conti2009} (the scaling law also used by ref.~\cite{Soleti2024} for its own
+extrapolations), both BGO operating points land at ${\approx}4\times$ the CsI CTR. This is
+consistent with the ${\sim}5\ns$ coincidence window at which commercial whole-body BGO systems
+operate, e.g.\ the GE Omni Legend~32 \cite{Yamagishi2023}, which we take as the realistic
+operating point.
+
+\section{How the model handles it}
+\label{sec:model}
+
+The adopted timestamp of a detected gamma is
+\begin{equation}
+  t \;=\; \mathrm{TOF}(\text{annihilation} \to \text{first interaction})
+     \;+\; t_{\mathrm{jitter}}
+     \;+\; \sigma_t \cdot g, \qquad g \sim \mathcal{N}(0,1),
+  \label{eq:stamp}
+\end{equation}
+where $t_{\mathrm{jitter}}$ is the physical first-photon draw of eq.~\eqref{eq:firstphoton}
+and $\sigma_t$ is a per-crystal Gaussian \textbf{readout floor} lumping the trigger/threshold
+statistics, the SiPM single-photon transit spread, and the optical transit --- everything a
+leading-edge readout adds on top of photon emission. The physical term is kept because it is
+free, carries the correct $1/E$ deterioration for low-energy deposits, and is genuinely the
+dominant term for slow low-yield crystals; the Gaussian term carries the measured reality.
+TOF is the gamma's flight to its own first interaction point, so the DOI penetration is
+inside each $t$ and hence inside $\Delta t_{\mathrm{raw}}$ --- consistent with a measurement,
+where DOI is likewise absorbed into the arrival times. No TOF correction is applied anywhere
+in the selection chain.
+
+The calibration of $\sigma_t$:
+\begin{itemize}
+\item \textbf{CsI: $\sigma_t = 0.35\ns$.} Anchored to the measured $1.84\ns$ FWHM
+  \cite{Soleti2024} at $N_{\mathrm{pe}} = 4{,}600$, scaled by
+  $\sqrt{N}$ to the scanner assumption $\Ndet \approx 20{,}400$
+  (PDE 0.40 with the Hamamatsu S14160-6050HS and near-unity collection in the large block),
+  and chosen so that the total raw width satisfies $3\sigma \approx 1.5\ns$, the pinned window.
+\item \textbf{BGO (both): $\sigma_t = 1.1\ns$.} From the $\mathrm{CTR} \propto
+  \sqrt{\tau/N_{\mathrm{ph}}}$ extrapolation of the CsI anchor \cite{Conti2009}, and chosen so
+  that $3\sigma \approx 5\ns$, matching the window of the commercial BGO reference
+  \cite{Yamagishi2023}. To be replaced by a direct calibration when a cryogenic BGO bench CTR
+  becomes available.
+\end{itemize}
+
+One methodological point: the CTR study must be conditioned on the photopeak energy selection
+($E \ge 511 - 3\sigma_E$ per crystal, table~\ref{tab:systems}). The uncut coincidence list
+contains few-keV crystal deposits whose photostatistics jitter, by the $1/E$ scaling of
+eq.~\eqref{eq:firstphoton}, reaches $10^2$--$10^5\ns$; these events dominate a naive standard
+deviation but never survive the energy selection that precedes any timing cut in the real
+chain.
+
+\section{Validated results and the coincidence windows}
+\label{sec:results}
+
+The model was validated with one full production shard per scanner ($8\times10^7$ decays of a
+1\,Gy proton-therapy activity scenario in a head phantom; $8.7$--$19$~million
+energy-selected true coincidences each). Table~\ref{tab:results} shows the measured widths and
+the containment at the pinned windows.
+
+\begin{table}[ht]
+\centering
+\caption{Simulated timing with the calibrated model (one shard per scanner,
+photopeak-selected). $\sigma_{\mathrm{raw}}$ is the width of the window variable
+$\Delta t_{\mathrm{raw}}$ (it includes the TOF spread of the source across the head phantom
+and the DOI spread); the CTR column is the FWHM of the TOF-corrected residual (the
+bench-equivalent detector response). The pinned windows sit at ${\sim}3\sigma$.}
+\label{tab:results}
+\vspace{2mm}
+\begin{tabular}{lccccc}
+\toprule
+scanner & $\sigma_{\mathrm{raw}}$ & CTR (FWHM) & $\tau$ & $\tau/\sigma_{\mathrm{raw}}$ &
+trues kept at $\tau$ \\
+\midrule
+CsI       & $0.512\ns$ & $1.17\ns$ & $1.5\ns$ & $2.9$ & $99.66\%$ \\
+BGO 77\,K  & $1.77\ns$  & $4.08\ns$ & $5.0\ns$ & $2.8$ & $99.32\%$ \\
+BGO 195\,K & $1.77\ns$  & $4.08\ns$ & $5.0\ns$ & $2.8$ & $99.31\%$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Findings:
+\begin{enumerate}
+\item \textbf{The calibrated CsI CTR is $1.17\ns$ FWHM} --- consistent with the bench
+  measurement of ref.~\cite{Soleti2024} once the improved sensor (PDE $0.17 \to 0.40$) and the
+  block light collection are credited, and a factor ${\sim}24$ more conservative than the
+  original first-photon prediction.
+\item \textbf{The two BGO operating points are indistinguishable in timing} (widths equal to
+  three digits): the 195\,K yield loss is compensated by its faster decay at every level of the
+  modelling --- first-photon mean, figure-of-merit extrapolation, and full MC. The choice
+  between them is therefore purely an energy-resolution choice ($10\%$ vs.\ $15\%$ FWHM),
+  i.e.\ scatter rejection, not timing.
+\item \textbf{The pinned windows behave as $3\sigma$ Gaussian cuts.} With the Gaussian floor
+  dominant, the raw $\Delta t$ distributions are Gaussian to good accuracy (robust and standard
+  widths agree to $0.1\%$), and the earlier concern about heavy Laplace tails --- which made
+  $3\sigma$ keep only $97\%$ when the exponential term dominated --- has dissolved.
+\item \textbf{For CsI the window is not detector-limited.} Its raw width
+  ($0.51\ns$) is dominated by the readout floor and the TOF/DOI geometric spread in comparable
+  parts; the photostatistics term ($39\ps$) is negligible. Any further sensor improvement
+  changes CsI's window only marginally --- the head geometry is already visible in it.
+\end{enumerate}
+
+\section{Deferred refinements}
+\label{sec:deferred}
+
+Two refinements are scoped but deliberately deferred:
+\begin{itemize}
+\item \textbf{A standalone optical MC} of one monolithic block (PTFE-lined, SiPM plane on the
+  instrumented face): a one-time computation per crystal system that would replace the
+  ${\approx}1$ collection-efficiency assumption, quantify the DOI--time correlation
+  (${\sim}0.13$--$0.15\ns$ systematic swing across the depth), and allow the readout floor to
+  be split into its physical parts. Tracking the ${\sim}10^{12}$ optical photons of a
+  production shard inline is not tractable, nor necessary: the parameterised result feeds
+  eq.~\eqref{eq:stamp}.
+\item \textbf{Scintillation rise time}: eq.~\eqref{eq:firstphoton} assumes the emission rate is
+  maximal at $t=0$. A finite rise would degrade the first-photon term; at present it is
+  absorbed into $\sigma_t$, pending cryogenic rise-time measurements.
+\end{itemize}
+
+\begin{thebibliography}{9}
+
+\bibitem{Soleti2024}
+S.~R.~Soleti, A.~Castillo, J.~Collar, M.~del Barrio-Torregrosa, C.~Echeverria, M.~Seemann,
+D.~Zerzion and J.~J.~G\'omez Cadenas,
+\emph{Cryogenic cesium iodide as a potential PET material},
+JINST (2025), arXiv:2406.13598 [physics.ins-det].
+
+\bibitem{Conti2009}
+M.~Conti, L.~Eriksson, H.~Rothfuss and C.~L.~Melcher,
+\emph{Comparison of fast scintillators with TOF PET potential},
+IEEE Trans.\ Nucl.\ Sci.\ \textbf{56} (2009) 926.
+
+\bibitem{Yamagishi2023}
+S.~Yamagishi, K.~Miwa, S.~Kamitaki, K.~Anraku, S.~Sato, T.~Yamao et al.,
+\emph{Performance characteristics of a new-generation digital bismuth germanium oxide PET/CT
+system, Omni Legend 32, according to NEMA NU 2-2018 standards},
+J.\ Nucl.\ Med.\ \textbf{64} (2023) 1990.
+
+\bibitem{Janecek2012}
+M.~Janecek,
+\emph{Reflectivity spectra for commonly used reflectors},
+IEEE Trans.\ Nucl.\ Sci.\ \textbf{59} (2012) 490.
+
+\bibitem{Amsler2002}
+C.~Amsler et al.,
+\emph{Temperature dependence of pure CsI: scintillation light yield and decay time},
+Nucl.\ Instrum.\ Meth.\ A \textbf{480} (2002) 494.
+
+\end{thebibliography}
+
+\end{document}

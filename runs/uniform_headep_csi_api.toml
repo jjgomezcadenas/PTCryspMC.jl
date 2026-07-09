@@ -1,0 +1,36 @@
+# API production: SOBP proton field in a uniform brain head, imaged by the CRYSP ring with
+# cryogenic pure CsI (100k ph/MeV, single 800 ns decay, eres 6% FWHM).
+# Ring depth = 3 X0 of CsI (5.580 cm), same transverse layout as the reference crysp_ring_1m.
+# reco_emin = 511 - 3*sigma_E = 472 keV. eres/timing constants come from the crystal entry in
+# data/materials.json (no [detector].eres override). tau_ns is pinned from the CTR study
+# (scripts/studies/ — one-shard MC per scanner) before any production.
+
+[source]
+mode          = "api"
+scenario_dir  = "../ptcrysp-scenarios/scenarios/uniform_headep_sobp_1e8"
+budget        = "fast"
+dose_Gy       = 1.0
+master_seed   = 1
+realization   = 0
+time_seed     = 1234
+keep_escaped  = false
+
+[geometry]
+file = "geometry/geometry_head_csi_3x0.json"
+
+[transport]
+crystal_material = "CsI"
+seed             = 1234
+nchunks          = 144
+
+[timing]
+tau_ns = 1.5                   # 3σ of the raw t1−t2 (CTR study + Soleti 2024 bench anchor)
+
+[detector]
+sigma_xyz_mm  = 1.7            # CRYSP position/DOI resolution (Gaussian σ per axis)
+emin_keV      = 300.0          # spectrum-study lower cut (Compton shoulder visible)
+reco_emin_keV = 472.0          # photopeak cut: 511 − 3σ_E at 6% FWHM
+
+[output]
+format   = "hdf5"
+prod_dir = "prod"
