@@ -1,0 +1,36 @@
+# API production: SOBP proton field in a uniform brain head, imaged by the CRYSP ring with
+# BGO at 195 K (dry-ice operating point: 14k ph/MeV, single 1768 ns decay, eres 15% FWHM).
+# Bore-700mm variant: crystal R 350 mm, 43 x 10 blocks, AFOV 512 mm (patient aperture ~60 cm).
+# Depth 2 X0 of BGO (2.236 cm); detector constants unchanged.
+# reco_emin = 511 - 3*sigma_E = 413 keV. eres, sigma_xyz (3.5 mm FWHM) and timing constants come
+# from the crystal entry in data/materials.json (no [detector] overrides). tau_ns from the CTR study
+# (scripts/studies/ — one-shard MC per scanner) before any production.
+
+[source]
+mode          = "api"
+scenario_dir  = "../ptcrysp-scenarios/scenarios/uniform_headep_sobp_1e8"
+budget        = "fast"
+dose_Gy       = 1.0
+master_seed   = 1
+realization   = 0
+time_seed     = 1234
+keep_escaped  = false
+
+[geometry]
+file = "geometry/geometry_r35_50cm_bgo_2x0.json"
+
+[transport]
+crystal_material = "BGO_195K"
+seed             = 1234
+nchunks          = 144
+
+[timing]
+tau_ns = 5.0                   # 3σ of the raw t1−t2 (CTR study; ~the window of commercial BGO systems)
+
+[detector]
+emin_keV      = 300.0          # spectrum-study lower cut (Compton shoulder visible)
+reco_emin_keV = 413.0          # photopeak cut: 511 − 3σ_E at 15% FWHM
+
+[output]
+format   = "hdf5"
+prod_dir = "prod"

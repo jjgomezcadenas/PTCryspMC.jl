@@ -1,0 +1,31 @@
+{
+    "_doc": "Head-phantom geometry for the API source mode — CsI ring at 2 radiation lengths. Mid-bore variant: crystal r_inner 300 mm (patient aperture ~50 cm after cryostat), 37 phi-blocks (50.9 mm arc) x 10 wheels = 512 mm axial; same block technology and detector constants (r_inner, n_phi, n_z, half_length); wall = 2 X0 of CsI (X0 = 1.860 cm -> 3.720 cm; the CRYSP 3.5 mm FWHM position resolution is measured on 2X0 crystals). The phantom section is a PLACEHOLDER — in mode=\"api\" the driver replaces it with the phantom built from the scenario's phantom_regions.csv. Dimensions in cm; material keys into data/materials.json.",
+    "world": {
+        "name": "world",
+        "shape": "cylinder",
+        "radius_cm": 60.0,
+        "half_length_cm": 60.0,
+        "position_cm": [0.0, 0.0, 0.0],
+        "material": "Air"
+    },
+    "phantom": {
+        "name": "head_placeholder",
+        "shape": "ellipsoid",
+        "a_cm": 7.2,
+        "b_cm": 8.7,
+        "c_cm": 10.2,
+        "position_cm": [0.0, -3.0, 0.0],
+        "material": "G4_BRAIN_ICRP"
+    },
+    "scanner": {
+        "name": "crysp_r30_50cm_csi_2x0",
+        "shape": "cyl_shell",
+        "r_inner_cm": 30.0,
+        "wall_thickness_cm": 3.72,
+        "half_length_cm": 25.6,
+        "n_phi": 37,
+        "n_z": 10,
+        "position_cm": [0.0, 0.0, 0.0],
+        "material": "CsI"
+    }
+}
