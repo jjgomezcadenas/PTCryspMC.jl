@@ -96,13 +96,32 @@ eres_a, pde 0.40, σ_t, σ_xyz — configs override only deliberately):
 
 σ_xyz = 3.5 mm FWHM per axis for all (CRYSP SiPM measurement on 2X₀ crystals). **Depth
 standard: 2X₀** (CsI 3.72 cm / BGO 2.236 cm — resolution measured at 2X₀; 3X₀ would degrade it
-and raise cost; 3X₀ geometries kept for a thick-crystal study). Scanners named with the depth:
-`crysp_ring_1m_{bgo,csi}_{2x0,3x0}`. The BGO temperatures are timing-degenerate → **the two
-representative production scanners are BGO_195K and CsI** (`runs/uniform_headep_{bgo195k,csi}_api.toml`;
-`bgo77k` config ready but not scheduled). Rationale + findings: `latex/scanner_prods.tex`. The old
-hybrid "BGO" material is removed; `runs/uniform_headep_bgo_api.toml` is the frozen reference of
-the existing `crysp_ring_1m/bgo` master. CsI(Tl) (7%) and the pixelated detectors (LYSO,
-standard BGO) are still to add.
+and raise cost; 3X₀ geometries kept for a thick-crystal study). Only BGO_195K + CsI are
+produced (the BGO temperatures are timing-degenerate → 195K is the cheaper representative;
+`bgo77k`/`3x0` configs ready but unscheduled). The old hybrid "BGO" material is removed;
+`runs/uniform_headep_bgo_api.toml` is the frozen reference of the existing `crysp_ring_1m/bgo`
+master. CsI(Tl) (7%) and the pixelated detectors (LYSO, standard BGO) are still to add.
+
+**Scanner-geometry survey (built).** A family of closed rings, same block/constants/source,
+varying radius and AFOV, to map σ_R vs geometry (full detail + acceptance table:
+`latex/scanner_prods.tex`). Scanners named `crysp_<tag>_{bgo,csi}_2x0`; every arm in both
+crystals; detector-level acceptance (shard 0, of 8.0e7 annihilations, BGO_195K / CsI):
+
+| scanner | R (mm) | AFOV (mm) | φ×z | accept. BGO / CsI | shards |
+|---|---|---|---|---|---|
+| ring_1m  | 387 | 1024 | 48×20 | 19.0 / 7.6% | 10 |
+| r30_50cm | 300 | 512  | 37×10 | 13.6 / 5.35% | 1 |
+| chs      | 200 | 358  | 25×7  | 12.7 / 4.9% | 10 |
+| r35_50cm | 350 | 512  | 43×10 | 12.1 / 4.78% | 10 |
+| ring_50cm| 387 | 512  | 48×10 | 11.1 / 4.4% | 1 |
+| r35_35cm | 350 | 358  | 43×7  | 7.8 / 3.11% | 10 |
+| r30_30cm | 300 | 307  | 37×6  | 7.2 / 2.85% | 10 |
+| r35_30cm | 350 | 307  | 43×6  | 6.2 / 2.48% | 1 |
+
+Ten full masters (5 geometries × 2 crystals, ΣM = 8.02e8 each) + 3 geometry pairs at shard 0.
+Findings: purity geometry-independent (~72–75% / ~87% trues BGO / CsI); radius beats length —
+CHS (R200) beats every R≥300 ring below 1 m; the axial-loss hits the phantom poles, not the
+central distal edge. `chs` = compact head scanner (R200 → ~30 cm bore, vertex-to-C7).
 
 ## Documentation
 

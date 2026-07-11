@@ -103,13 +103,19 @@ everything; configs override only deliberately):
 
 Shared: pde 0.40 (Hamamatsu S14160-6050HS), σ_xyz 3.5 mm FWHM per axis (= 1.486 mm σ; the
 CRYSP SiPM measurement, made on 2X₀ crystals — hence the depth standard below). **Depth = 2X₀**
-(CsI 3.72 cm, BGO 2.236 cm; same transverse block everywhere), scanners named with the depth
-(`crysp_ring_1m_{bgo,csi}_2x0`; 3X₀ variants kept for a future thick-crystal study). The two
-BGO temperatures are timing-degenerate (yield loss ↔ faster decay); they differ only in eres
-and cryogenic cost. **The two representative scanners for production: BGO_195K and CsI**
-(rationale + all timing findings: `latex/scanner_prods.tex`). CsI(Tl) (7%) is still to add;
-pixelated detectors (LYSO, standard BGO) report a fixed crystal rather than a continuous
-position, and come later.
+(CsI 3.72 cm, BGO 2.236 cm; same transverse block everywhere; 3X₀ variants kept for a future
+thick-crystal study). Only BGO_195K + CsI are produced — the two BGO temperatures are
+timing-degenerate (yield loss ↔ faster decay), so 195K is the cheaper representative; findings
++ calibration in `latex/scanner_prods.tex`. CsI(Tl) (7%) is still to add; pixelated detectors
+(LYSO, standard BGO) report a fixed crystal rather than a continuous position, and come later.
+
+**Scanner-geometry survey.** Beyond the 1 m flagship, a family of closed rings varies radius
+(200–387 mm) and AFOV (30–102 cm) at fixed block/constants/source, to map σ_R vs geometry —
+scanners `crysp_<tag>_{bgo,csi}_2x0` (e.g. `crysp_chs` = compact head scanner, R200 → ~30 cm
+bore; `crysp_r35_50cm` = R350 × 50 cm), each in both crystals. The block face is fixed, so the
+φ×z counts quantize (radius, AFOV). Radius beats length for a head target (the CHS outperforms
+every R≥300 ring below 1 m at a fraction of the crystal); purity is geometry-independent. Full
+survey + acceptance table + the products layout: `latex/scanner_prods.tex`.
 
 ## Output — `lors_det.h5`
 
@@ -243,9 +249,11 @@ three crystal systems with the CTR-calibrated timing (σ_t) and per-crystal σ_x
 `truth/` bundle; the ten-shard `crysp_ring_1m/bgo/fast_1Gy` master is a **frozen reference** —
 its config uses the removed hybrid "BGO" entry). `Pkg.test` passes (**1024**).
 
-**Remaining** (all mechanical or downstream): the two representative productions — BGO_195K and
-CsI at 2X₀ (configs ready; one-shard CTR re-check at the 2X₀ geometry first, then `run_shards`);
-the Documenter doc-site; and the deferred-but-scoped engine gates (multi-region phantom, open
-dual-head, mixed crystal, standalone optical MC). See `dev/status.md` for the full register.
+**Produced** (in `PtCryspProds/`, local): the scanner-geometry survey — ten full ten-shard
+masters (5 geometries × BGO_195K/CsI) plus 3 geometry pairs at shard 0; acceptance table and
+findings in `dev/status.md` + `latex/scanner_prods.tex`. **Remaining** (mechanical or
+downstream): promoting the remaining survey singles to masters on demand; the Documenter
+doc-site; and the deferred-but-scoped engine gates (multi-region phantom, open dual-head, mixed
+crystal, standalone optical MC). See `dev/status.md` for the full register.
 
 Downstream (separate repo, `CryspBrainSim`): reconstruction, range precision, detector comparison.

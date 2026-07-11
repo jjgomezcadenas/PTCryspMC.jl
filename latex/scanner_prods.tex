@@ -38,10 +38,11 @@ BGO systems. With the calibrated model, the simulated raw time-difference widths
 $\sigma \simeq 0.51\ns$ (CsI) and $1.77\ns$ (BGO at 77\,K and at 195\,K, indistinguishable),
 and the pinned coincidence windows $\tau = 1.5\ns$ (CsI) and $5\ns$ (BGO) sit at
 ${\sim}3\sigma$, keeping $99.7\%$ and $99.3\%$ of true coincidences respectively.
-The note closes with the production deliverables (section~\ref{sec:deliverables}): two
-ten-shard list-mode masters --- BGO 195\,K and cryogenic CsI on the same $2X_0$ ring, from the
-identical proton-activity source --- with the geometry, statistics, file layout and column
-semantics the downstream \textsc{CryspBrainSim} analysis consumes.
+The note closes with the production deliverables (section~\ref{sec:deliverables}): a
+scanner-geometry survey --- eight ring designs (radius $200$--$387$\,mm, AFOV $30$--$102$\,cm),
+each in both crystals, from the identical proton-activity source, five promoted to ten-shard
+masters --- with the geometry, statistics, file layout and column semantics the downstream
+\textsc{CryspBrainSim} analysis consumes.
 \end{abstract}
 
 \section{Context and definitions}
@@ -307,78 +308,106 @@ deposits for the light-based position estimator.
 \section{Production deliverables for \textsc{CryspBrainSim}}
 \label{sec:deliverables}
 
-Two ten-shard list-mode masters are produced, one per representative scanner, into the
-\texttt{PtCryspProds/} tree (layout contract: \texttt{PRODUCTS.md} = the tree's
-\texttt{README.md}; column schema: \texttt{SCHEMA.md} at the tree root, refreshed on every
-publish, as is this note's PDF):
+The productions form a \textbf{scanner-geometry survey}: the same block module, crystal
+systems, detector constants and identical proton-activity source, over a family of closed rings
+that vary only in \emph{radius} and \emph{axial length}. The aim is the range-precision figure
+$\sigma_R$ as a function of geometry, at fixed physics. Files land in the \texttt{PtCryspProds/}
+tree (layout contract: \texttt{PRODUCTS.md} = the tree's \texttt{README.md}; column schema:
+\texttt{SCHEMA.md} at the tree root, refreshed on every publish, as is this note's PDF).
+
+Each leaf, at \texttt{<scanner>/<crystal>/fast\_1Gy/} under the scenario, holds
+\texttt{lors\_shardNNN.h5} plus \texttt{config.toml} (the regeneration recipe);
+\texttt{scanner\_geometry.json} sits at the scanner level, and the shared \texttt{phantom/}
+($\mu$-map inputs) and \texttt{truth/} (dose-$R_{80}$ + activity-$R_{50}$) bundles at the
+scenario level. Every arm exists in \textbf{both} crystals (BGO 195\,K and CsI). A leaf carries
+\textbf{ten shards} (a full master, $\Sigma M \approx 8.0\times10^8$ decays) or \textbf{one
+shard} (a survey point sufficient for acceptance / composition, promotable to a master on
+request):
 
 \begin{center}
-\begin{tabular}{ll}
+\small\setlength{\tabcolsep}{5pt}
+\begin{tabular}{lccccc}
 \toprule
-BGO 195\,K & \texttt{uniform\_headep\_sobp\_1e8/crysp\_ring\_1m\_bgo\_2x0/bgo\_195k/fast\_1Gy/} \\
-CsI        & \texttt{uniform\_headep\_sobp\_1e8/crysp\_ring\_1m\_csi\_2x0/csi/fast\_1Gy/} \\
+scanner & radius & AFOV & $\varphi\times z$ blocks & crystal area & shards \\
+\midrule
+\texttt{crysp\_ring\_1m}   & 387\,mm & 1024\,mm & $48\times20$ & 2.49\,m$^2$ & \textbf{10} \\
+\texttt{crysp\_r35\_50cm}  & 350\,mm & 512\,mm  & $43\times10$ & 1.13\,m$^2$ & \textbf{10} \\
+\texttt{crysp\_r35\_35cm}  & 350\,mm & 358\,mm  & $43\times7$  & 0.79\,m$^2$ & \textbf{10} \\
+\texttt{crysp\_r30\_30cm}  & 300\,mm & 307\,mm  & $37\times6$  & 0.58\,m$^2$ & \textbf{10} \\
+\texttt{crysp\_chs}        & 200\,mm & 358\,mm  & $25\times7$  & 0.45\,m$^2$ & \textbf{10} \\
+\texttt{crysp\_r30\_50cm}  & 300\,mm & 512\,mm  & $37\times10$ & 0.97\,m$^2$ & 1 \\
+\texttt{crysp\_ring\_50cm} & 387\,mm & 512\,mm  & $48\times10$ & 1.25\,m$^2$ & 1 \\
+\texttt{crysp\_r35\_30cm}  & 350\,mm & 307\,mm  & $43\times6$  & 0.68\,m$^2$ & 1 \\
 \bottomrule
 \end{tabular}
 \end{center}
 
-Each leaf holds \texttt{lors\_shard000.h5}\,\ldots\,\texttt{lors\_shard009.h5} plus
-\texttt{config.toml} (the regeneration recipe); \texttt{scanner\_geometry.json} sits at the
-scanner level, and the shared \texttt{phantom/} ($\mu$-map inputs) and \texttt{truth/}
-(dose-$R_{80}$ + activity-$R_{50}$) bundles at the scenario level.
+Scanner names append the crystal and depth ($\ldots$\texttt{\_bgo\_2x0}, $\ldots$\texttt{\_csi\_2x0});
+the CHS is the \emph{compact head scanner} (200\,mm crystal radius $\to$ ${\sim}30$\,cm patient
+bore after the cryostat, the ring sliding over the head with its lower edge at the shoulder
+line, vertex-to-C7).
 
 \subsection*{Scanner geometry}
 
-Both scanners are the same closed cylindrical ring, differing only in crystal and depth:
+Every scanner is a closed cylindrical ring built from the \textbf{same monolithic block}: a
+transverse face of $50.6$\,mm (arc at the inner radius) $\times\, 51.2$\,mm ($z$ wheel pitch),
+at $2X_0$ depth --- $22.36$\,mm for BGO (outer radius $=$ inner $+\,22.36$\,mm) and $37.20$\,mm
+for CsI (inner $+\,37.20$\,mm). The block face is fixed, so the $\varphi\times z$ block counts of
+the survey table quantize the chosen radius and AFOV. The detector response
+(table~\ref{tab:systems}) --- $\sigma_{xyz}$, energy resolution, photopeak cut, $\tau$ --- is
+identical across all rings and already applied in the files; do \emph{not} re-apply it.
 
-\begin{center}
-\begin{tabular}{lcc}
-\toprule
- & ring (shared) & \\
-\midrule
-inner radius            & \multicolumn{2}{c}{$387$\,mm} \\
-axial length            & \multicolumn{2}{c}{$1024$\,mm ($\pm 512$\,mm)} \\
-segmentation            & \multicolumn{2}{c}{$48$ blocks in $\varphi$ $\times$ $20$ wheels in $z$} \\
-block transverse size   & \multicolumn{2}{c}{$50.6$\,mm (arc at inner radius) $\times$ $51.2$\,mm ($z$)} \\
-\midrule
- & BGO 195\,K & CsI \\
-\midrule
-crystal depth ($2X_0$)  & $22.36$\,mm & $37.20$\,mm \\
-outer radius            & $409.4$\,mm & $424.2$\,mm \\
-\bottomrule
-\end{tabular}
-\end{center}
-
-The phantom is the scenario's: a uniform G4\_BRAIN\_ICRP ellipsoid (semi-axes
-$7.2 \times 8.7 \times 10.2$\,cm, centred at $(0, -3, 0)$\,cm), inside an air world. Monolithic
-blocks, continuous 3-D readout; the detector response (table~\ref{tab:systems}) is already
-applied in the files --- do \emph{not} re-apply it.
+The phantom is the scenario's, identical for every arm: a uniform G4\_BRAIN\_ICRP ellipsoid
+(semi-axes $7.2 \times 8.7 \times 10.2$\,cm, centred at $(0, -3, 0)$\,cm), inside an air world.
+It is contained even by the shortest ring (its $\pm 102$\,mm axial extent inside the
+$\pm 154$\,mm FOV of the 30\,cm arms), so the SOBP distal edge --- near the axial centre --- sits
+where every ring is efficient.
 
 \subsection*{Source and statistics}
 
 The source is the frozen \texttt{uniform\_headep\_sobp\_1e8} scenario at 1\,Gy, \texttt{fast}
 budget (acquisition window $[0, 1200]$\,s): ${\approx}8.02\times10^7$ decays per shard,
 5 isotopes ($^{15}$O, $^{11}$C, $^{13}$N, $^{10}$C, $^{14}$O). Shard $R$ is seeded by
-(\texttt{master\_seed}=1, \texttt{realization}=$R$), $R = 0\ldots9$, and \textbf{the same $R$
-sees the identical annihilation set on both scanners} --- differences between the two masters
-are detector-only, event by event. Expected per-shard and pooled-master statistics (measured on
-shard~0):
+(\texttt{master\_seed}=1, \texttt{realization}=$R$), and \textbf{the same $R$ sees the identical
+annihilation set on \emph{every} scanner and crystal} --- all differences across the survey are
+detector/geometry-only, event by event.
+
+Measured shard-0 statistics across the survey (detector-level acceptance = fraction of the
+$8.0\times10^7$ annihilations surviving containment, photopeak cut and the DT window):
 
 \begin{center}
-\begin{tabular}{lcc}
+\begin{tabular}{lcccc}
 \toprule
- & BGO 195\,K & CsI \\
+scanner & \multicolumn{2}{c}{acceptance} & \multicolumn{2}{c}{det.\ LORs / shard} \\
+        & BGO 195\,K & CsI & BGO 195\,K & CsI \\
 \midrule
-detector LORs per shard (\texttt{lors\_det})  & $15.3$\,M & $6.1$\,M \\
-acceptance (of $8\times10^7$ annihilations)   & $19.0\%$  & $7.6\%$ \\
-true / scatter / random                       & $72.3 / 27.4 / 0.3\%$ & $86.6 / 13.3 / 0.1\%$ \\
-shard file size                               & ${\sim}490$\,MB & ${\sim}190$\,MB \\
-pooled master ($10$ shards)                   & ${\sim}153$\,M LORs & ${\sim}61$\,M LORs \\
+\texttt{ring\_1m}   (R387$\times$1024) & $19.0\%$ & $7.6\%$  & $15.3$\,M & $6.1$\,M \\
+\texttt{r30\_50cm}  (R300$\times$512)  & $13.6\%$ & $5.35\%$ & $10.9$\,M & $4.3$\,M \\
+\texttt{chs}        (R200$\times$358)  & $12.7\%$ & $4.9\%$  & $10.1$\,M & $3.9$\,M \\
+\texttt{r35\_50cm}  (R350$\times$512)  & $12.1\%$ & $4.78\%$ & $9.7$\,M  & $3.8$\,M \\
+\texttt{ring\_50cm} (R387$\times$512)  & $11.1\%$ & $4.4\%$  & $8.9$\,M  & $3.5$\,M \\
+\texttt{r35\_35cm}  (R350$\times$358)  & $7.8\%$  & $3.11\%$ & $6.3$\,M  & $2.5$\,M \\
+\texttt{r35\_30cm}  (R350$\times$307)  & $6.2\%$  & $2.48\%$ & $5.0$\,M  & $2.0$\,M \\
+\texttt{r30\_30cm}  (R300$\times$307)  & $7.2\%$  & $2.85\%$ & $5.8$\,M  & $2.3$\,M \\
 \bottomrule
 \end{tabular}
 \end{center}
 
-The contrast is the point of the pair: BGO delivers $2.5\times$ the statistics; CsI delivers
-purity (half the scatter fraction, $3\times$ fewer randoms) --- the range study arbitrates.
+Two invariants hold across the whole family. \textbf{Purity is geometry-independent}:
+${\sim}72$--$75\%$ true / ${\sim}25$--$27\%$ scatter for BGO and ${\sim}87\%$ true / $13\%$
+scatter for CsI everywhere, randoms $<0.3\%$ --- so geometry moves only the statistics, and the
+CsI-vs-BGO contrast (CsI purer, BGO ${\sim}2.5\times$ the counts) is the crystal axis at every
+ring. \textbf{Radius beats length}: at fixed $358$\,mm AFOV, shrinking the crystal radius
+$350\to200$\,mm (\texttt{r35\_35cm}$\to$\texttt{chs}) raises BGO acceptance $7.8\to12.7\%$ while
+\emph{halving} the crystal area --- solid angle is bought far more cheaply with radius than with
+axial length, and the compact head scanner outperforms every $R\ge300$\,mm ring of any length
+below $1$\,m. The axial scan is smoother than the raw acceptance suggests for range work: the
+source fills two-thirds of the shortest FOV, so the $50\to30$\,cm acceptance loss (${\sim}\times
+0.5$) is concentrated at the phantom poles, away from the centrally-located distal edge the
+range measurement uses.
+
+Per shard, BGO leaves ${\sim}300$--$490$\,MB and CsI ${\sim}120$--$190$\,MB (scaling with the
+LOR count); a ten-shard master pools to $\Sigma M \approx 8.0\times10^8$ decays.
 
 \subsection*{Column semantics (highlights; full schema in \texttt{SCHEMA.md})}
 
@@ -399,7 +428,7 @@ The pre-existing master at \texttt{crysp\_ring\_1m/bgo/fast\_1Gy/} (ten shards) 
 \textbf{frozen}: it predates this standard (hybrid room/cryo BGO constants, $3.7$\,cm depth,
 no readout floor, $450\keV$ cut, $\tau = 3\ns$, $\sigma_{xyz} = 1.7$\,mm Gaussian $\sigma$).
 It remains valid as a methods reference but must not be pooled or compared quantitatively with
-the two new arms.
+any survey arm.
 
 \section{Deferred refinements}
 \label{sec:deferred}
