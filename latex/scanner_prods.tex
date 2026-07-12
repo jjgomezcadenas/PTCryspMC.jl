@@ -616,23 +616,6 @@ vs BGO ${\sim}73$--$77\%$ (BGO's coarse resolution admits more scatter). Shard 0
 \label{fig:crystalcompare}
 \end{figure}
 
-\section{Deferred refinements}
-\label{sec:deferred}
-
-Two refinements are scoped but deliberately deferred:
-\begin{itemize}
-\item \textbf{A standalone optical MC} of one monolithic block (PTFE-lined, SiPM plane on the
-  instrumented face): a one-time computation per crystal system that would replace the
-  ${\approx}1$ collection-efficiency assumption, quantify the DOI--time correlation
-  (${\sim}0.13$--$0.15\ns$ systematic swing across the depth), and allow the readout floor to
-  be split into its physical parts. Tracking the ${\sim}10^{12}$ optical photons of a
-  production shard inline is not tractable, nor necessary: the parameterised result feeds
-  eq.~\eqref{eq:stamp}.
-\item \textbf{Scintillation rise time}: eq.~\eqref{eq:firstphoton} assumes the emission rate is
-  maximal at $t=0$. A finite rise would degrade the first-photon term; at present it is
-  absorbed into $\sigma_t$, pending cryogenic rise-time measurements.
-\end{itemize}
-
 \begin{thebibliography}{9}
 
 \bibitem{Soleti2024}
