@@ -35,13 +35,13 @@ end
 # Columnar store of the CONTAINED singles (nblocks==1) kept in memory for the sort/pair. Positions
 # stay quantized (Int16, as in the file) — decoded only when a pair is written.
 struct RandSingles
-    ev::Vector{Int32}
+    ev::Vector{Int32}; iso::Vector{Int8}
     t_abs::Vector{Float64}; t_rel::Vector{Float32}; t_dec::Vector{Float32}
     x::Vector{Int16}; y::Vector{Int16}; z::Vector{Int16}; e::Vector{Int16}
     iz::Vector{Int16}; iphi::Vector{Int16}; nscat::Vector{Int8}
     x0::Vector{Int16}; y0::Vector{Int16}; z0::Vector{Int16}
 end
-RandSingles() = RandSingles(Int32[], Float64[], Float32[], Float32[], Int16[], Int16[], Int16[], Int16[],
+RandSingles() = RandSingles(Int32[], Int8[], Float64[], Float32[], Float32[], Int16[], Int16[], Int16[], Int16[],
                             Int16[], Int16[], Int8[], Int16[], Int16[], Int16[])
 Base.length(r::RandSingles) = length(r.ev)
 
@@ -51,7 +51,7 @@ Base.length(r::RandSingles) = length(r.ev)
 @inline function push_contained!(r::RandSingles, acts, ev, iso, x, y, z, e, iz, iphi, nb, x0, y0, z0, t_rel, nscat)
     nb == 1 || return                                    # contained hits only (same as the trues)
     t_dec = event_time(acts[iso + 1], ev)                 # decay time [s] with the isotope's λ
-    push!(r.ev, Int32(ev)); push!(r.t_abs, t_dec * 1.0e9 + t_rel) # absolute clock [ns]
+    push!(r.ev, Int32(ev)); push!(r.iso, Int8(iso)); push!(r.t_abs, t_dec * 1.0e9 + t_rel) # absolute clock [ns]
     push!(r.t_rel, Float32(t_rel)); push!(r.t_dec, Float32(t_dec))
     push!(r.x, x); push!(r.y, y); push!(r.z, z); push!(r.e, e); push!(r.iz, iz); push!(r.iphi, iphi)
     push!(r.nscat, Int8(min(nscat, 127)))
@@ -128,10 +128,13 @@ function main()
     # isotope column is all 0, so acts[1] is used for every single).
     hls = ishdf5 ? Vector{Float64}(singles_hdf5_attr(singles, "isotope_half_lives", Float64[])) : Float64[]
     if !isempty(hls)
-        tmeas = Float64(singles_hdf5_attr(singles, "t_meas_s", 600.0))
+        # v2 activity window [t_window_lo_s, t_window_hi_s] (irradiation-end clock); legacy [0, t_meas].
+        lo = Float64(singles_hdf5_attr(singles, "t_window_lo_s", NaN))
+        hi = Float64(singles_hdf5_attr(singles, "t_window_hi_s", NaN))
+        (isnan(lo) || isnan(hi)) && (lo = 0.0; hi = Float64(singles_hdf5_attr(singles, "t_meas_s", 600.0)))
         tseed = Int(singles_hdf5_attr(singles, "time_seed", 1234))
-        acts  = ActivityModel[ActivityModel(; t0=0.0, t1=tmeas, half_life_s=h, seed=tseed) for h in hls]
-        tdesc = "per-isotope ($(length(acts)) isotopes, t_meas=$(tmeas)s)"
+        acts  = ActivityModel[ActivityModel(; t0=lo, t1=hi, half_life_s=h, seed=tseed) for h in hls]
+        tdesc = "per-isotope ($(length(acts)) isotopes, window [$(lo),$(hi)]s)"
     else
         acts  = ActivityModel[ActivityModel(cfg)]
         tdesc = "single-isotope (t½=$(round(log(2.0)/acts[1].λ, digits=1))s, window [$(acts[1].t0),$(acts[1].t1)]s)"
@@ -155,7 +158,7 @@ function main()
         push_coincidence!(w, r.ev[i],
             decode_xyz(r.x[i]), decode_xyz(r.y[i]), decode_xyz(r.z[i]), decode_e(r.e[i]), r.t_rel[i], r.iz[i], r.iphi[i], Int(r.nscat[i]),
             decode_xyz(r.x[j]), decode_xyz(r.y[j]), decode_xyz(r.z[j]), decode_e(r.e[j]), r.t_rel[i] + Δ, r.iz[j], r.iphi[j], Int(r.nscat[j]),
-            NaN32, decode_xyz(r.x0[i]), decode_xyz(r.y0[i]), decode_xyz(r.z0[i]), TRUTH_RANDOM, r.t_dec[i])
+            NaN32, decode_xyz(r.x0[i]), decode_xyz(r.y0[i]), decode_xyz(r.z0[i]), TRUTH_RANDOM, Int(r.iso[i]), r.t_dec[i])
     end
     nrand = pair_randoms(emit, r.t_abs, r.ev, tau)
 

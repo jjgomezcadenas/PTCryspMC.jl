@@ -1196,8 +1196,8 @@ end
         for ev in 1:150
             args = (ev, 100.0 + ev, -50.0, 30.0, 511.0, 0.0, ev % 20, ev % 48, Int8(ev % 3),
                     -200.0, 40.0, -30.0, 480.0, 0.0, (ev + 3) % 20, (ev + 5) % 48, Int8((ev + 1) % 3),
-                    0.25 * ev, 1.0, 2.0, 3.0, Int8(ev % 2),
-                    3.5 * ev)   # nscat1(9), nscat2(17), dt(18), x0,y0,z0, truth(22), t_decay(23)
+                    0.25 * ev, 1.0, 2.0, 3.0, Int8(ev % 2), Int8(ev % 5),
+                    3.5 * ev)   # nscat1(9), nscat2(17), dt(18), x0,y0,z0, truth(22), isotope(23), t_decay(24)
             push_coincidence!(w, args...); push!(ref, args)
         end
         set_lor_attr!(w, "nevents", 4242)                # post-hoc stamp on the open stream
@@ -1211,7 +1211,7 @@ end
                 push!(got, (Int(b.event[i]), decode_xyz(b.x1[i]), decode_e(b.e1[i]),
                             Int(b.iz1[i]), Int(b.iphi1[i]), Int(b.iz2[i]), Int(b.iphi2[i]),
                             Int8(b.truth[i]), Float64(b.dt[i]), Int(b.nscat1[i]), Int(b.nscat2[i]),
-                            Float64(b.t_decay[i])))
+                            Float64(b.t_decay[i]), Int8(b.isotope[i])))
             end
         end
         @test length(got) == 150
@@ -1223,7 +1223,8 @@ end
             ok &= abs(g[2] - r[2]) <= XYZ_SCALE_MM/2 + 1e-6             # x1 within ½ step
             ok &= abs(g[3] - r[5]) <= E_SCALE_KEV/2 + 1e-6             # e1 within ½ step
             ok &= abs(g[9] - r[18]) <= 1e-3                            # dt_ns round-trips (Float32)
-            ok &= abs(g[12] - r[23]) <= abs(r[23]) * 1e-6 + 1e-6       # t_decay_s round-trips (Float32)
+            ok &= abs(g[12] - r[24]) <= abs(r[24]) * 1e-6 + 1e-6       # t_decay_s round-trips (Float32)
+            ok &= g[13] == r[23]                                       # isotope round-trips exact
         end
         @test ok
         rm(dir; recursive=true)

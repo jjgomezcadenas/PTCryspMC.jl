@@ -36,9 +36,10 @@ mutable struct LorState
     cur_ev::Int; maxev::Int
     ev_x0::Float64; ev_y0::Float64; ev_z0::Float64
     ev_tdec::Float64                 # this event's absolute decay time [s] (event_time)
+    ev_iso::Int                      # this event's emitting isotope id (carried onto the LOR)
     n_pair::Int; n_true::Int
 end
-LorState() = LorState(-1, 0, 0.0, 0.0, 0.0, 0.0, 0, 0)
+LorState() = LorState(-1, 0, 0.0, 0.0, 0.0, 0.0, 0, 0, 0)
 
 # Feed one singles row: close the previous event at a boundary (finish_event! → writer), then
 # fill the gamma's accumulator directly. `g` = (GammaAcc, GammaAcc).
@@ -52,7 +53,7 @@ function feed_row!(st::LorState, g, gt, gps, w, resp, rng, acts, ev::Int, gi::In
                    nblocks::Int, nscat::Int, t_rel::Float64, x0::Float64, y0::Float64, z0::Float64)
     if ev != st.cur_ev
         if st.cur_ev != -1
-            emitted, is_true = finish_event!((a...) -> push_coincidence!(w, a..., st.ev_tdec),
+            emitted, is_true = finish_event!((a...) -> push_coincidence!(w, a..., st.ev_iso, st.ev_tdec),
                                              st.cur_ev, g[1], g[2], gt[1], gt[2], gps[1], gps[2],
                                              st.ev_x0, st.ev_y0, st.ev_z0, resp, rng)
             st.n_pair += emitted; st.n_true += (emitted && is_true)
@@ -61,7 +62,7 @@ function feed_row!(st::LorState, g, gt, gps, w, resp, rng, acts, ev::Int, gi::In
     end
     ev > st.maxev && (st.maxev = ev)
     st.ev_x0 = x0; st.ev_y0 = y0; st.ev_z0 = z0
-    st.ev_tdec = event_time(acts[iso + 1], ev)
+    st.ev_tdec = event_time(acts[iso + 1], ev); st.ev_iso = iso
     (gi == 1 || gi == 2) || return
     fill_singles!(g[gi], x, y, z, e, iz, iphi, nblocks)
     gt[gi] = t_rel; gps[gi] = nscat
@@ -140,9 +141,12 @@ function main()
     # the clock so t_decay_s and the randoms pairing agree.
     hls = ishdf5 ? Vector{Float64}(singles_hdf5_attr(singles, "isotope_half_lives", Float64[])) : Float64[]
     if !isempty(hls)
-        tmeas = Float64(singles_hdf5_attr(singles, "t_meas_s", 600.0))
+        # v2 activity window [t_window_lo_s, t_window_hi_s] (irradiation-end clock); legacy [0, t_meas].
+        lo = Float64(singles_hdf5_attr(singles, "t_window_lo_s", NaN))
+        hi = Float64(singles_hdf5_attr(singles, "t_window_hi_s", NaN))
+        (isnan(lo) || isnan(hi)) && (lo = 0.0; hi = Float64(singles_hdf5_attr(singles, "t_meas_s", 600.0)))
         tseed = Int(singles_hdf5_attr(singles, "time_seed", 1234))
-        acts  = ActivityModel[ActivityModel(; t0=0.0, t1=tmeas, half_life_s=h, seed=tseed) for h in hls]
+        acts  = ActivityModel[ActivityModel(; t0=lo, t1=hi, half_life_s=h, seed=tseed) for h in hls]
     else
         acts  = ActivityModel[act]
     end
@@ -163,7 +167,7 @@ function main()
     ishdf5 ? feed_singles_hdf5!(st, g, gt, gps, w, resp, rng, acts, singles) :
              feed_singles_csv!(st, g, gt, gps, w, resp, rng, acts, singles)
     if st.cur_ev != -1                                   # the final event
-        emitted, is_true = finish_event!((a...) -> push_coincidence!(w, a..., st.ev_tdec),
+        emitted, is_true = finish_event!((a...) -> push_coincidence!(w, a..., st.ev_iso, st.ev_tdec),
                                          st.cur_ev, g[1], g[2], gt[1], gt[2], gps[1], gps[2],
                                          st.ev_x0, st.ev_y0, st.ev_z0, resp, rng)
         st.n_pair += emitted; st.n_true += (emitted && is_true)

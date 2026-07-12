@@ -79,31 +79,43 @@ function main()
         return
     end
 
-    lors   = joinpath(outdir, "lors_det.h5")
-    isfile(lors) || error("missing $lors — run (and don't prune) the chain first")
-    realiz   = Int(singles_hdf5_attr(lors, "realization", cfg_get(cfg, "source", "realization", 0)))  # what was actually run
+    # Generation-2 writes one lors_det_del<NNN>.h5 per acquisition scenario → one leaf each; legacy
+    # writes a single lors_det.h5. The leaf timing token comes from the shard's own attrs (v2:
+    # del<t_del>s_ac<t_ac>s; legacy: the budget), so the tree self-organises by acquisition.
+    v2files  = sort(filter(f -> startswith(f, "lors_det_del") && endswith(f, ".h5"), readdir(outdir)))
+    detfiles = isempty(v2files) ? ["lors_det.h5"] : v2files
+    isfile(joinpath(outdir, detfiles[1])) || error("missing lors_det — run (and don't prune) the chain first")
+
     geomfile = rp(cfg_get(cfg, "geometry", "file", "geometry/geometry_head.json"))
     scanner  = sanitize(get(get(JSON.parsefile(geomfile), "scanner", Dict()), "name", "scanner"))
+    scan_dir = joinpath(scen_dir, scanner)
+    phantom  = joinpath(scen_dir, "phantom")
 
-    scan_dir  = joinpath(scen_dir, scanner)
-    leaf      = joinpath(scan_dir, crystal, "$(budget)_$(dose)")
-    phantom   = joinpath(scen_dir, "phantom")
-    shard     = joinpath(leaf, "lors_shard$(lpad(realiz, 3, '0')).h5")
-
-    println("publishing '$tag' → $root")
-    println("  leaf: $scenario/$scanner/$crystal/$(budget)_$(dose)/  (shard $(lpad(realiz,3,'0')))")
-    mkpath(leaf); mkpath(phantom)
-
-    # The shard (the deliverable): copy lors_det.h5 → lors_shard<NNN>.h5.
-    if isfile(shard) && !a["force"]
-        println("    ! shard exists: $(basename(shard)) — use --force to overwrite (SKIPPED)")
-    else
-        cp(lors, shard; force=true); println("    + $(basename(shard))  ($(round(filesize(shard)/1e6,digits=1)) MB)")
+    println("publishing '$tag' → $root  ($(length(detfiles)) scenario file(s))")
+    for det in detfiles
+        lors   = joinpath(outdir, det)
+        realiz = Int(singles_hdf5_attr(lors, "realization", cfg_get(cfg, "source", "realization", 0)))
+        token  = if String(singles_hdf5_attr(lors, "generation", "")) == "v2"
+            td = round(Int, Float64(singles_hdf5_attr(lors, "t_del_s", 0.0)))
+            ta = round(Int, Float64(singles_hdf5_attr(lors, "t_ac_s", 0.0)))
+            "del$(td)s_ac$(ta)s_$(dose)"
+        else
+            "$(budget)_$(dose)"
+        end
+        leaf  = joinpath(scan_dir, crystal, token)
+        shard = joinpath(leaf, "lors_shard$(lpad(realiz, 3, '0')).h5")
+        mkpath(leaf)
+        println("  leaf: $scenario/$scanner/$crystal/$token/  (shard $(lpad(realiz,3,'0')))")
+        if isfile(shard) && !a["force"]
+            println("    ! shard exists: $(basename(shard)) — use --force to overwrite (SKIPPED)")
+        else
+            cp(lors, shard; force=true); println("    + $(basename(shard))  ($(round(filesize(shard)/1e6,digits=1)) MB)")
+        end
+        # config.toml at each leaf (the recipe; shards differ only in realization).
+        copy_once(joinpath(outdir, "config.toml"), joinpath(leaf, "config.toml"); label="config.toml")
     end
 
-    # config.toml at the leaf (the recipe; shards differ only in realization).
-    copy_once(joinpath(outdir, "config.toml"), joinpath(leaf, "config.toml"); label="config.toml")
-
+    mkpath(phantom)
     # scanner_geometry.json at the scanner level (the system model; shared across crystals).
     copy_once(geomfile, joinpath(scan_dir, "scanner_geometry.json"); label="../scanner_geometry.json")
 

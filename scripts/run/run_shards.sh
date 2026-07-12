@@ -47,26 +47,29 @@ for N in $(seq $LO $HI); do
   prev_nev=$nev
 
   # --- prune ALL heavy .h5: the shard is exported, so prod/ keeps no .h5 (only config.toml).
-  # Guard: delete the source lors_det.h5 only once THIS run's published shard is confirmed on
-  # disk. The leaf comes from the publish log ("  leaf: <scenario>/<scanner>/<crystal>/<bd>/"),
-  # NOT from a tree glob — a glob matches every master in the tree and picks the alphabetically
-  # first (the frozen reference), silently validating the wrong leaf once several masters exist.
-  leafrel=$(grep -oE 'leaf: [^ ]+' $log | head -1); leafrel=${leafrel#leaf: }; leafrel=${leafrel%/}
-  published=$PRODS/$leafrel/lors_shard$s3.h5
-  if [[ -n $leafrel && -f $published ]]; then
-    rm -f $dir/singles.h5 $dir/lors_truth.h5 $dir/randoms.h5 $dir/lors_det.h5
+  # v2 publishes one leaf PER acquisition scenario (lors_det_del<NNN>.h5 → del<..>s_ac<..>s leaves);
+  # legacy publishes one. Verify EVERY published leaf holds THIS shard before deleting the
+  # intermediates. Leaves come from the publish log ("  leaf: <rel>/"), NOT a tree glob — a glob
+  # matches every master and picks the alphabetically first (the frozen reference), silently
+  # validating the wrong leaf once several masters exist.
+  leaves=(${(f)"$(grep -oE 'leaf: [^ ]+' $log | sed 's/^leaf: //; s:/$::')"})
+  allpub=1
+  (( ${#leaves} > 0 )) || allpub=0
+  for lf in $leaves; do [[ -f $PRODS/$lf/lors_shard$s3.h5 ]] || allpub=0; done
+  if (( allpub )); then
+    rm -f $dir/singles.h5 $dir/lors_truth.h5 $dir/randoms.h5 $dir/lors_det.h5 $dir/lors_det_del*.h5(N)
   else
-    print "  WARN: published shard $s3 not found — keeping lors_det.h5"
+    print "  WARN: not all published shards for $s3 found — keeping lors_det*.h5"
     rm -f $dir/singles.h5 $dir/lors_truth.h5 $dir/randoms.h5
   fi
 done
 
-# --- master check: all shards present, self-describing, with distinct realizations ---
-# $leafrel survives the loop (same leaf every shard) — the check runs on THIS run's leaf.
+# --- master check: for EACH published leaf (v2 = one per acquisition scenario), all shards present,
+# self-describing, distinct realizations. $leaves survives from the last shard iteration.
 print "\n=== master check ==="
-leaf=$PRODS/$leafrel
-[[ -n $leafrel && -d $leaf ]] || { print "  no published leaf (no 'leaf:' line in the publish log)"; exit 1 }
-julia --project=. -e '
+(( ${#leaves} > 0 )) || { print "  no published leaf (no 'leaf:' line in the publish log)"; exit 1 }
+for lf in $leaves; do
+  julia --project=. -e '
 using HDF5
 d = ARGS[1]
 fs = sort(filter(f -> startswith(f, "lors_shard") && endswith(f, ".h5"), readdir(d)))
@@ -81,4 +84,5 @@ println("  shards: ", length(fs), "  realizations: ", reals)
 println("  nevents: ", extrema(nevs), "  pooled ΣM = ", sum(nevs))
 length(unique(reals)) == length(reals) || error("duplicate realizations — shards NOT independent")
 println("  OK: ", length(unique(reals)), " distinct realizations, all self-describing.")
-' "$leaf" 2>&1 | grep -vE "Precompiling|precompiled"
+' "$PRODS/$lf" 2>&1 | grep -vE "Precompiling|precompiled"
+done

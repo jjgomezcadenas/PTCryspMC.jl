@@ -175,6 +175,30 @@ function _activity_distal_edge_mm(pools::Vector{Vector{NTuple{3,Float64}}},
 end
 
 """
+    _dose_target_center_mm(depth_dose_path, prox_depth_mm, dist_depth_mm) -> Float64
+
+The tumour/target centre [mm, z]: the **distal** dose R80 (the clean distal falloff = the range
+endpoint in z; +z is distal, as for the activity edge) shifted proximally by half the target
+thickness `(dist_depth − prox_depth)` from run_meta. Anchored to the distal falloff ONLY — the
+proximal dose has no clean edge (entrance plateau), so a two-sided midpoint is unreliable. Dose-based
+⇒ independent of acquisition window / isotope mix / washout: the FIXED patient-positioning reference
+a clinician sets from anatomy (`center_on="tumour"`), unlike the activity edge which drifts.
+"""
+function _dose_target_center_mm(depth_dose_path::AbstractString, prox_depth_mm::Real, dist_depth_mm::Real)::Float64
+    dh, dr = _read_csv(depth_dose_path)
+    zc = _col(dh, "z_mm"); dc = _col(dh, "dose_core_Gy")
+    z = [parse(Float64, r[zc]) for r in dr]
+    d = [parse(Float64, r[dc]) for r in dr]
+    n = length(z); n >= 2 || error("depth_dose.csv needs ≥2 rows")
+    imax = argmax(d); half = 0.8 * d[imax]
+    zd80 = z[imax]                                          # distal 80% crossing (increasing z)
+    for i in imax:(n - 1)
+        d[i] >= half > d[i + 1] && (zd80 = z[i] + (z[i + 1] - z[i]) * (d[i] - half) / (d[i] - d[i + 1]); break)
+    end
+    zd80 - 0.5 * (Float64(dist_depth_mm) - Float64(prox_depth_mm))
+end
+
+"""
     load_scenario(dir, materials; budget="fast", dose_Gy=1.0, keep_escaped=false, center_on="") -> Scenario
 
 Read a frozen `ptcryspg4` scenario directory into a `Scenario`. Builds the phantom from the
@@ -188,7 +212,8 @@ here and is unused in API mode.
 """
 function load_scenario(dir::AbstractString, materials::Dict{String,Material};
                        budget::AbstractString="fast", dose_Gy::Real=1.0,
-                       keep_escaped::Bool=false, center_on::AbstractString="")::Scenario
+                       keep_escaped::Bool=false, center_on::AbstractString="",
+                       t_window::Tuple{<:Real,<:Real}=(0.0, 0.0))::Scenario
     phantom = load_phantom_regions(joinpath(dir, "phantom_regions.csv"), materials)
 
     ih, ir = _read_csv(joinpath(dir, "isotopes.csv"))
@@ -209,11 +234,31 @@ function load_scenario(dir::AbstractString, materials::Dict{String,Material};
     bmeta   = _read_meta_row(joinpath(dir, "sampling_budget_$(budget)_meta.csv"))
     ref_dose = parse(Float64, bmeta["dose_Gy"])
     t_meas   = parse(Float64, bmeta["t_meas_s"])
+    t_irr_b  = parse(Float64, get(bmeta, "t_irr_s", "0.0"))
+    t_del_b  = parse(Float64, get(bmeta, "t_del_s", "0.0"))
     tgt_dose = parse(Float64, bmeta["target_dose_Gy"])
     scale = Float64(dose_Gy) / ref_dose
     n_exp = zeros(Float64, n_iso)
     for r in br
         n_exp[parse(Int, r[bidc]) + 1] = parse(Float64, r[nec]) * scale
+    end
+
+    # Generation-2 timing (irradiation-end clock): when an explicit acquisition window is requested,
+    # re-express the counts for it. The budget N_j is the window-integral of one irradiation-end
+    # population N_j⁰ (production ends before the budget window → pure decay), so back N_j⁰ out of the
+    # budget window [t_del_b, t_del_b + t_meas] and re-integrate over [t_lo, t_hi]. This is
+    # budget-independent (any budget yields the same N_j⁰ to <0.2%). Default (0,0) = legacy: keep the
+    # budget counts and the [0, t_meas] clock. Done before centring so the edge uses the shard weights.
+    t_lo, t_hi = Float64(t_window[1]), Float64(t_window[2])
+    if t_hi > t_lo
+        for j in 1:n_iso
+            λ = log(2.0) / isos[j].half_life_s
+            f_budget = exp(-λ * t_del_b) - exp(-λ * (t_del_b + t_meas))     # budget window factor
+            N0 = f_budget > 0.0 ? n_exp[j] / f_budget : 0.0                 # irradiation-end population
+            n_exp[j] = N0 * (exp(-λ * t_lo) - exp(-λ * t_hi))              # union-window expected count
+        end
+    else
+        t_lo, t_hi = 0.0, t_meas                                           # legacy activity window
     end
 
     # Optional patient positioning: rigidly shift the source + phantom in z so a chosen reference
@@ -222,12 +267,18 @@ function load_scenario(dir::AbstractString, materials::Dict{String,Material};
     # region. The scanner is untouched; only the relative source/phantom placement moves, exactly
     # as a patient is positioned. Emitters and phantom shift together, so the inside/escaped
     # classification (done above, in the original frame) is preserved.
+    rmeta = _read_meta_row(joinpath(dir, "run_meta.csv"))    # target depths (tumour centring) + provenance
     z_offset_mm = 0.0
-    if center_on == "distal_edge"
+    if center_on == "tumour"
+        # FIXED anatomical reference: the SOBP dose-target centre (window/mix/washout-independent).
+        prox = parse(Float64, get(rmeta, "target_prox_depth_mm", "0.0"))
+        dist = parse(Float64, get(rmeta, "target_dist_depth_mm", "0.0"))
+        z_offset_mm = -_dose_target_center_mm(joinpath(dir, "depth_dose.csv"), prox, dist)
+    elseif center_on == "distal_edge"
         weights = [length(pools[j]) > 0 ? n_exp[j] * f_inside[j] / length(pools[j]) : 0.0 for j in 1:n_iso]
         z_offset_mm = -_activity_distal_edge_mm(pools, weights)
     elseif !isempty(center_on)
-        error("[source].center_on '$center_on' unknown (supported: \"distal_edge\", or omit)")
+        error("[source].center_on '$center_on' unknown (supported: \"tumour\", \"distal_edge\", or omit)")
     end
     if z_offset_mm != 0.0
         off = z_offset_mm / 10                      # mm → cm
@@ -238,11 +289,12 @@ function load_scenario(dir::AbstractString, materials::Dict{String,Material};
         phantom = PhysicalVolume(phantom.logical, (p0[1], p0[2], p0[3] + off))
     end
 
-    rmeta = _read_meta_row(joinpath(dir, "run_meta.csv"))
     sname = basename(rstrip(dir, '/'))
     prov = Dict{String,Any}(
         "scenario" => sname, "budget" => budget, "dose_Gy" => Float64(dose_Gy),
         "center_on" => center_on, "z_offset_mm" => z_offset_mm,
+        "t_lo_s" => t_lo, "t_hi_s" => t_hi, "t_irr_s" => t_irr_b,
+        "t_del_budget_s" => t_del_b, "t_meas_budget_s" => t_meas,
         "geometry" => get(rmeta, "geometry", ""), "phantom_material" => get(rmeta, "phantom_material", ""),
         "geant4_version" => get(rmeta, "geant4_version", ""), "physics_list" => get(rmeta, "physics_list", ""),
         "upstream_seed" => get(rmeta, "random_seed", ""), "n_protons" => get(rmeta, "n_protons", ""),

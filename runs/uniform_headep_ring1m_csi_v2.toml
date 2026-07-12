@@ -1,0 +1,40 @@
+# API production v2 — reference detector: the CRYSP 1 m ring (crysp_ring_1m_csi_2x0, ~1 m AFOV),
+# cryogenic pure CsI (100k ph/MeV, 800 ns, 6% FWHM). Generation-2 (dev/generation2_plan.md):
+#   - phantom centred so the activity distal edge sits at the ring centre (center_on="distal_edge");
+#   - irradiation-end clock; fixed acquisition scenarios t_del ∈ {120,180,300} s, t_ac = 300 s;
+#   - isotope truth carried per LOR; Mizuno washout g_i stamped (NOT applied — left to downstream).
+# Transport spans the union window [120,600] s; reco band-cuts each scenario into
+# prod/<tag>/lors_det_del<NNN>.h5. N_j is derived from the irradiation-end population N_j⁰ (the
+# fast budget is only the source of N_j⁰; the acquisition windows are set here).
+
+[source]
+center_on     = "tumour"        # fixed anatomical reference: the SOBP dose-target centre (z≈−27 mm)
+mode          = "api"
+scenario_dir  = "../ptcrysp-scenarios/scenarios/uniform_headep_sobp_1e8"
+budget        = "fast"          # N_j⁰ source (window-independent); NOT the acquisition window
+dose_Gy       = 1.0
+master_seed   = 1
+realization   = 0
+time_seed     = 1234
+keep_escaped  = false
+
+[geometry]
+file = "geometry/geometry_head_csi_2x0.json"   # scanner crysp_ring_1m_csi_2x0 (r 38.7 cm, AFOV ~102 cm)
+
+[transport]
+crystal_material = "CsI"
+seed             = 1234
+nchunks          = 144
+
+[timing]
+tau_ns     = 1.5                       # 3σ of the raw t1−t2 (CTR study + Soleti 2024)
+t_ac_s     = 300.0                     # fixed acquisition length (5 min — realistic in-room PET)
+t_del_list = [120.0, 180.0, 300.0]     # patient-arrival delays (irradiation-end clock)
+
+[detector]
+emin_keV      = 300.0                  # spectrum-study lower cut
+reco_emin_keV = 472.0                  # photopeak cut: 511 − 3σ_E at 6% FWHM
+
+[output]
+format   = "hdf5"
+prod_dir = "prod"

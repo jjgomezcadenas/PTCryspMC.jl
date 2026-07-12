@@ -2,7 +2,7 @@
 
 **Generated from the code by `scripts/gen_schema.jl` — do not edit by hand.** Regenerate with `julia --project=. scripts/gen_schema.jl`. Columns and types are introspected from `singles_columns` / `coinc_columns` and the struct field types; units and meaning come from the `singles_doc` / `coinc_doc` maps beside them. `test/runtests.jl` fails if this file drifts from the code.
 
-Positions and energies are stored as quantized `Int16`: position = `round(mm / 0.1)`, energy = `round(keV / 0.1)` — lossless at detector resolution; decode with `decode_xyz` / `decode_e`. Times are `Float32` nanoseconds **relative to the decay**; the decay's absolute time in the acquisition window is the LOR column `t_decay_s` (`Float32` seconds, zero = acquisition start), so absolute photon time = `t_decay_s·1e9 + t`.
+Positions and energies are stored as quantized `Int16`: position = `round(mm / 0.1)`, energy = `round(keV / 0.1)` — lossless at detector resolution; decode with `decode_xyz` / `decode_e`. Times are `Float32` nanoseconds **relative to the decay**; the decay's absolute time in the acquisition window is the LOR column `t_decay_s` (`Float32` seconds; the zero is the `t_decay_zero` attribute — `acquisition_start` in legacy files, `irradiation_end` in generation-2 shards), so absolute photon time = `t_decay_s·1e9 + t`.
 
 ## Singles — `prod/<tag>/singles.{h5,csv}`
 
@@ -34,6 +34,7 @@ One row per coincidence (line of response). All three files share this schema: `
 |--------|------|------|-------------|
 | `event` | Int32 |  | annihilation index (shared by the two gammas; a cross-decay pair for randoms) |
 | `truth` | Int8 |  | 0 = true, 1 = scatter, 2 = random |
+| `isotope` | Int8 |  | emitting isotope id (0=O15,1=C11,2=N13,3=C10,4=O14; gamma 1's decay for randoms) |
 | `x1_mm` | Int16 | mm | gamma 1 hit position (smeared in lors_det), x |
 | `y1_mm` | Int16 | mm | gamma 1 hit position, y |
 | `z1_mm` | Int16 | mm | gamma 1 hit position, z |
@@ -82,4 +83,25 @@ Set by the writers (not part of the column lists), carried for provenance and ex
 | `tau_ns` | lors_det, randoms | coincidence window |
 | `sigma_xyz_mm`, `eres`, `emin_keV`, `window_fwhm` | lors_det | detector response + energy cut |
 | `t_relative_to_decay`, `t0_s`, `t1_s`, `half_life_s`, `time_seed` | LORs | the activity clock for absolute time |
-| `t_decay_zero` | LORs | zero point of `t_decay_s` (`acquisition_start`) |
+| `t_decay_zero` | LORs | zero point of `t_decay_s` (`acquisition_start`, or `irradiation_end` in v2) |
+
+### Generation-2 (`generation = "v2"`) shard attributes
+
+Every `lors_det_del<NNN>.h5` is self-describing (see `dev/generation2_plan.md` §5). `generation` is the mandatory semantics guard — consumers must check it and refuse to mix generations, since the `t_decay_s` zero moved to `irradiation_end`. Enumerated set:
+
+| Attribute | Meaning |
+|-----------|---------|
+| `generation` | products generation, `"v2"` (mandatory guard) |
+| `schema_version` | schema version (int) |
+| `t_decay_zero` | `"irradiation_end"` |
+| `center_on`, `source_z_offset_mm` | patient placement (distal-edge centring, +mm z-shift) |
+| `t_irr_s` | irradiation duration |
+| `t_del_s`, `t_ac_s`, `t1_s`, `t2_s` | this scenario's delay, acquisition length, window `[t1,t2]` |
+| `t_window_lo_s`, `t_window_hi_s` | the union transport window |
+| `isotope_names`, `isotope_half_lives` | isotope id → name / T½ (id = the `isotope` column) |
+| `sigma_t_ns`, `eres_fwhm_511` | per-crystal timing floor / energy resolution |
+| `geometry_json` | the full scanner+phantom+world geometry, embedded verbatim |
+| `scanner_name`, `ring_radius_mm`, `afov_mm`, `crystal_depth_mm` | scanner scalars |
+| `washout_model` | `"mizuno_brain_3comp"` |
+| `washout_fractions`, `washout_Thalf_s` | Mizuno M_k / T_k^bio (3-vectors) |
+| `washout_g` | per-isotope survival g_i for this window (NOT applied; `washout_applied=false`) |

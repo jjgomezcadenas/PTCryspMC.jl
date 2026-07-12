@@ -148,7 +148,13 @@ function main()
         realz   = a["realization"] >= 0 ? a["realization"] : Int(cfg_get(cfg, "source", "realization", 0))
         tseed   = Int(cfg_get(cfg, "source", "time_seed", 1234))
         center  = String(cfg_get(cfg, "source", "center_on", ""))   # ""=native frame; "distal_edge"=centre the range endpoint at z=0
-        scn     = load_scenario(scndir, mats; budget=budget, dose_Gy=dose, keep_escaped=keepesc, center_on=center)
+        # v2 timing: fixed acquisition scenarios on the irradiation-end clock. t_del_list = the
+        # patient-arrival delays [s], t_ac_s = the (fixed) acquisition length. Transport spans the
+        # union window [min t_del, max t_del + t_ac]; reco band-cuts each scenario. Absent → legacy.
+        t_ac    = Float64(cfg_get(cfg, "timing", "t_ac_s", 0.0))
+        t_dels  = Float64[Float64(x) for x in cfg_get(cfg, "timing", "t_del_list", Float64[])]
+        t_lo, t_hi = (t_ac > 0.0 && !isempty(t_dels)) ? (minimum(t_dels), maximum(t_dels) + t_ac) : (0.0, 0.0)
+        scn     = load_scenario(scndir, mats; budget=budget, dose_Gy=dose, keep_escaped=keepesc, center_on=center, t_window=(t_lo, t_hi))
         geom    = Geometry(geom.world, scn.phantom, sc)      # phantom from the scenario (shifted with the source if centred)
         src     = materialize_api_source(scn; master_seed=mseed, realization=realz)
         nevents = length(src.points)                          # fixed by the source (‑‑nevents ignored)
@@ -156,10 +162,12 @@ function main()
             "dose_Gy"=>dose, "realization"=>realz, "master_seed"=>mseed, "keep_escaped"=>keepesc,
             "center_on"=>center, "source_z_offset_mm"=>scn.provenance["z_offset_mm"],
             "prompt_gamma_modeled"=>false, "t_meas_s"=>scn.t_meas_s, "time_seed"=>tseed,
+            "t_window_lo_s"=>scn.provenance["t_lo_s"], "t_window_hi_s"=>scn.provenance["t_hi_s"],
+            "t_irr_s"=>scn.provenance["t_irr_s"], "t_ac_s"=>t_ac, "t_del_list_s"=>t_dels,
             "isotope_half_lives"=>Float64[iso.half_life_s for iso in scn.isotopes],
             "isotope_names"=>String[iso.name for iso in scn.isotopes],
             "n_escaped_dropped"=>scn.provenance["n_escaped_dropped"])
-        srcdesc = "API $(scn.name)/$budget $(dose)Gy real=$realz, N=$nevents, $(length(scn.pools)) isotope(s)"
+        srcdesc = "API $(scn.name)/$budget $(dose)Gy real=$realz, N=$nevents, $(length(scn.pools)) isotope(s), window [$(scn.provenance["t_lo_s"]),$(scn.provenance["t_hi_s"])]s"
     else
         kind    = String(cfg_get(cfg, "source", "kind", "point"))
         kind in ("point", "phantom") || error("[source].kind must be 'point' or 'phantom'")

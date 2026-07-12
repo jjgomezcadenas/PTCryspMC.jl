@@ -7,6 +7,11 @@ Orientation for any Claude Code session on this repo.
 Ask questions plainly, in prose — not as multiple-choice "shopping list" menus (avoid the
 AskUserQuestion option-list format). State what you need to know directly.
 
+**Terminal output: never emit blue-rendering text; use bold.** JJ reads responses in a terminal
+where markdown links, `inline code` (backticks), and file:line references all render blue. Do not
+use any of them in responses — no backticks, no code fences for listings, no clickable links. Emphasise
+with **bold** and write paths, filenames, config keys, and code identifiers as plain text.
+
 **Figures: always from a tracked tool.** Every figure that goes into a doc (the LaTeX notes,
 `docs/`) must be produced by a checked-in script (a `py/fig_*.py`, or a `scripts/` generator) that
 reads the data and writes the image — never with a throwaway inline/ad-hoc command. The script and

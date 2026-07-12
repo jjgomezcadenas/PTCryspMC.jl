@@ -101,3 +101,37 @@ no RNG object).
     u = (z >> 11) * (1.0 / 9007199254740992.0)        # top 53 bits → uniform in [0, 1)
     m.t0 - log1p(-u * m.norm) / m.λ                   # inverse truncated-exponential CDF
 end
+
+# ── Mizuno three-component biological washout (brain) ─────────────────────────────────────────
+# See CryspBrainSim/latex/washout_brain.tex. W(t) = Σ_k M_k e^{-λ_k t}, one W for all isotopes
+# (tissue-level). We do NOT apply washout here (it is left to downstream); these give the per-isotope
+# window-integrated survival factor g_i, stamped into each shard so downstream can apply the exact
+# Bernoulli-g_i keep or recompute for a different model. Rabbit-brain params from Mizuno et al. 2003.
+const MIZUNO_FRACTIONS = (0.35, 0.30, 0.35)            # M_k: fast, medium, slow
+const MIZUNO_THALF_S   = (2.0, 140.0, 10191.0)         # T_k^bio [s]
+
+# Φ(a) = (e^{a·t_irr} − 1)(e^{-a·t1} − e^{-a·t2}) / a²  — the uniform-production window integral
+# (washout_brain.tex Eq. 7); a = a decay rate [1/s], the acquisition window is [t1, t2].
+_washout_phi(a::Float64, t_irr::Float64, t1::Float64, t2::Float64)::Float64 =
+    (exp(a * t_irr) - 1.0) * (exp(-a * t1) - exp(-a * t2)) / (a * a)
+
+"""
+    washout_gi(lambda_phys, t_irr, t1, t2; fractions=MIZUNO_FRACTIONS, thalf=MIZUNO_THALF_S) -> Float64
+
+The per-isotope washout survival factor g_i (washout_brain.tex Eq. 8): the fraction of physically
+recorded decays of a species with physical rate `lambda_phys` [1/s] that also survive clearance,
+window-integrated over the acquisition [t1, t2] with uniform production over [0, t_irr]. A pure
+scalar; downstream applies it as a Bernoulli keep (exact for uniform clearance).
+"""
+function washout_gi(lambda_phys::Real, t_irr::Real, t1::Real, t2::Real;
+                    fractions::NTuple{3,Float64}=MIZUNO_FRACTIONS,
+                    thalf::NTuple{3,Float64}=MIZUNO_THALF_S)::Float64
+    lp = Float64(lambda_phys); ti = Float64(t_irr); a = Float64(t1); b = Float64(t2)
+    denom = _washout_phi(lp, ti, a, b)
+    denom == 0.0 && return 1.0
+    num = 0.0
+    for k in 1:3
+        num += fractions[k] * _washout_phi(lp + log(2.0) / thalf[k], ti, a, b)
+    end
+    num / denom
+end

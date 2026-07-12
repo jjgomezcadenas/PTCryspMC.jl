@@ -40,8 +40,9 @@ function schema_markdown()::String
                 "`round(mm / $(XYZ_SCALE_MM))`, energy = `round(keV / $(E_SCALE_KEV))` — lossless at ",
                 "detector resolution; decode with `decode_xyz` / `decode_e`. Times are `Float32` ",
                 "nanoseconds **relative to the decay**; the decay's absolute time in the acquisition ",
-                "window is the LOR column `t_decay_s` (`Float32` seconds, zero = acquisition start), ",
-                "so absolute photon time = `t_decay_s·1e9 + t`.")
+                "window is the LOR column `t_decay_s` (`Float32` seconds; the zero is the ",
+                "`t_decay_zero` attribute — `acquisition_start` in legacy files, `irradiation_end` in ",
+                "generation-2 shards), so absolute photon time = `t_decay_s·1e9 + t`.")
     println(io)
 
     println(io, "## Singles — `prod/<tag>/singles.{h5,csv}`")
@@ -90,7 +91,30 @@ function schema_markdown()::String
     println(io, "| `tau_ns` | lors_det, randoms | coincidence window |")
     println(io, "| `sigma_xyz_mm`, `eres`, `emin_keV`, `window_fwhm` | lors_det | detector response + energy cut |")
     println(io, "| `t_relative_to_decay`, `t0_s`, `t1_s`, `half_life_s`, `time_seed` | LORs | the activity clock for absolute time |")
-    println(io, "| `t_decay_zero` | LORs | zero point of `t_decay_s` (`acquisition_start`) |")
+    println(io, "| `t_decay_zero` | LORs | zero point of `t_decay_s` (`acquisition_start`, or `irradiation_end` in v2) |")
+    println(io)
+    println(io, "### Generation-2 (`generation = \"v2\"`) shard attributes")
+    println(io)
+    println(io, "Every `lors_det_del<NNN>.h5` is self-describing (see `dev/generation2_plan.md` §5). ",
+                "`generation` is the mandatory semantics guard — consumers must check it and refuse to ",
+                "mix generations, since the `t_decay_s` zero moved to `irradiation_end`. Enumerated set:")
+    println(io)
+    println(io, "| Attribute | Meaning |")
+    println(io, "|-----------|---------|")
+    println(io, "| `generation` | products generation, `\"v2\"` (mandatory guard) |")
+    println(io, "| `schema_version` | schema version (int) |")
+    println(io, "| `t_decay_zero` | `\"irradiation_end\"` |")
+    println(io, "| `center_on`, `source_z_offset_mm` | patient placement (distal-edge centring, +mm z-shift) |")
+    println(io, "| `t_irr_s` | irradiation duration |")
+    println(io, "| `t_del_s`, `t_ac_s`, `t1_s`, `t2_s` | this scenario's delay, acquisition length, window `[t1,t2]` |")
+    println(io, "| `t_window_lo_s`, `t_window_hi_s` | the union transport window |")
+    println(io, "| `isotope_names`, `isotope_half_lives` | isotope id → name / T½ (id = the `isotope` column) |")
+    println(io, "| `sigma_t_ns`, `eres_fwhm_511` | per-crystal timing floor / energy resolution |")
+    println(io, "| `geometry_json` | the full scanner+phantom+world geometry, embedded verbatim |")
+    println(io, "| `scanner_name`, `ring_radius_mm`, `afov_mm`, `crystal_depth_mm` | scanner scalars |")
+    println(io, "| `washout_model` | `\"mizuno_brain_3comp\"` |")
+    println(io, "| `washout_fractions`, `washout_Thalf_s` | Mizuno M_k / T_k^bio (3-vectors) |")
+    println(io, "| `washout_g` | per-isotope survival g_i for this window (NOT applied; `washout_applied=false`) |")
     String(take!(io))
 end
 

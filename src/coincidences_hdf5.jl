@@ -20,7 +20,7 @@ const COINC_BLOCK = 1 << 20     # rows buffered before a block is appended to th
 @inline _enc_e_c(keV::Real)::Int16  = Int16(clamp(round(Int, keV / E_SCALE_KEV), 0, 32767))
 
 struct CoincidenceBuffer
-    event::Vector{Int32}; truth::Vector{Int8}
+    event::Vector{Int32}; truth::Vector{Int8}; isotope::Vector{Int8}
     x1::Vector{Int16}; y1::Vector{Int16}; z1::Vector{Int16}; e1::Vector{Int16}
     t1::Vector{Float32}; iz1::Vector{Int16}; iphi1::Vector{Int16}; nscat1::Vector{Int8}
     x2::Vector{Int16}; y2::Vector{Int16}; z2::Vector{Int16}; e2::Vector{Int16}
@@ -29,7 +29,7 @@ struct CoincidenceBuffer
     x0::Vector{Int16}; y0::Vector{Int16}; z0::Vector{Int16}
     t_decay::Vector{Float32}                  # absolute decay time in the acquisition window [s]
 end
-CoincidenceBuffer() = CoincidenceBuffer(Int32[], Int8[],
+CoincidenceBuffer() = CoincidenceBuffer(Int32[], Int8[], Int8[],
     Int16[], Int16[], Int16[], Int16[], Float32[], Int16[], Int16[], Int8[],
     Int16[], Int16[], Int16[], Int16[], Float32[], Int16[], Int16[], Int8[],
     Float32[], Int16[], Int16[], Int16[], Float32[])
@@ -37,7 +37,7 @@ Base.length(b::CoincidenceBuffer) = length(b.event)
 
 "The LOR columns in canonical order (name, vector) — the schema + dataset/IO ordering."
 coinc_columns(b::CoincidenceBuffer) = (
-    ("event", b.event), ("truth", b.truth),
+    ("event", b.event), ("truth", b.truth), ("isotope", b.isotope),
     ("x1_mm", b.x1), ("y1_mm", b.y1), ("z1_mm", b.z1), ("e1_keV", b.e1), ("t1_ns", b.t1), ("iz1", b.iz1), ("iphi1", b.iphi1), ("nscat1", b.nscat1),
     ("x2_mm", b.x2), ("y2_mm", b.y2), ("z2_mm", b.z2), ("e2_keV", b.e2), ("t2_ns", b.t2), ("iz2", b.iz2), ("iphi2", b.iphi2), ("nscat2", b.nscat2),
     ("dt_ns", b.dt),
@@ -52,6 +52,7 @@ Base.empty!(b::CoincidenceBuffer) = (foreach(c -> empty!(c[2]), coinc_columns(b)
 const coinc_doc = Dict{String,Tuple{String,String}}(
     "event"  => ("",    "annihilation index (shared by the two gammas; a cross-decay pair for randoms)"),
     "truth"  => ("",     "0 = true, 1 = scatter, 2 = random"),
+    "isotope"=> ("",     "emitting isotope id (0=O15,1=C11,2=N13,3=C10,4=O14; gamma 1's decay for randoms)"),
     "x1_mm"  => ("mm",   "gamma 1 hit position (smeared in lors_det), x"),
     "y1_mm"  => ("mm",   "gamma 1 hit position, y"),
     "z1_mm"  => ("mm",   "gamma 1 hit position, z"),
@@ -77,8 +78,8 @@ const coinc_doc = Dict{String,Tuple{String,String}}(
 
 "Append one accepted LOR (the `finish_event!` emit args + the event's `t_decay` [s]), quantized."
 function push_coincidence!(b::CoincidenceBuffer, ev, x1, y1, z1, e1, t1, iz1, iphi1, nscat1,
-                           x2, y2, z2, e2, t2, iz2, iphi2, nscat2, dt, x0, y0, z0, truth, t_decay)
-    push!(b.event, Int32(ev)); push!(b.truth, Int8(truth))
+                           x2, y2, z2, e2, t2, iz2, iphi2, nscat2, dt, x0, y0, z0, truth, isotope, t_decay)
+    push!(b.event, Int32(ev)); push!(b.truth, Int8(truth)); push!(b.isotope, Int8(isotope))
     push!(b.x1, _enc_xyz_c(x1)); push!(b.y1, _enc_xyz_c(y1)); push!(b.z1, _enc_xyz_c(z1))
     push!(b.e1, _enc_e_c(e1)); push!(b.t1, Float32(t1)); push!(b.iz1, Int16(iz1)); push!(b.iphi1, Int16(iphi1)); push!(b.nscat1, Int8(min(nscat1, 127)))
     push!(b.x2, _enc_xyz_c(x2)); push!(b.y2, _enc_xyz_c(y2)); push!(b.z2, _enc_xyz_c(z2))
@@ -119,7 +120,8 @@ function CoincidenceWriter(path::AbstractString, attrs::AbstractDict; block::Int
     end
     attributes(f)["xyz_scale_mm"] = XYZ_SCALE_MM
     attributes(f)["e_scale_keV"]  = E_SCALE_KEV
-    attributes(f)["t_decay_zero"] = "acquisition_start"
+    # t_decay_zero: the caller may stamp it (v2 = "irradiation_end"); default to the legacy zero.
+    haskey(attrs, "t_decay_zero") || (attributes(f)["t_decay_zero"] = "acquisition_start")
     CoincidenceWriter(f, dsets, proto, 0, block)
 end
 
@@ -153,7 +155,10 @@ const PROVENANCE_ATTRS = String[
     "source_mode", "scenario", "budget", "dose_Gy", "realization", "master_seed",
     "keep_escaped", "prompt_gamma_modeled", "n_escaped_dropped",
     "phantom_material", "geometry_file", "n_phi", "n_z",
-    "isotope_names", "t_meas_s", "time_seed",
+    "isotope_names", "isotope_half_lives", "t_meas_s", "time_seed",
+    # generation-2: source placement + irradiation-end timing window (propagate so lors_det is
+    # self-describing; reco stamps the per-scenario window/washout on top).
+    "center_on", "source_z_offset_mm", "t_window_lo_s", "t_window_hi_s", "t_irr_s",
 ]
 
 """
@@ -196,7 +201,7 @@ function foreach_coincidences_hdf5(f, path::AbstractString; batch::Int = 1 << 20
         while lo <= total
             hi = min(lo + batch - 1, total); rng = lo:hi
             rd(name) = h[name][rng]
-            b = CoincidenceBuffer(rd("event"), rd("truth"),
+            b = CoincidenceBuffer(rd("event"), rd("truth"), rd("isotope"),
                 rd("x1_mm"), rd("y1_mm"), rd("z1_mm"), rd("e1_keV"), rd("t1_ns"), rd("iz1"), rd("iphi1"), rd("nscat1"),
                 rd("x2_mm"), rd("y2_mm"), rd("z2_mm"), rd("e2_keV"), rd("t2_ns"), rd("iz2"), rd("iphi2"), rd("nscat2"),
                 rd("dt_ns"),
