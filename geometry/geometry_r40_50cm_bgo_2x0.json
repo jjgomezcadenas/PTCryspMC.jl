@@ -1,0 +1,31 @@
+{
+    "_doc": "Head-phantom geometry for the API source mode — BGO ring at 2 radiation lengths, v2 CRYOSTAT variant: r_inner = the CsI R35 ring + 5 cm (BGO sits inside a cryostat; the crystals move 5 cm outward for the cryostat + insulation). crysp_r40_50cm: CsI R35 -> BGO r_inner 40.0 cm; n_phi recomputed at the fixed block face (~5.11 cm arc): 43 -> 49; n_z and AFOV unchanged (half_length 25.6 cm). This is the BGO counterpart of the CsI crysp_r35_50cm (compare the two: the +5 cm is the cryostat penalty). wall = 2 X0 of BGO (2.236 cm). The config's [transport].crystal_material picks the crystal (BGO_195K produced). The phantom section is a PLACEHOLDER — replaced in mode=\"api\" by the scenario phantom. Dimensions in cm.",
+    "world": {
+        "name": "world",
+        "shape": "cylinder",
+        "radius_cm": 60.0,
+        "half_length_cm": 60.0,
+        "position_cm": [0.0, 0.0, 0.0],
+        "material": "Air"
+    },
+    "phantom": {
+        "name": "head_placeholder",
+        "shape": "ellipsoid",
+        "a_cm": 7.2,
+        "b_cm": 8.7,
+        "c_cm": 10.2,
+        "position_cm": [0.0, -3.0, 0.0],
+        "material": "G4_BRAIN_ICRP"
+    },
+    "scanner": {
+        "name": "crysp_r40_50cm_bgo_2x0",
+        "shape": "cyl_shell",
+        "r_inner_cm": 40.0,
+        "wall_thickness_cm": 2.236,
+        "half_length_cm": 25.6,
+        "n_phi": 49,
+        "n_z": 10,
+        "position_cm": [0.0, 0.0, 0.0],
+        "material": "BGO_195K"
+    }
+}
