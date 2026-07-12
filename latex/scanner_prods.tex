@@ -515,6 +515,55 @@ the per-LOR isotope truth) --- $^{15}$O depletes and $^{11}$C grows with the del
 \label{fig:shard}
 \end{figure}
 
+\subsection*{The CsI three-ring survey}
+
+Three CsI rings are produced in v2: the 1\,m flagship (\texttt{crysp\_ring\_1m}, $R\,38.7$\,cm /
+AFOV $102$\,cm) and two compact head rings at $R\,35$\,cm (\texttt{crysp\_r35\_50cm} and
+\texttt{crysp\_r35\_35cm}, AFOV $51$ and $36$\,cm), each across the three acquisition scenarios (ten
+shards, $\Sigma M = 4.87\times10^{8}$ per leaf). Table~\ref{tab:csisurvey} and
+Fig.~\ref{fig:csisurvey} summarise them. Acceptance grows with the axial FOV --- a larger solid angle
+catches more gammas --- and falls with the arrival delay as the short-lived activity decays, from
+$6.4\%$ (1\,m ring, $t_{\mathrm{del}}=120$\,s) down to $1.4\%$ ($36$\,cm ring, $t_{\mathrm{del}}=300$\,s).
+Purity is geometry- and delay-independent at ${\sim}87\%$, dipping ${\sim}1$ point at the largest
+ring (its larger solid angle admits marginally more phantom scatter). Whether the acceptance ordering
+carries over to a $\sigma_R$ ordering is the downstream reconstruction question; these masters are
+its clean, tumour-centred input.
+
+\begin{table}[htbp]
+\centering
+\caption{CsI three-ring v2 survey (tumour-centred, $t_{\mathrm{ac}}=300$\,s): per acquisition
+scenario, the selected-LOR yield (per shard; the master pools ten), the acceptance (selected LORs per
+annihilation), and the purity (true fraction of the detected LORs).}
+\label{tab:csisurvey}
+\begin{tabular}{lccccc}
+\hline
+ring ($R$/AFOV) & $t_{\mathrm{del}}$ [s] & AFOV [cm] & LORs/shard & acceptance [\%] & purity [\%] \\
+\hline
+R38.7/102 & 120 & 102 & 3.09\,M & 6.35 & 86.7 \\
+R38.7/102 & 180 & 102 & 2.34\,M & 4.80 & 86.7 \\
+R38.7/102 & 300 & 102 & 1.41\,M & 2.90 & 86.7 \\
+\hline
+R35/51 & 120 & 51 & 2.09\,M & 4.29 & 87.4 \\
+R35/51 & 180 & 51 & 1.58\,M & 3.24 & 87.4 \\
+R35/51 & 300 & 51 & 0.95\,M & 1.95 & 87.4 \\
+\hline
+R35/36 & 120 & 36 & 1.47\,M & 3.01 & 87.6 \\
+R35/36 & 180 & 36 & 1.11\,M & 2.27 & 87.7 \\
+R35/36 & 300 & 36 & 0.67\,M & 1.37 & 87.7 \\
+\hline
+\end{tabular}
+\end{table}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\textwidth]{figures/csi_survey.png}
+\caption{CsI three-ring v2 survey. \textbf{Left:} acceptance vs axial FOV, per acquisition scenario
+--- it grows with the FOV (more solid angle) and falls with the arrival delay (short-lived activity
+gone). \textbf{Right:} purity (true fraction of detected LORs) --- geometry- and delay-independent at
+${\sim}87\%$, dipping slightly at the largest ring. Shard 0 (per-shard-stable quantities).}
+\label{fig:csisurvey}
+\end{figure}
+
 \section{Deferred refinements}
 \label{sec:deferred}
 
