@@ -432,65 +432,87 @@ no readout floor, $450\keV$ cut, $\tau = 3\ns$, $\sigma_{xyz} = 1.7$\,mm Gaussia
 It remains valid as a methods reference but must not be pooled or compared quantitatively with
 any survey arm.
 
-\section{The source activity and its acquisition-time dependence}
+\section{The v2 convention and the first production round}
 \label{sec:activity}
 
-\subsection*{Where the activity is}
+Generation-2 fixes three conventions (full spec: \texttt{generation2\_plan.md}), each recorded in
+every shard's HDF5 attributes so a file is self-describing --- guarded by \texttt{generation="v2"}.
 
-Figure~\ref{fig:activity} is the truth $\beta^+$ activity depth profile of the scenario, per
-isotope. It is $^{15}$O-dominated (${\sim}65\%$), with $^{11}$C the main slow component and
-$^{13}$N/$^{10}$C/$^{14}$O minor; the total rises from the entrance, peaks broadly, and falls
-through its distal edge. The \textbf{distal edge} --- the activity R50 --- is the range endpoint
-the study fits; it is the downstream ($+z$) end of the activity, so essentially all the
-activation lies proximal of it. The source is positioned so this edge sits at the ring centre
-($z=0$), where the ring subtends the maximum symmetric solid angle, maximising the acceptance of
-the LORs from the critical edge region (a source-side shift; the scanner sits at the origin).
-Every scanner sees the identical, identically-positioned source, so all differences across the
-survey are detector/geometry-only.
+\subsection*{Patient placement: tumour-centred}
+
+The patient is placed as in the clinic: the \textbf{tumour} at isocentre --- a fixed anatomical
+reference set from NMR/CT \emph{before} any acquisition, not the activity edge (which drifts with the
+window). The source and phantom are rigidly shifted in $z$ (the scanner stays at the origin) so the
+SOBP dose-target centre sits at $z=0$; that centre is the distal dose R80 minus half the target
+thickness --- a dose-based quantity, independent of the acquisition window, isotope mix, and washout
+(here $+25.6$\,mm, stamped \texttt{source\_z\_offset\_mm}). Every scanner sees the identical,
+identically-placed source, so survey differences are detector/geometry-only. Figure~\ref{fig:activity}
+shows the source activity: the tumour at $z=0$, the $\beta^+$ activity ($^{15}$O-dominated) peaking
+proximal --- the usual $\beta^+$-upstream-of-dose offset --- and falling through its distal edge (the
+activity R50, the range endpoint) ${\sim}+10$\,mm distal of the tumour.
 
 \begin{figure}[htbp]
 \centering
 \includegraphics[width=0.86\textwidth]{figures/activity_truth.png}
-\caption{Source activity depth profile (truth), per isotope, at 1\,Gy, over the full acquisition
-window. The total (black) falls through its distal edge (R50), the range endpoint, placed at the
-ring centre $z=0$; the shaded band is the tumour/target extent, which straddles the activity
-edge (the activity peaks proximal of the tumour, the usual $\beta^+$-upstream-of-dose offset).
-Source level --- no scanner.}
+\caption{Source activity depth profile (truth), per isotope, at 1\,Gy. \textbf{Tumour-centred}: the
+SOBP dose-target centre is at $z=0$ (shaded band = target extent); the activity peaks proximal and
+falls through its distal edge (R50, the range endpoint) ${\sim}+10$\,mm distal of the tumour. Source
+level --- no scanner.}
 \label{fig:activity}
 \end{figure}
 
-\subsection*{Activity vs.\ the acquisition start time}
+\subsection*{Timing: fixed acquisitions on the irradiation-end clock}
 
-The five isotopes have very different half-lives --- $^{10}$C $19$\,s, $^{14}$O $71$\,s,
-$^{15}$O $122$\,s, $^{13}$N $598$\,s, $^{11}$C $1223$\,s --- so the activity seen by the scanner
-depends strongly on \emph{when} acquisition starts. Because every stored coincidence carries its
-absolute decay time (\texttt{t\_decay\_s}), any start time is a pure event selection
-$t_{\mathrm{decay}} \ge t_{\mathrm{start}}$ on the produced list --- no re-simulation. As
-$t_{\mathrm{start}}$ is delayed, the short-lived components decay away and the profile collapses
-toward the $^{11}$C/$^{13}$N long-lived tail, losing counts and reshaping the distal edge --- the
-timing rung of the range-degradation study.
+Time is measured from the \textbf{end of irradiation} (attr \texttt{t\_decay\_zero =
+irradiation\_end}). Each product is a \textbf{fixed acquisition window} $[t_{\mathrm{del}},
+t_{\mathrm{del}}+t_{\mathrm{ac}}]$: the patient arrives a delay $t_{\mathrm{del}}$ after the beam and
+is imaged for a fixed $t_{\mathrm{ac}}=300$\,s (realistic in-room PET) --- \emph{not} a shrinking
+window. The first round takes $t_{\mathrm{del}}\in\{120,180,300\}$\,s. Transport runs once over the
+union window $[120,600]$\,s and each scenario is a band-cut of it ($t_{\mathrm{decay}}$ within the
+window); on the irradiation-end clock the acquisition window, the physical decay, and the washout age
+($=t_{\mathrm{decay}}$) factor cleanly, which is why this reframing removes the timing coupling that
+made a shrinking-window start-cut error-prone.
 
-This is a source-level effect --- it does not depend on the scanner. At the source, a start-time
-cut scales each isotope's contribution by its surviving fraction over the window,
-$f_j(t_{\mathrm{start}}) = (e^{-\lambda_j t_{\mathrm{start}}} - e^{-\lambda_j T_{\mathrm{meas}}}) /
-(1 - e^{-\lambda_j T_{\mathrm{meas}}})$, without changing its depth shape (the decay time is drawn
-independent of position). Figure~\ref{fig:tstart} shows the truth activity depth profile, per
-isotope, at $t_{\mathrm{start}} = 0,\,120,\,180,\,300$\,s. At $t=0$ it is $^{15}$O-dominated; by
-$300$\,s the $^{10}$C and $^{14}$O are gone and $^{15}$O has fallen to ${\sim}18\%$, leaving the
-$^{11}$C/$^{13}$N tail --- roughly a third of the counts, and, because those isotopes have a
-different depth distribution, a slightly reshaped distal edge. Every scanner sees this same
-source evolution, modulated only by its axial acceptance.
+Because the five isotopes span half-lives $19$--$1223$\,s ($^{10}$C $19$, $^{14}$O $71$,
+$^{15}$O $122$, $^{13}$N $598$, $^{11}$C $1223$\,s), a later start loses the short-lived components
+and reshapes the profile --- the timing rung of the range-degradation study.
+Figure~\ref{fig:tstart} is the source truth for the three scenarios, each isotope scaled to its
+expected decays in the window. From $t_{\mathrm{del}}=120$ to $300$\,s the total falls by
+${\sim}2.3\times$ and the mix shifts from $^{15}$O-dominated toward the $^{11}$C tail; because those
+isotopes sit at different depths, the distal edge reshapes. Every scanner sees this same source
+evolution, modulated only by its axial acceptance.
 
 \begin{figure}[htbp]
 \centering
 \includegraphics[width=\textwidth]{figures/activity_vs_tstart.png}
-\caption{Source activity depth profile (truth), per isotope, at acquisition start times
-$t_{\mathrm{start}} = 0,\,120,\,180,\,300$\,s --- each isotope scaled by its surviving fraction
-$f_j(t_{\mathrm{start}})$ over the window (equivalently, the cut
-$t_{\mathrm{decay}} \ge t_{\mathrm{start}}$ on the stored decay time). Delaying the start removes
-the short-lived isotopes, cutting counts and reshaping the distal edge. Distal edge at $z=0$;
-no scanner (source level).}
+\caption{Source activity depth profile (truth), per isotope, for the three fixed acquisition
+scenarios $t_{\mathrm{del}}=120/180/300$\,s (window $[t_{\mathrm{del}}, t_{\mathrm{del}}+300]$\,s) ---
+each isotope scaled to its expected decays in the window. Delaying the start removes the short-lived
+isotopes, cutting counts and reshaping the distal edge. Tumour at $z=0$; no scanner (source level).}
 \label{fig:tstart}
+\end{figure}
+
+\subsection*{Isotope truth, and the first shard round}
+
+Every LOR carries its emitting isotope (the \texttt{isotope} column), so the per-species content is
+measured directly rather than inferred from a blind reconstruction. Figure~\ref{fig:shard} documents
+the first v2 master round --- the reference detector \texttt{crysp\_ring\_1m\_csi\_2x0} (CsI), the
+three scenarios, ten shards pooled each. The detected depth profile (left, trues) falls with delay
+($26.8\to20.3\to12.2$\,M) and its distal edge --- the range endpoint --- reshapes; the isotope
+composition (right) shows $^{15}$O depleting ($79\to62\%$) and $^{11}$C growing ($14\to29\%$) as the
+start is delayed. The Mizuno brain washout survival $g_i$ is stamped per shard but \emph{not} applied
+(left to \textsc{CryspBrainSim}); applied downstream it suppresses the long-lived $^{11}$C more than
+the young $^{15}$O, partly opposing this drift.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\textwidth]{figures/shard_scenarios.png}
+\caption{First v2 master round --- \texttt{crysp\_ring\_1m} CsI, tumour-centred, $t_{\rm ac}=300$\,s,
+ten shards pooled per scenario. \textbf{Left:} detected activity depth profile (trues) vs the true
+annihilation depth $z_0$, per acquisition scenario; counts fall and the distal edge reshapes as the
+start is delayed (tumour at $z=0$). \textbf{Right:} isotope composition of the detected trues (from
+the per-LOR isotope truth) --- $^{15}$O depletes and $^{11}$C grows with the delay.}
+\label{fig:shard}
 \end{figure}
 
 \subsection*{Acceptance is not range response}
@@ -508,10 +530,10 @@ transverse one at the edge. Whether $\sigma_R$ tracks the total count or the edg
 count is a reconstruction question, settled downstream by how $\sigma_R$ scales with counts.
 
 \medskip\noindent\textbf{Note on the published survey.} The acceptance table in
-section~\ref{sec:deliverables} was measured in the \emph{native} (off-centre) frame. The
-corrected convention is distal-edge centring; the centred re-run is the basis for the final
-$\sigma_R$ comparison, and the shard-0 acceptances shift up modestly (e.g.\ CsI R350$\times$35\,cm
-$3.11\to3.47\%$, $\times$50\,cm $4.78\to5.06\%$) without changing the ordering.
+section~\ref{sec:deliverables} was measured in the earlier off-centre frame. The v2 convention is
+\textbf{tumour} centring (this section); the reference detector's three-scenario master
+(Fig.~\ref{fig:shard}) is the first v2 production, and the survey is being re-run in this convention
+for the final $\sigma_R$ comparison.
 
 \section{Deferred refinements}
 \label{sec:deferred}

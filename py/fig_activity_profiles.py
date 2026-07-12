@@ -1,24 +1,23 @@
 #!/usr/bin/env python3
-"""Figures for latex/scanner_prods.tex — the source activity and its acquisition-time dependence.
+"""Source-level truth figures for latex/scanner_prods.tex (v2 convention).
 
-Both figures are SOURCE-level (truth, no scanner): the beta+ activity depth profile per isotope,
-with the distal edge (R50) centred at z=0 (patient positioning). At acquisition start time
-t_start the activity a scanner records is the truth profile with each isotope j scaled by its
-surviving fraction over the window [0, T_meas],
+Both figures are SOURCE-level (truth, no scanner), in the v2 convention: **tumour-centred** — z = 0
+is the SOBP dose-target centre (a fixed anatomical reference, from the distal dose R80 minus half the
+target thickness), not the drifting activity edge. The acquisition is a family of **fixed windows**
+[t_del, t_del + t_ac] on the irradiation-end clock (t_ac = 300 s), one per patient-arrival delay
+t_del. The activity a scanner would record in scenario (t_del) is the truth profile with each isotope
+j scaled by its expected decays in that window,
 
-    f_j(t_start) = (e^{-lam_j t_start} - e^{-lam_j T_meas}) / (1 - e^{-lam_j T_meas}),
+    s_j(t1, t2) = (e^{-lam_j t1} - e^{-lam_j t2}) / (e^{-lam_j t_del^bud} - e^{-lam_j (t_del^bud + t_meas^bud)}),
 
-since the decay time is drawn from a truncated exponential on [0, T_meas] independent of position
-(so a start-time cut scales each isotope's amplitude, not its shape). This uses only the truth
-activity profile and the isotope half-lives — no per-scanner simulation.
+i.e. the count in [t1, t2] relative to the fast budget window the truth profile is normalised to
+([60, 1260] s). Uses only the truth activity profile + dose + the isotope half-lives — no scanner.
 
 Produces two tracked figures in latex/figures/:
-  activity_truth.png       the truth activity per isotope (full window), edge centred at 0.
-  activity_vs_tstart.png   four panels, one per t_start = 0,120,180,300 s, each the per-isotope
-                           activity scaled by f_j(t_start) — the isotope-composition evolution.
+  activity_truth.png       the truth activity per isotope (full window), tumour centred at 0.
+  activity_vs_tstart.png   three panels, one per fixed-window scenario t_del = 120/180/300 s.
 
-Source: <PRODS>/<scenario>/truth/activity_profile_<budget>.csv (the canonical truth product from
-src/scenario.jl:write_activity_profile). Half-lives / window from the scenario (below).
+Source: <PRODS>/<scenario>/truth/{activity_profile_<budget>.csv, depth_dose.csv, run_meta.csv}.
 
     python3 py/fig_activity_profiles.py
 """
@@ -30,87 +29,87 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-REPO  = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-PRODS = os.environ.get("PRODS", os.path.expanduser("~/Projects/PtCryspProds"))
-SCEN  = "uniform_headep_sobp_1e8"
+REPO   = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+PRODS  = os.environ.get("PRODS", os.path.expanduser("~/Projects/PtCryspProds"))
+SCEN   = "uniform_headep_sobp_1e8"
 BUDGET = "fast"
-FIGS  = os.path.join(REPO, "latex", "figures")
+FIGS   = os.path.join(REPO, "latex", "figures")
+TRUTH  = os.path.join(PRODS, SCEN, "truth")
 
-# Isotope half-lives [s] and the acquisition window [s] — frozen scenario constants
-# (isotopes.csv / sampling_budget_<budget>_meta.csv of the scenario).
+# Isotope half-lives [s] — frozen scenario constants (isotopes.csv).
 HALF_LIVES = {"O15": 122.24, "C11": 1223.4, "N13": 597.9, "C10": 19.29, "O14": 70.62}
-T_MEAS = 1200.0
-TSTARTS = [0, 120, 180, 300]
+# The fast budget window [t_del_bud, t_del_bud + t_meas_bud] the truth profile counts are normalised to.
+T_DEL_BUD, T_MEAS_BUD = 60.0, 1200.0
+# v2 acquisition scenarios: fixed length t_ac, patient-arrival delays t_del (irradiation-end clock).
+T_AC   = 300.0
+TDELS  = [120, 180, 300]
 ISO_COLORS = {"O15": "#226688", "C11": "#ee88aa", "N13": "#44aa44", "C10": "#cc3333", "O14": "#aa7700"}
 
 
-def _distal_edge(z, y):
-    """Downstream (+z) 50%-of-peak crossing of profile y(z) — the activity R50 [mm]."""
-    pk = int(np.argmax(y)); half = y[pk] / 2.0
-    for i in range(pk, len(y) - 1):
-        if y[i] >= half > y[i + 1]:
-            return z[i] + (z[i + 1] - z[i]) * (y[i] - half) / (y[i] - y[i + 1])
-    return z[pk]
-
-
-def _surviving(iso, t_start):
-    """Fraction of isotope `iso` decaying in [t_start, T_MEAS] (truncated-exponential window)."""
+def _window_scale(iso, t1, t2):
+    """Expected decays of `iso` in [t1, t2] relative to the fast budget window (the profile's norm)."""
     lam = np.log(2) / HALF_LIVES[iso]
-    return (np.exp(-lam * t_start) - np.exp(-lam * T_MEAS)) / (1.0 - np.exp(-lam * T_MEAS))
+    return (np.exp(-lam * t1) - np.exp(-lam * t2)) / (np.exp(-lam * T_DEL_BUD) - np.exp(-lam * (T_DEL_BUD + T_MEAS_BUD)))
 
 
-# Tumour/target z-extent in the native scenario frame [mm] (headep tumour ellipsoid, c=20 at -25).
-TUMOUR_MM = (-45.0, -5.0)
+def _tumour_center_mm():
+    """Native-frame z [mm] of the SOBP target centre = distal dose R80 − half the target thickness."""
+    rows = list(csv.DictReader(open(os.path.join(TRUTH, "depth_dose.csv"))))
+    z = np.array([float(r["z_mm"]) for r in rows]); d = np.array([float(r["dose_core_Gy"]) for r in rows])
+    im = int(np.argmax(d)); half = 0.8 * d[im]; zd80 = z[im]
+    for i in range(im, len(z) - 1):
+        if d[i] >= half > d[i + 1]:
+            zd80 = z[i] + (z[i + 1] - z[i]) * (d[i] - half) / (d[i] - d[i + 1]); break
+    m = list(csv.DictReader(open(os.path.join(TRUTH, "run_meta.csv"))))[0]
+    prox, dist = float(m["target_prox_depth_mm"]), float(m["target_dist_depth_mm"])
+    return zd80 - 0.5 * (dist - prox), 0.5 * (dist - prox)     # (centre, half-thickness)
 
 
 def _load_profile():
-    """Return (z centred on the distal edge, {iso: activity(z)}, isos, shift[mm]) from the bundle."""
-    path = os.path.join(PRODS, SCEN, "truth", "activity_profile_%s.csv" % BUDGET)
-    rows = list(csv.DictReader(open(path)))
+    """Return (z tumour-centred, {iso: activity(z)}, isos, tumour half-thickness [mm])."""
+    rows = list(csv.DictReader(open(os.path.join(TRUTH, "activity_profile_%s.csv" % BUDGET))))
     isos = [c for c in rows[0] if c not in ("z_mm", "total")]
     z    = np.array([float(r["z_mm"]) for r in rows])
     A    = {iso: np.array([float(r[iso]) for r in rows]) for iso in isos}
-    tot  = np.array([float(r["total"]) for r in rows])
-    shift = -_distal_edge(z, tot)                      # bring the distal edge to z=0
-    return z + shift, A, isos, shift
+    center, halfthick = _tumour_center_mm()
+    return z - center, A, isos, halfthick                     # tumour → z = 0
 
 
 def fig_truth():
-    """activity_truth.png — the truth activity per isotope (full window), edge centred at 0."""
-    z, A, isos, shift = _load_profile()
+    """activity_truth.png — the truth activity per isotope (full window), tumour centred at 0."""
+    z, A, isos, ht = _load_profile()
     fig, ax = plt.subplots(figsize=(8, 4.6))
     for iso in isos:
         ax.plot(z, A[iso], lw=1.3, color=ISO_COLORS.get(iso), label=iso)
     ax.plot(z, sum(A.values()), lw=2.2, color="k", label="total")
-    ax.axvspan(TUMOUR_MM[0] + shift, TUMOUR_MM[1] + shift, alpha=0.12, color="purple", label="tumour region")
-    ax.axvline(0, ls="--", color="k", lw=1, label="distal edge (R50) = ring centre")
-    ax.set_xlabel("z along beam [mm]  (distal edge at ring centre)")
+    ax.axvspan(-ht, ht, alpha=0.12, color="purple", label="tumour/target extent")
+    ax.axvline(0, ls="--", color="k", lw=1, label="tumour centre = ring centre")
+    ax.set_xlabel("z along beam [mm]  (tumour/target centre at ring centre)")
     ax.set_ylabel("expected decays / bin")
     ax.set_title("Source activity depth profile (truth), per isotope — 1 Gy")
-    ax.legend(fontsize=8, ncol=2); ax.grid(alpha=0.3); ax.set_xlim(-100, 25)
+    ax.legend(fontsize=8, ncol=2); ax.grid(alpha=0.3); ax.set_xlim(-90, 40)
     fig.tight_layout(); out = os.path.join(FIGS, "activity_truth.png")
     fig.savefig(out, dpi=110); plt.close(fig); print("wrote", out)
 
 
 def fig_tstart():
-    """activity_vs_tstart.png — four panels (t_start=0,120,180,300 s), per-isotope source activity."""
-    z, A, isos, _ = _load_profile()
+    """activity_vs_tstart.png — three panels, per fixed-window scenario t_del = 120/180/300 s."""
+    z, A, isos, ht = _load_profile()
     ymax = max(sum(A.values()))
-    fig, axes = plt.subplots(2, 2, figsize=(11, 7), sharex=True, sharey=True)
-    axes = axes.flatten()
-    for ax, t in zip(axes, TSTARTS):
-        scaled = {iso: A[iso] * _surviving(iso, t) for iso in isos}
+    fig, axes = plt.subplots(1, 3, figsize=(13, 4.2), sharex=True, sharey=True)
+    for ax, td in zip(axes, TDELS):
+        t1, t2 = float(td), float(td) + T_AC
+        scaled = {iso: A[iso] * _window_scale(iso, t1, t2) for iso in isos}
         for iso in isos:
             ax.plot(z, scaled[iso], lw=1.3, color=ISO_COLORS.get(iso), label=iso)
         ax.plot(z, sum(scaled.values()), lw=2.2, color="k", label="total")
         ax.axvline(0, ls=":", color="k", lw=0.9)
-        ax.set_title("acquisition start $t = %d$ s" % t, fontsize=10)
-        ax.grid(alpha=0.3); ax.set_xlim(-100, 25); ax.set_ylim(0, 1.05 * ymax)
-    axes[0].legend(fontsize=8, ncol=2)
-    for i in (0, 2): axes[i].set_ylabel("expected decays / bin")
-    for i in (2, 3): axes[i].set_xlabel("z along beam [mm]  (distal edge at 0)")
-    fig.suptitle("Source activity depth profile per isotope, vs acquisition start time — 1 Gy", fontsize=12)
-    fig.tight_layout(rect=[0, 0, 1, 0.98]); out = os.path.join(FIGS, "activity_vs_tstart.png")
+        ax.set_title(r"$t_{\rm del}=%d$ s, window $[%d,%d]$ s" % (td, td, td + int(T_AC)), fontsize=10)
+        ax.grid(alpha=0.3); ax.set_xlim(-90, 40); ax.set_ylim(0, 1.05 * ymax)
+        ax.set_xlabel("z along beam [mm]  (tumour at 0)")
+    axes[0].set_ylabel("expected decays / bin"); axes[0].legend(fontsize=8, ncol=2)
+    fig.suptitle("Source activity per fixed acquisition scenario (truth) — 1 Gy, $t_{\\rm ac}=300$ s", fontsize=12)
+    fig.tight_layout(rect=[0, 0, 1, 0.96]); out = os.path.join(FIGS, "activity_vs_tstart.png")
     fig.savefig(out, dpi=110); plt.close(fig); print("wrote", out)
 
 
