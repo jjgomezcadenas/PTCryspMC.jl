@@ -102,10 +102,9 @@ produced (the BGO temperatures are timing-degenerate → 195K is the cheaper rep
 `runs/uniform_headep_bgo_api.toml` is the frozen reference of the existing `crysp_ring_1m/bgo`
 master. CsI(Tl) (7%) and the pixelated detectors (LYSO, standard BGO) are still to add.
 
-**Scanner-geometry survey (built).** A family of closed rings, same block/constants/source,
-varying radius and AFOV, to map σ_R vs geometry (full detail + acceptance table:
-`latex/scanner_prods.tex`). Scanners named `crysp_<tag>_{bgo,csi}_2x0`; every arm in both
-crystals; detector-level acceptance (shard 0, of 8.0e7 annihilations, BGO_195K / CsI):
+**Scanner-geometry survey — HISTORICAL (off-centre; SUPERSEDED by the v2 generation below; these
+masters are DELETED).** A family of closed rings, same block/constants/source, varying radius and
+AFOV. Table kept for the geometry-vs-acceptance intuition only (shard 0, off-centre, BGO_195K / CsI):
 
 | scanner | R (mm) | AFOV (mm) | φ×z | accept. BGO / CsI | shards |
 |---|---|---|---|---|---|
@@ -123,24 +122,39 @@ Findings: purity geometry-independent (~72–75% / ~87% trues BGO / CsI); radius
 CHS (R200) beats every R≥300 ring below 1 m; the axial-loss hits the phantom poles, not the
 central distal edge. `chs` = compact head scanner (R200 → ~30 cm bore, vertex-to-C7).
 
-**⚠ Source centring (2026-07-12) — the survey above is OFF-CENTRE and must be regenerated.**
-The published masters were run in the native scenario frame, with the tumour ~25 mm and the
-activity distal edge ~16 mm proximal of the ring centre. The correct patient placement centres
-the range endpoint at isocentre: `[source].center_on = "distal_edge"` (src/scenario.jl), a rigid
-+16.35 mm z-shift of the emitters+phantom, scanner fixed (see CLAUDE.md "Source positioning").
-Centring raises acceptance, more for the compact rings (CsI shard0: R350×35cm 3.11→3.47%,
-×50cm 4.78→5.06%), so the 35/50 count ratio *falls* 1.54→1.46 — the R35/35≈R35/50 closeness is
-robust, not a centring artifact (acceptance ranks total counts; the range endpoint is set by the
-edge-region, near-transverse LORs, which are ~equal — full argument in `latex/scanner_prods.tex`).
+## Generation-2 (current, 2026-07-13) — supersedes the off-centre survey above
 
-**Regeneration plan (pending go).** Re-run the survey with `center_on="distal_edge"`:
-- Centred CsI shard-0 exists for all 8 geometries in `prod/uniform_headep_*_csi_distal_centered/`
-  (configs `runs/uniform_headep_*_csi_distal_centered.toml`); BGO centred not yet run.
-- To rebuild masters: for each arm, copy its `*_csi_api`/`*_bgo195k_api` config to a centred one
-  (add `center_on = "distal_edge"`), then `run_shards <cfg> 0 9` into NEW leaves (append e.g.
-  `_dc` to the scanner name or a distinct products path — do NOT overwrite the off-centre masters
-  until the centred set is validated). σ_R comparison downstream is on the centred set.
-- Detector params unchanged (τ, cuts, σ_xyz per crystal); only the source frame moves.
+The engine now runs the **v2** products convention (full spec + downstream contract:
+`dev/generation2_plan.md`; layout: `dev/PRODUCTS.md`; schema: `docs/SCHEMA.md`):
+
+- **Tumour-centred** patient placement (`[source].center_on="tumour"`, `src/scenario.jl`): the SOBP
+  dose-target centre (distal dose R80 − half the target thickness) sits at the ring centre — a fixed,
+  dose-based reference, window/mix/washout-independent (+25.6 mm shift here). `"distal_edge"` remains
+  in the code but is NOT used (it drifts with the acquisition window).
+- **Irradiation-end clock + fixed acquisition scenarios** `[t_del, t_del+t_ac]`, with
+  `t_del ∈ {120,180,300}` s and `t_ac = 300` s (config `[timing].t_del_list`/`t_ac_s`). Transport runs
+  ONCE over the union window [120,600] s; `reco_lors` band-cuts each scenario → one
+  `lors_det_del<NNN>.h5` per scenario. Counts from the irradiation-end population N_j⁰ (budget-
+  independent, agrees <0.2%). `t_decay_s` zero moved acquisition-start → **irradiation end**.
+- **Isotope truth** per LOR (new `isotope` column) + **self-describing shard metadata**
+  (`generation="v2"` guard, embedded `geometry_json`, Mizuno washout `g_i` stamped — NOT applied,
+  left to downstream; the full §5 attribute set is drift-tested in SCHEMA). `t_ac=1200` was the
+  inherited budget window — replaced by the realistic 300 s.
+- `publish_prod`/`run_shards` handle the per-scenario leaves (`del<t_del>s_ac<t_ac>s_<dose>`) + the v2
+  pruning. `Pkg.test` green.
+
+**Produced (v2, in PtCryspProds; the tree is now ALL-v2, ~15 GB):** six masters, three scenarios × 10
+shards each. **CsI** (r unchanged): `crysp_ring_1m` (R38.7), `crysp_r35_50cm`, `crysp_r35_35cm`.
+**BGO_195K** at **R = CsI + 5 cm** (cryostat; new actual-radius geometries): `crysp_ring_1m` (R43.7),
+`crysp_r40_50cm`, `crysp_r40_35cm`. Findings (shard 0): acceptance grows with AFOV, falls with delay;
+purity geometry/delay-set, ~87% CsI / ~73–77% BGO; **BGO ~2.4× the CsI acceptance** (denser, 413 vs
+472 keV cut, net of the +5 cm cryostat). Documented in `latex/scanner_prods.tex`
+(fig:csisurvey + fig:crystalcompare, from `py/fig_csi_survey.py` + `py/fig_crystal_compare.py`).
+**All old off-centre products (CsI + BGO, incl. the frozen `crysp_ring_1m/bgo` reference) are DELETED.**
+
+**Remaining:** more geometries / the second BGO temperature on demand (`run_shards <v2 cfg> 0 9`);
+downstream σ_R (CryspBrainSim vendors `dev/generation2_plan.md` + `docs/SCHEMA.md` + `dev/PRODUCTS.md`
++ `dev/data_generation_strategy.md`, all v2-updated).
 
 ## Documentation
 

@@ -56,14 +56,15 @@ tracer distribution) reads none. Point the API driver at one scenario directory 
 Stamp the scenario name into every output.
 
 **Source positioning (patient placement).** The frozen scenario's coordinates put the tumour off
-the ring centre (native frame: tumour centre z = −25 mm, activity distal edge ≈ −16 mm, activity
-peak ≈ −55 mm; the β⁺ activity peaks proximal of the dose). Clinically the patient is positioned so
-the target is at isocentre, so `[source].center_on = "distal_edge"` (in `src/scenario.jl`
-`load_scenario`) rigidly shifts the emitter pool **and** the phantom in z so the activity distal
-edge (the range endpoint, R50) sits at z = 0 — maximising the acceptance of the edge-region LORs.
-The scanner stays at the origin; emitters and phantom move together (offset ≈ +16.35 mm, stamped
-`source_z_offset_mm`). Default (knob absent) = native frame. **All published survey masters were
-produced in the NATIVE (off-centre) frame** — see `dev/status.md` for the pending centred re-run.
+the ring centre (native frame: tumour/SOBP-target centre z ≈ −26 mm; the β⁺ activity peaks proximal
+of the dose). Clinically the patient is positioned with the **tumour** at isocentre — a fixed
+anatomical reference set from NMR/CT before any acquisition — so the current convention is
+`[source].center_on = "tumour"` (in `src/scenario.jl` `load_scenario`): it rigidly shifts the emitter
+pool **and** the phantom in z (scanner fixed) so the SOBP dose-target centre (the distal dose R80
+minus half the target thickness — dose-based, hence window/mix/washout-independent) sits at z = 0.
+Offset ≈ +25.6 mm, stamped `source_z_offset_mm`. `"distal_edge"` (centre the activity R50) remains in
+the code but is NOT used — it drifts with the acquisition window. This is part of the **v2** products
+convention — see `dev/generation2_plan.md` and `dev/status.md` "Generation-2".
 
 ## How the simulation works (decisions)
 
