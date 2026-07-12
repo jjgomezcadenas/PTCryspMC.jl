@@ -59,25 +59,30 @@ def _surviving(iso, t_start):
     return (np.exp(-lam * t_start) - np.exp(-lam * T_MEAS)) / (1.0 - np.exp(-lam * T_MEAS))
 
 
+# Tumour/target z-extent in the native scenario frame [mm] (headep tumour ellipsoid, c=20 at -25).
+TUMOUR_MM = (-45.0, -5.0)
+
+
 def _load_profile():
-    """Return (z centred on the distal edge, {iso: activity(z)}), from the truth bundle."""
+    """Return (z centred on the distal edge, {iso: activity(z)}, isos, shift[mm]) from the bundle."""
     path = os.path.join(PRODS, SCEN, "truth", "activity_profile_%s.csv" % BUDGET)
     rows = list(csv.DictReader(open(path)))
     isos = [c for c in rows[0] if c not in ("z_mm", "total")]
     z    = np.array([float(r["z_mm"]) for r in rows])
     A    = {iso: np.array([float(r[iso]) for r in rows]) for iso in isos}
     tot  = np.array([float(r["total"]) for r in rows])
-    z    = z - _distal_edge(z, tot)                    # centre the distal edge at z=0
-    return z, A, isos
+    shift = -_distal_edge(z, tot)                      # bring the distal edge to z=0
+    return z + shift, A, isos, shift
 
 
 def fig_truth():
     """activity_truth.png — the truth activity per isotope (full window), edge centred at 0."""
-    z, A, isos = _load_profile()
+    z, A, isos, shift = _load_profile()
     fig, ax = plt.subplots(figsize=(8, 4.6))
     for iso in isos:
         ax.plot(z, A[iso], lw=1.3, color=ISO_COLORS.get(iso), label=iso)
     ax.plot(z, sum(A.values()), lw=2.2, color="k", label="total")
+    ax.axvspan(TUMOUR_MM[0] + shift, TUMOUR_MM[1] + shift, alpha=0.12, color="purple", label="tumour region")
     ax.axvline(0, ls="--", color="k", lw=1, label="distal edge (R50) = ring centre")
     ax.set_xlabel("z along beam [mm]  (distal edge at ring centre)")
     ax.set_ylabel("expected decays / bin")
@@ -89,7 +94,7 @@ def fig_truth():
 
 def fig_tstart():
     """activity_vs_tstart.png — four panels (t_start=0,120,180,300 s), per-isotope source activity."""
-    z, A, isos = _load_profile()
+    z, A, isos, _ = _load_profile()
     ymax = max(sum(A.values()))
     fig, axes = plt.subplots(2, 2, figsize=(11, 7), sharex=True, sharey=True)
     axes = axes.flatten()
