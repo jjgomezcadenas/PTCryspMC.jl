@@ -12,6 +12,28 @@ essential to not misuse them (especially the shard/thinning distinction below).
 
 ---
 
+## 0. Generation-2 (current products) — what changed for you
+
+The shard / realization / `thin_lm` / σ_R model in this document is **unchanged** — it now simply
+runs **per acquisition-scenario leaf**. What differs in generation v2 (full spec:
+`dev/generation2_plan.md`; layout: `dev/PRODUCTS.md`; schema: `docs/SCHEMA.md`):
+
+- **Per-scenario leaves.** The timing leaf is `del<t_del>s_ac<t_ac>s_<dose>` (a fixed acquisition
+  `[t_del, t_del+t_ac]` on the irradiation-end clock), **one per scenario** — e.g.
+  `.../csi/del120s_ac300s_1Gy/`. Pool + thin **within** one leaf (never across scenarios); you get
+  **one σ_R curve per scenario**, and the delay dependence is read across leaves.
+- **Guard on `generation`.** Every shard carries `generation="v2"`; check it and refuse to mix
+  generations, because `t_decay_s`'s zero moved to **irradiation end** (attr `t_decay_zero`).
+- **Isotope column** per LOR → exact per-species selection / σ_R^(i); ignore it to stay isotope-blind.
+- **Washout is NOT applied.** Apply it yourself as a per-species Bernoulli keep with the stamped
+  `washout_g` (Mizuno; see `washout_brain.tex`), or recompute for another model from the stamped
+  timing + params. Un-washed per-species profiles `P_i(z)` are in `truth/`. Do this as a thinning
+  step alongside `thin_lm`.
+- **Tumour-centred phantom** (`center_on="tumour"`, `source_z_offset_mm` stamped) — the source frame
+  already has the tumour at the ring centre; nothing for you to shift.
+
+---
+
 ## 1. The pipeline and the four parts
 
 ```
