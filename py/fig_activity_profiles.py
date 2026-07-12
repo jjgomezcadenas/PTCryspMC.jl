@@ -1,55 +1,46 @@
 #!/usr/bin/env python3
 """Figures for latex/scanner_prods.tex — the source activity and its acquisition-time dependence.
 
+Both figures are SOURCE-level (truth, no scanner): the beta+ activity depth profile per isotope,
+with the distal edge (R50) centred at z=0 (patient positioning). At acquisition start time
+t_start the activity a scanner records is the truth profile with each isotope j scaled by its
+surviving fraction over the window [0, T_meas],
+
+    f_j(t_start) = (e^{-lam_j t_start} - e^{-lam_j T_meas}) / (1 - e^{-lam_j T_meas}),
+
+since the decay time is drawn from a truncated exponential on [0, T_meas] independent of position
+(so a start-time cut scales each isotope's amplitude, not its shape). This uses only the truth
+activity profile and the isotope half-lives — no per-scanner simulation.
+
 Produces two tracked figures in latex/figures/:
+  activity_truth.png       the truth activity per isotope (full window), edge centred at 0.
+  activity_vs_tstart.png   four panels, one per t_start = 0,120,180,300 s, each the per-isotope
+                           activity scaled by f_j(t_start) — the isotope-composition evolution.
 
-  activity_truth.png      the truth beta+ activity depth profile, per isotope, with the distal
-                          edge (R50) centred at z=0 (patient positioning). Source:
-                          <PRODS>/<scenario>/truth/activity_profile_<budget>.csv (the canonical
-                          truth product written by src/scenario.jl:write_activity_profile).
-
-  activity_vs_tstart.png  per scanner, the accepted-LOR activity depth profile at acquisition
-                          start times t_start = 0,120,180,300 s (the cut t_decay >= t_start on
-                          the stored t_decay_s column). Source: the distal-edge-centred CsI
-                          shard-0 lors_det.h5 of each geometry, under <PROD>/<tag>/.
-
-Data prerequisites (regenerable; the lors_det files are gitignored and may be pruned). Each arm
-is one config with [source].center_on = "distal_edge", chain simulate -> build_true ->
-build_randoms -> reco_lors, realization 0:
-    runs/uniform_headep_{ring1m,r30_50cm,ring50cm,r35_50cm,chs,r35_35cm,r30_30cm,r35_30cm}_csi_distal_centered.toml
+Source: <PRODS>/<scenario>/truth/activity_profile_<budget>.csv (the canonical truth product from
+src/scenario.jl:write_activity_profile). Half-lives / window from the scenario (below).
 
     python3 py/fig_activity_profiles.py
 """
 import csv
-import math
 import os
 
 import numpy as np
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-import h5py
 
 REPO  = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PRODS = os.environ.get("PRODS", os.path.expanduser("~/Projects/PtCryspProds"))
-PROD  = os.path.join(REPO, "prod")                 # local production tree (gitignored)
 SCEN  = "uniform_headep_sobp_1e8"
 BUDGET = "fast"
 FIGS  = os.path.join(REPO, "latex", "figures")
 
-# scanner tag -> (prod dir under PROD, display title), in a sensible radius/AFOV order
-SCANNERS = [
-    ("ring1m",   "uniform_headep_ring1m_csi_distal_centered",   "ring 1m (R387x1024)"),
-    ("r30_50cm", "uniform_headep_r30_50cm_csi_distal_centered", "R300x50cm"),
-    ("ring50cm", "uniform_headep_ring50cm_csi_distal_centered", "R387x50cm"),
-    ("r35_50cm", "uniform_headep_r35_50cm_csi_distal_centered", "R350x50cm"),
-    ("chs",      "uniform_headep_chs_csi_distal_centered",      "CHS (R200x358)"),
-    ("r35_35cm", "uniform_headep_r35_35cm_csi_distal_centered", "R350x35cm"),
-    ("r30_30cm", "uniform_headep_r30_30cm_csi_distal_centered", "R300x30cm"),
-    ("r35_30cm", "uniform_headep_r35_30cm_csi_distal_centered", "R350x30cm"),
-]
-TSTARTS = [(0, "0 s", "#222222"), (120, "120 s", "#226688"),
-           (180, "180 s", "#22aa88"), (300, "300 s", "#cc3333")]
+# Isotope half-lives [s] and the acquisition window [s] — frozen scenario constants
+# (isotopes.csv / sampling_budget_<budget>_meta.csv of the scenario).
+HALF_LIVES = {"O15": 122.24, "C11": 1223.4, "N13": 597.9, "C10": 19.29, "O14": 70.62}
+T_MEAS = 1200.0
+TSTARTS = [0, 120, 180, 300]
 ISO_COLORS = {"O15": "#226688", "C11": "#ee88aa", "N13": "#44aa44", "C10": "#cc3333", "O14": "#aa7700"}
 
 
@@ -62,23 +53,33 @@ def _distal_edge(z, y):
     return z[pk]
 
 
-def fig_truth():
-    """activity_truth.png — the truth activity profile, per isotope, centred on its distal edge."""
+def _surviving(iso, t_start):
+    """Fraction of isotope `iso` decaying in [t_start, T_MEAS] (truncated-exponential window)."""
+    lam = np.log(2) / HALF_LIVES[iso]
+    return (np.exp(-lam * t_start) - np.exp(-lam * T_MEAS)) / (1.0 - np.exp(-lam * T_MEAS))
+
+
+def _load_profile():
+    """Return (z centred on the distal edge, {iso: activity(z)}), from the truth bundle."""
     path = os.path.join(PRODS, SCEN, "truth", "activity_profile_%s.csv" % BUDGET)
     rows = list(csv.DictReader(open(path)))
     isos = [c for c in rows[0] if c not in ("z_mm", "total")]
     z    = np.array([float(r["z_mm"]) for r in rows])
+    A    = {iso: np.array([float(r[iso]) for r in rows]) for iso in isos}
     tot  = np.array([float(r["total"]) for r in rows])
-    shift = -_distal_edge(z, tot)                      # centre the distal edge at z=0
-    z = z + shift
+    z    = z - _distal_edge(z, tot)                    # centre the distal edge at z=0
+    return z, A, isos
 
+
+def fig_truth():
+    """activity_truth.png — the truth activity per isotope (full window), edge centred at 0."""
+    z, A, isos = _load_profile()
     fig, ax = plt.subplots(figsize=(8, 4.6))
     for iso in isos:
-        ax.plot(z, [float(r[iso]) for r in rows], lw=1.3, color=ISO_COLORS.get(iso), label=iso)
-    ax.plot(z, tot, lw=2.2, color="k", label="total")
-    ax.axvspan(-45 + shift, -5 + shift, alpha=0.12, color="purple", label="tumour region")
+        ax.plot(z, A[iso], lw=1.3, color=ISO_COLORS.get(iso), label=iso)
+    ax.plot(z, sum(A.values()), lw=2.2, color="k", label="total")
     ax.axvline(0, ls="--", color="k", lw=1, label="distal edge (R50) = ring centre")
-    ax.set_xlabel("z along beam [mm]  (distal edge centred at ring centre)")
+    ax.set_xlabel("z along beam [mm]  (distal edge at ring centre)")
     ax.set_ylabel("expected decays / bin")
     ax.set_title("Source activity depth profile (truth), per isotope — 1 Gy")
     ax.legend(fontsize=8, ncol=2); ax.grid(alpha=0.3); ax.set_xlim(-100, 25)
@@ -87,39 +88,25 @@ def fig_truth():
 
 
 def fig_tstart():
-    """activity_vs_tstart.png — per scanner, accepted-LOR activity at t_start = 0,120,180,300 s."""
-    lo, hi, bw = -100.0, 30.0, 2.0
-    edges = np.arange(lo, hi + bw, bw); centers = (edges[:-1] + edges[1:]) / 2
-    panels = []
-    for tag, d, title in SCANNERS:
-        p = os.path.join(PROD, d, "lors_det.h5")
-        if not os.path.isfile(p):
-            print("  skip (missing):", p); continue
-        with h5py.File(p, "r") as f:
-            sc = float(f.attrs["xyz_scale_mm"])
-            z0 = f["z0_mm"][:].astype(np.float64) * sc
-            td = f["t_decay_s"][:].astype(np.float64)
-        hists = [np.histogram(z0[td >= t], bins=edges)[0] for t, _, _ in TSTARTS]
-        panels.append((title, hists))
-
-    n = len(panels); ncol = 2; nrow = math.ceil(n / ncol)
-    fig, axes = plt.subplots(nrow, ncol, figsize=(11, 2.3 * nrow), sharex=True)
-    axes = np.atleast_1d(axes).flatten()
-    for ax, (title, hists) in zip(axes, panels):
-        for h, (_, lab, c) in zip(hists, TSTARTS):
-            ax.plot(centers, h / 1e3, lw=1.4, color=c, label=lab)
-        ax.axvline(0, ls=":", color="k", lw=0.8)
-        ax.set_title(title, fontsize=9); ax.grid(alpha=0.3); ax.set_xlim(-100, 25)
-    for ax in axes[n:]:
-        ax.axis("off")
-    axes[0].legend(fontsize=7, title="acq. start", title_fontsize=7)
-    for i in range(0, n, ncol):
-        axes[i].set_ylabel("acc. LORs /2mm [k]")
-    for i in range(max(0, n - ncol), n):
-        axes[i].set_xlabel("z [mm] (distal edge at 0)")
-    fig.suptitle("Accepted-LOR activity vs acquisition start time (CsI, distal-edge centred)", fontsize=11)
+    """activity_vs_tstart.png — four panels (t_start=0,120,180,300 s), per-isotope source activity."""
+    z, A, isos = _load_profile()
+    ymax = max(sum(A.values()))
+    fig, axes = plt.subplots(2, 2, figsize=(11, 7), sharex=True, sharey=True)
+    axes = axes.flatten()
+    for ax, t in zip(axes, TSTARTS):
+        scaled = {iso: A[iso] * _surviving(iso, t) for iso in isos}
+        for iso in isos:
+            ax.plot(z, scaled[iso], lw=1.3, color=ISO_COLORS.get(iso), label=iso)
+        ax.plot(z, sum(scaled.values()), lw=2.2, color="k", label="total")
+        ax.axvline(0, ls=":", color="k", lw=0.9)
+        ax.set_title("acquisition start $t = %d$ s" % t, fontsize=10)
+        ax.grid(alpha=0.3); ax.set_xlim(-100, 25); ax.set_ylim(0, 1.05 * ymax)
+    axes[0].legend(fontsize=8, ncol=2)
+    for i in (0, 2): axes[i].set_ylabel("expected decays / bin")
+    for i in (2, 3): axes[i].set_xlabel("z along beam [mm]  (distal edge at 0)")
+    fig.suptitle("Source activity depth profile per isotope, vs acquisition start time — 1 Gy", fontsize=12)
     fig.tight_layout(rect=[0, 0, 1, 0.98]); out = os.path.join(FIGS, "activity_vs_tstart.png")
-    fig.savefig(out, dpi=110); plt.close(fig); print("wrote", out, "(%d panels)" % n)
+    fig.savefig(out, dpi=110); plt.close(fig); print("wrote", out)
 
 
 def main():

@@ -468,19 +468,26 @@ $t_{\mathrm{start}}$ is delayed, the short-lived components decay away and the p
 toward the $^{11}$C/$^{13}$N long-lived tail, losing counts and reshaping the distal edge --- the
 timing rung of the range-degradation study.
 
-Figure~\ref{fig:tstart} shows this for every scanner: the accepted-LOR activity depth profile at
-acquisition start times $t_{\mathrm{start}} = 0,\,120,\,180,\,300$\,s. The evolution is
-common to all (it is source-driven), modulated by each ring's axial acceptance envelope; the
-compact rings, whose acceptance peaks at the centred edge, retain the edge region best as the
-start is delayed.
+This is a source-level effect --- it does not depend on the scanner. At the source, a start-time
+cut scales each isotope's contribution by its surviving fraction over the window,
+$f_j(t_{\mathrm{start}}) = (e^{-\lambda_j t_{\mathrm{start}}} - e^{-\lambda_j T_{\mathrm{meas}}}) /
+(1 - e^{-\lambda_j T_{\mathrm{meas}}})$, without changing its depth shape (the decay time is drawn
+independent of position). Figure~\ref{fig:tstart} shows the truth activity depth profile, per
+isotope, at $t_{\mathrm{start}} = 0,\,120,\,180,\,300$\,s. At $t=0$ it is $^{15}$O-dominated; by
+$300$\,s the $^{10}$C and $^{14}$O are gone and $^{15}$O has fallen to ${\sim}18\%$, leaving the
+$^{11}$C/$^{13}$N tail --- roughly a third of the counts, and, because those isotopes have a
+different depth distribution, a slightly reshaped distal edge. Every scanner sees this same
+source evolution, modulated only by its axial acceptance.
 
 \begin{figure}[htbp]
 \centering
 \includegraphics[width=\textwidth]{figures/activity_vs_tstart.png}
-\caption{Accepted-LOR activity depth profile (CsI, shard 0, distal-edge centred) per scanner, at
-acquisition start times $t_{\mathrm{start}} = 0,\,120,\,180,\,300$\,s (the cut
-$t_{\mathrm{decay}} \ge t_{\mathrm{start}}$). Delaying the start removes the short-lived
-isotopes, cutting counts and reshaping the distal edge.}
+\caption{Source activity depth profile (truth), per isotope, at acquisition start times
+$t_{\mathrm{start}} = 0,\,120,\,180,\,300$\,s --- each isotope scaled by its surviving fraction
+$f_j(t_{\mathrm{start}})$ over the window (equivalently, the cut
+$t_{\mathrm{decay}} \ge t_{\mathrm{start}}$ on the stored decay time). Delaying the start removes
+the short-lived isotopes, cutting counts and reshaping the distal edge. Distal edge at $z=0$;
+no scanner (source level).}
 \label{fig:tstart}
 \end{figure}
 
