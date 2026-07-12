@@ -7,6 +7,12 @@ Orientation for any Claude Code session on this repo.
 Ask questions plainly, in prose — not as multiple-choice "shopping list" menus (avoid the
 AskUserQuestion option-list format). State what you need to know directly.
 
+**Figures: always from a tracked tool.** Every figure that goes into a doc (the LaTeX notes,
+`docs/`) must be produced by a checked-in script (a `py/fig_*.py`, or a `scripts/` generator) that
+reads the data and writes the image — never with a throwaway inline/ad-hoc command. The script and
+the generated image are both committed, so any figure regenerates from the repo. E.g.
+`py/fig_activity_profiles.py` → `latex/figures/activity_{truth,vs_tstart}.png`.
+
 ## Purpose
 
 Simulate how a PET scanner detects the positron activity left by a proton field, and
@@ -43,6 +49,16 @@ tracer distribution) reads none. Point the API driver at one scenario directory 
 - `isotopes.csv`, `SCHEMA.md` — isotope codes and column meanings.
 
 Stamp the scenario name into every output.
+
+**Source positioning (patient placement).** The frozen scenario's coordinates put the tumour off
+the ring centre (native frame: tumour centre z = −25 mm, activity distal edge ≈ −16 mm, activity
+peak ≈ −55 mm; the β⁺ activity peaks proximal of the dose). Clinically the patient is positioned so
+the target is at isocentre, so `[source].center_on = "distal_edge"` (in `src/scenario.jl`
+`load_scenario`) rigidly shifts the emitter pool **and** the phantom in z so the activity distal
+edge (the range endpoint, R50) sits at z = 0 — maximising the acceptance of the edge-region LORs.
+The scanner stays at the origin; emitters and phantom move together (offset ≈ +16.35 mm, stamped
+`source_z_offset_mm`). Default (knob absent) = native frame. **All published survey masters were
+produced in the NATIVE (off-centre) frame** — see `dev/status.md` for the pending centred re-run.
 
 ## How the simulation works (decisions)
 

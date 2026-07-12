@@ -4,7 +4,7 @@ A one-page snapshot of where the simulation stands, plus the **deferred-work reg
 Companion docs: the *method* is in `docs/PTCryspMC_phys.tex` (engine) and `docs/PTCryspMC_app.tex` (modes); the
 decisions + code layout in `CLAUDE.md`.
 
-_Last updated: 2026-07-09._
+_Last updated: 2026-07-12._
 
 ## What it does
 
@@ -122,6 +122,25 @@ Ten full masters (5 geometries × 2 crystals, ΣM = 8.02e8 each) + 3 geometry pa
 Findings: purity geometry-independent (~72–75% / ~87% trues BGO / CsI); radius beats length —
 CHS (R200) beats every R≥300 ring below 1 m; the axial-loss hits the phantom poles, not the
 central distal edge. `chs` = compact head scanner (R200 → ~30 cm bore, vertex-to-C7).
+
+**⚠ Source centring (2026-07-12) — the survey above is OFF-CENTRE and must be regenerated.**
+The published masters were run in the native scenario frame, with the tumour ~25 mm and the
+activity distal edge ~16 mm proximal of the ring centre. The correct patient placement centres
+the range endpoint at isocentre: `[source].center_on = "distal_edge"` (src/scenario.jl), a rigid
++16.35 mm z-shift of the emitters+phantom, scanner fixed (see CLAUDE.md "Source positioning").
+Centring raises acceptance, more for the compact rings (CsI shard0: R350×35cm 3.11→3.47%,
+×50cm 4.78→5.06%), so the 35/50 count ratio *falls* 1.54→1.46 — the R35/35≈R35/50 closeness is
+robust, not a centring artifact (acceptance ranks total counts; the range endpoint is set by the
+edge-region, near-transverse LORs, which are ~equal — full argument in `latex/scanner_prods.tex`).
+
+**Regeneration plan (pending go).** Re-run the survey with `center_on="distal_edge"`:
+- Centred CsI shard-0 exists for all 8 geometries in `prod/uniform_headep_*_csi_distal_centered/`
+  (configs `runs/uniform_headep_*_csi_distal_centered.toml`); BGO centred not yet run.
+- To rebuild masters: for each arm, copy its `*_csi_api`/`*_bgo195k_api` config to a centred one
+  (add `center_on = "distal_edge"`), then `run_shards <cfg> 0 9` into NEW leaves (append e.g.
+  `_dc` to the scanner name or a distinct products path — do NOT overwrite the off-centre masters
+  until the centred set is validated). σ_R comparison downstream is on the centred set.
+- Detector params unchanged (τ, cuts, σ_xyz per crystal); only the source frame moves.
 
 ## Documentation
 
