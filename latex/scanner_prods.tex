@@ -1,12 +1,14 @@
 % Documentation note — the PTCryspMC scanner productions: the two representative systems,
-% the CTR findings/calibration, and the deliverables for CryspBrainSim.
-% Self-contained: compiles with pdflatex (no external figures or .bib).
+% the CTR findings/calibration, the source activity + positioning, and the deliverables for
+% CryspBrainSim. Compiles with pdflatex; figures live in latex/figures/ (embedded in the built
+% PDF, so the published PDF is self-contained). No .bib.
 % A copy of the built PDF is published at the PtCryspProds root by publish_prod.jl.
 \documentclass[11pt,a4paper]{article}
 
 \usepackage[margin=2.6cm]{geometry}
 \usepackage{amsmath}
 \usepackage{booktabs}
+\usepackage{graphicx}
 \usepackage[colorlinks=true, linkcolor=blue!50!black, citecolor=blue!50!black, urlcolor=blue!50!black]{hyperref}
 \usepackage{xcolor}
 
@@ -365,8 +367,8 @@ where every ring is efficient.
 
 \subsection*{Source and statistics}
 
-The source is the frozen \texttt{uniform\_headep\_sobp\_1e8} scenario at 1\,Gy, \texttt{fast}
-budget (acquisition window $[0, 1200]$\,s): ${\approx}8.02\times10^7$ decays per shard,
+The source is the frozen \texttt{uniform\_headep\_sobp\_1e8} scenario at 1\,Gy over the
+acquisition window $[0, 1200]$\,s: ${\approx}8.02\times10^7$ decays per shard,
 5 isotopes ($^{15}$O, $^{11}$C, $^{13}$N, $^{10}$C, $^{14}$O). Shard $R$ is seeded by
 (\texttt{master\_seed}=1, \texttt{realization}=$R$), and \textbf{the same $R$ sees the identical
 annihilation set on \emph{every} scanner and crystal} --- all differences across the survey are
@@ -429,6 +431,78 @@ The pre-existing master at \texttt{crysp\_ring\_1m/bgo/fast\_1Gy/} (ten shards) 
 no readout floor, $450\keV$ cut, $\tau = 3\ns$, $\sigma_{xyz} = 1.7$\,mm Gaussian $\sigma$).
 It remains valid as a methods reference but must not be pooled or compared quantitatively with
 any survey arm.
+
+\section{The source activity and its acquisition-time dependence}
+\label{sec:activity}
+
+\subsection*{Where the activity is}
+
+Figure~\ref{fig:activity} is the truth $\beta^+$ activity depth profile of the scenario, per
+isotope. It is $^{15}$O-dominated (${\sim}65\%$), with $^{11}$C the main slow component and
+$^{13}$N/$^{10}$C/$^{14}$O minor; the total rises from the entrance, peaks broadly, and falls
+through its distal edge. The \textbf{distal edge} --- the activity R50 --- is the range endpoint
+the study fits; it is the downstream ($+z$) end of the activity, so essentially all the
+activation lies proximal of it. The source is positioned so this edge sits at the ring centre
+($z=0$), where the ring subtends the maximum symmetric solid angle, maximising the acceptance of
+the LORs from the critical edge region (a source-side shift; the scanner sits at the origin).
+Every scanner sees the identical, identically-positioned source, so all differences across the
+survey are detector/geometry-only.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.86\textwidth]{figures/activity_truth.png}
+\caption{Source activity depth profile (truth), per isotope, at 1\,Gy. The total (black) falls
+through its distal edge (R50), the range endpoint, placed at the ring centre $z=0$; the shaded
+band is the tumour/target extent. Same source, same positioning, for every scanner.}
+\label{fig:activity}
+\end{figure}
+
+\subsection*{Activity vs.\ the acquisition start time}
+
+The five isotopes have very different half-lives --- $^{10}$C $19$\,s, $^{14}$O $71$\,s,
+$^{15}$O $122$\,s, $^{13}$N $598$\,s, $^{11}$C $1223$\,s --- so the activity seen by the scanner
+depends strongly on \emph{when} acquisition starts. Because every stored coincidence carries its
+absolute decay time (\texttt{t\_decay\_s}), any start time is a pure event selection
+$t_{\mathrm{decay}} \ge t_{\mathrm{start}}$ on the produced list --- no re-simulation. As
+$t_{\mathrm{start}}$ is delayed, the short-lived components decay away and the profile collapses
+toward the $^{11}$C/$^{13}$N long-lived tail, losing counts and reshaping the distal edge --- the
+timing rung of the range-degradation study.
+
+Figure~\ref{fig:tstart} shows this for every scanner: the accepted-LOR activity depth profile at
+acquisition start times $t_{\mathrm{start}} = 0,\,120,\,180,\,300$\,s. The evolution is
+common to all (it is source-driven), modulated by each ring's axial acceptance envelope; the
+compact rings, whose acceptance peaks at the centred edge, retain the edge region best as the
+start is delayed.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\textwidth]{figures/activity_vs_tstart.png}
+\caption{Accepted-LOR activity depth profile (CsI, shard 0, distal-edge centred) per scanner, at
+acquisition start times $t_{\mathrm{start}} = 0,\,120,\,180,\,300$\,s (the cut
+$t_{\mathrm{decay}} \ge t_{\mathrm{start}}$). Delaying the start removes the short-lived
+isotopes, cutting counts and reshaping the distal edge.}
+\label{fig:tstart}
+\end{figure}
+
+\subsection*{Acceptance is not range response}
+
+The survey acceptances rank scanners by \emph{total} LOR count, but that is not the quantity the
+range fit uses. The distal edge is a single $z$-gradient, and its fitted position is constrained
+by the LORs that localise $z$ \emph{at the edge} --- the near-transverse, edge-region
+coincidences. Measured on the R350 pair, those edge-informative counts are essentially equal
+between the $35$ and $50$\,cm rings, while the total counts differ by ${\sim}50\%$; the surplus
+of the longer ring is increasingly oblique. With the monolithic crystals' uniform $3$-D
+resolution there is no per-hit penalty for oblique LORs (no parallax), so a longer AFOV genuinely
+catches more gammas and helps as $1/\sqrt{N}$ --- but an oblique LOR integrates activity over a
+range of $z$, so per count it carries less information about the edge \emph{position} than a
+transverse one at the edge. Whether $\sigma_R$ tracks the total count or the edge-informative
+count is a reconstruction question, settled downstream by how $\sigma_R$ scales with counts.
+
+\medskip\noindent\textbf{Note on the published survey.} The acceptance table in
+section~\ref{sec:deliverables} was measured in the \emph{native} (off-centre) frame. The
+corrected convention is distal-edge centring; the centred re-run is the basis for the final
+$\sigma_R$ comparison, and the shard-0 acceptances shift up modestly (e.g.\ CsI R350$\times$35\,cm
+$3.11\to3.47\%$, $\times$50\,cm $4.78\to5.06\%$) without changing the ordering.
 
 \section{Deferred refinements}
 \label{sec:deferred}

@@ -137,7 +137,45 @@ struct Scenario
 end
 
 """
-    load_scenario(dir, materials; budget="fast", dose_Gy=1.0, keep_escaped=false) -> Scenario
+    _activity_distal_edge_mm(pools, weights; binw=2.0) -> Float64
+
+The activity distal edge [mm, z]: the most-downstream (+z) point where the weighted activity
+depth profile falls through half its peak. `weights[j]` scales isotope j's pooled points to the
+true abundance (as in `write_activity_profile`), so the edge is the physical R50 of the total
+activity. Used to centre the source on the range endpoint (`center_on="distal_edge"`).
+"""
+function _activity_distal_edge_mm(pools::Vector{Vector{NTuple{3,Float64}}},
+                                  weights::Vector{Float64}; binw::Float64=2.0)::Float64
+    zmin = Inf; zmax = -Inf
+    for pool in pools, p in pool
+        z = p[3] * 10
+        z < zmin && (zmin = z); z > zmax && (zmax = z)
+    end
+    isfinite(zmin) || error("distal-edge centring: no emitter points")
+    nb = max(2, ceil(Int, (zmax - zmin) / binw) + 1)
+    h  = zeros(Float64, nb)
+    for (j, pool) in enumerate(pools)
+        w = weights[j]; w == 0.0 && continue
+        for p in pool
+            b = clamp(floor(Int, (p[3] * 10 - zmin) / binw) + 1, 1, nb)
+            h[b] += w
+        end
+    end
+    pk = argmax(h); half = h[pk] / 2
+    edge = zmin + (pk - 0.5) * binw
+    for b in pk:(nb - 1)
+        if h[b] >= half && h[b + 1] < half
+            z1   = zmin + (b - 0.5) * binw
+            frac = (h[b] - half) / (h[b] - h[b + 1])
+            edge = z1 + frac * binw
+            break
+        end
+    end
+    edge
+end
+
+"""
+    load_scenario(dir, materials; budget="fast", dose_Gy=1.0, keep_escaped=false, center_on="") -> Scenario
 
 Read a frozen `ptcryspg4` scenario directory into a `Scenario`. Builds the phantom from the
 scenario's own `phantom_regions.csv`; streams `emitters.csv` into per-isotope `anh` pools (mm → cm),
@@ -150,7 +188,7 @@ here and is unused in API mode.
 """
 function load_scenario(dir::AbstractString, materials::Dict{String,Material};
                        budget::AbstractString="fast", dose_Gy::Real=1.0,
-                       keep_escaped::Bool=false)::Scenario
+                       keep_escaped::Bool=false, center_on::AbstractString="")::Scenario
     phantom = load_phantom_regions(joinpath(dir, "phantom_regions.csv"), materials)
 
     ih, ir = _read_csv(joinpath(dir, "isotopes.csv"))
@@ -178,10 +216,33 @@ function load_scenario(dir::AbstractString, materials::Dict{String,Material};
         n_exp[parse(Int, r[bidc]) + 1] = parse(Float64, r[nec]) * scale
     end
 
+    # Optional patient positioning: rigidly shift the source + phantom in z so a chosen reference
+    # point sits at the ring centre (z=0). `center_on="distal_edge"` centres the activity distal
+    # edge — the range endpoint — which maximises the acceptance of the LORs from that critical
+    # region. The scanner is untouched; only the relative source/phantom placement moves, exactly
+    # as a patient is positioned. Emitters and phantom shift together, so the inside/escaped
+    # classification (done above, in the original frame) is preserved.
+    z_offset_mm = 0.0
+    if center_on == "distal_edge"
+        weights = [length(pools[j]) > 0 ? n_exp[j] * f_inside[j] / length(pools[j]) : 0.0 for j in 1:n_iso]
+        z_offset_mm = -_activity_distal_edge_mm(pools, weights)
+    elseif !isempty(center_on)
+        error("[source].center_on '$center_on' unknown (supported: \"distal_edge\", or omit)")
+    end
+    if z_offset_mm != 0.0
+        off = z_offset_mm / 10                      # mm → cm
+        for pool in pools, i in eachindex(pool)
+            @inbounds pool[i] = (pool[i][1], pool[i][2], pool[i][3] + off)
+        end
+        p0 = phantom.position
+        phantom = PhysicalVolume(phantom.logical, (p0[1], p0[2], p0[3] + off))
+    end
+
     rmeta = _read_meta_row(joinpath(dir, "run_meta.csv"))
     sname = basename(rstrip(dir, '/'))
     prov = Dict{String,Any}(
         "scenario" => sname, "budget" => budget, "dose_Gy" => Float64(dose_Gy),
+        "center_on" => center_on, "z_offset_mm" => z_offset_mm,
         "geometry" => get(rmeta, "geometry", ""), "phantom_material" => get(rmeta, "phantom_material", ""),
         "geant4_version" => get(rmeta, "geant4_version", ""), "physics_list" => get(rmeta, "physics_list", ""),
         "upstream_seed" => get(rmeta, "random_seed", ""), "n_protons" => get(rmeta, "n_protons", ""),

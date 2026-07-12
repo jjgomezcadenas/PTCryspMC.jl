@@ -147,12 +147,14 @@ function main()
         mseed   = Int(cfg_get(cfg, "source", "master_seed", 1))
         realz   = a["realization"] >= 0 ? a["realization"] : Int(cfg_get(cfg, "source", "realization", 0))
         tseed   = Int(cfg_get(cfg, "source", "time_seed", 1234))
-        scn     = load_scenario(scndir, mats; budget=budget, dose_Gy=dose, keep_escaped=keepesc)
-        geom    = Geometry(geom.world, scn.phantom, sc)      # phantom from the scenario (single source of truth)
+        center  = String(cfg_get(cfg, "source", "center_on", ""))   # ""=native frame; "distal_edge"=centre the range endpoint at z=0
+        scn     = load_scenario(scndir, mats; budget=budget, dose_Gy=dose, keep_escaped=keepesc, center_on=center)
+        geom    = Geometry(geom.world, scn.phantom, sc)      # phantom from the scenario (shifted with the source if centred)
         src     = materialize_api_source(scn; master_seed=mseed, realization=realz)
         nevents = length(src.points)                          # fixed by the source (‑‑nevents ignored)
         extra_meta = Dict{String,Any}("source_mode"=>"api", "scenario"=>scn.name, "budget"=>budget,
             "dose_Gy"=>dose, "realization"=>realz, "master_seed"=>mseed, "keep_escaped"=>keepesc,
+            "center_on"=>center, "source_z_offset_mm"=>scn.provenance["z_offset_mm"],
             "prompt_gamma_modeled"=>false, "t_meas_s"=>scn.t_meas_s, "time_seed"=>tseed,
             "isotope_half_lives"=>Float64[iso.half_life_s for iso in scn.isotopes],
             "isotope_names"=>String[iso.name for iso in scn.isotopes],
