@@ -564,6 +564,58 @@ ${\sim}87\%$, dipping slightly at the largest ring. Shard 0 (per-shard-stable qu
 \label{fig:csisurvey}
 \end{figure}
 
+\subsection*{The BGO arm, and CsI vs BGO}
+
+BGO$_{195\mathrm{K}}$ is produced in v2 on the same three rings, but with the crystals 5\,cm further
+out: BGO sits inside a cryostat, so $R(\mathrm{BGO}) = R(\mathrm{CsI}) + 5$\,cm --- giving
+\texttt{crysp\_ring\_1m} ($R\,43.7$\,cm) and \texttt{crysp\_r40\_50cm}, \texttt{crysp\_r40\_35cm}
+($R\,40$\,cm), at the \emph{same} axial FOVs (102/51/36\,cm) as their CsI counterparts.
+Table~\ref{tab:bgosurvey} lists them; Fig.~\ref{fig:crystalcompare} compares the two crystals.
+
+The trade is textbook. BGO's higher density stops far more gammas and, with its coarser $15\%$ energy
+resolution, uses a lower photopeak cut ($413$ vs $472$\,keV) --- so its acceptance is ${\sim}2.4\times$
+the CsI ($15.1\%$ vs $6.4\%$ at the 1\,m ring, $t_{\mathrm{del}}=120$\,s). But that same resolution
+rejects scatter poorly, so BGO purity is ${\sim}73$--$77\%$ true against CsI's ${\sim}87\%$. Both
+crystals order the same way with geometry (acceptance up with FOV, purity up toward the smaller
+rings) and both are delay-independent in purity. Which crystal wins for range precision is the
+downstream $\sigma_R$ question --- BGO offers more counts, CsI a cleaner sample; and the BGO count
+advantage is already net of its $+5$\,cm cryostat radius.
+
+\begin{table}[htbp]
+\centering
+\caption{BGO$_{195\mathrm{K}}$ three-ring v2 survey (tumour-centred, $t_{\mathrm{ac}}=300$\,s, crystals
+at $R_{\mathrm{CsI}}+5$\,cm): per acquisition scenario, the selected-LOR yield (per shard; the master
+pools ten), the acceptance, and the purity. Compare with the CsI Table~\ref{tab:csisurvey}.}
+\label{tab:bgosurvey}
+\begin{tabular}{lccccc}
+\hline
+ring ($R$/AFOV) & $t_{\mathrm{del}}$ [s] & AFOV [cm] & LORs/shard & acceptance [\%] & purity [\%] \\
+\hline
+R43.7/102 & 120 & 102 & 7.36\,M & 15.11 & 72.9 \\
+R43.7/102 & 180 & 102 & 5.56\,M & 11.41 & 72.9 \\
+R43.7/102 & 300 & 102 & 3.35\,M & 6.88 & 73.1 \\
+\hline
+R40/51 & 120 & 51 & 4.71\,M & 9.67 & 75.1 \\
+R40/51 & 180 & 51 & 3.56\,M & 7.30 & 75.1 \\
+R40/51 & 300 & 51 & 2.15\,M & 4.41 & 75.2 \\
+\hline
+R40/36 & 120 & 36 & 3.21\,M & 6.60 & 76.9 \\
+R40/36 & 180 & 36 & 2.43\,M & 4.98 & 76.9 \\
+R40/36 & 300 & 36 & 1.46\,M & 3.00 & 77.0 \\
+\hline
+\end{tabular}
+\end{table}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\textwidth]{figures/crystal_compare.png}
+\caption{CsI (solid, circles) vs BGO$_{195\mathrm{K}}$ (dashed, squares), v2 masters, per acquisition
+scenario. \textbf{Left:} acceptance vs axial FOV --- BGO ${\sim}2.4\times$ the CsI (denser crystal,
+lower photopeak cut), net of its $+5$\,cm cryostat radius. \textbf{Right:} purity --- CsI ${\sim}87\%$
+vs BGO ${\sim}73$--$77\%$ (BGO's coarse resolution admits more scatter). Shard 0.}
+\label{fig:crystalcompare}
+\end{figure}
+
 \section{Deferred refinements}
 \label{sec:deferred}
 
