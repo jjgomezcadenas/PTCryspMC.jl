@@ -4,7 +4,7 @@ A one-page snapshot of where the simulation stands, plus the **deferred-work reg
 Companion docs: the *method* is in `docs/PTCryspMC_phys.tex` (engine) and `docs/PTCryspMC_app.tex` (modes); the
 decisions + code layout in `CLAUDE.md`.
 
-_Last updated: 2026-07-12._
+_Last updated: 2026-07-17._
 
 ## What it does
 
@@ -155,6 +155,34 @@ purity geometry/delay-set, ~87% CsI / ~73–77% BGO; **BGO ~2.4× the CsI accept
 **Remaining:** more geometries / the second BGO temperature on demand (`run_shards <v2 cfg> 0 9`);
 downstream σ_R (CryspBrainSim vendors `dev/generation2_plan.md` + `docs/SCHEMA.md` + `dev/PRODUCTS.md`
 + `dev/data_generation_strategy.md`, all v2-updated).
+
+## Position resolution model 2 (branch `position-resolution`, 2026-07-17)
+
+The CryspLight two-Gaussian position resolution (`data/pet_resolution_recipe.json`; per-coordinate
+core/tail mixture, **averaged over x/y/z** into one isotropic smear) is implemented as **position
+model 2** beside the single-Gaussian **model 1** (σ_xyz 1.486 mm), selected per run by
+`[detector].pos_model` with an optional selection tier `[detector].selection` = `"none"/"80"/"60"`
+(per-gamma Bernoulli efficiency 1.0/0.8/0.6, each tier with its own core fraction; only the
+smearing part of the recipe is imported — the efficiency ladder duplicates the transport). Crystal
+constants (`pos2_sigma{1,2}_mm`, `pos2_f_core`): CsI-family 1.152/4.226 mm, f = 0.616/0.789/0.865;
+BGO (both temps) 0.857/2.560 mm, f = 0.758/0.864/0.891. New **CSI_TL** crystal = CsI(Tl)
+(50k ph/MeV, 680/3340 ns 64/36%, 7% eres; CsI attenuation, σ_t 0.35 ns kept, τ 1.5 ns).
+**Model 1 remains the default; legacy outputs are bit-identical** (mixture and Bernoulli draw
+nothing unless enabled). `Pkg.test` **1039**.
+
+**Produced (model-2 pair, small scanners, 10 shards × 3 scenarios each, ΣM = 4.87e8):**
+`crysp_r35_35cm_csi_2x0/csi_tl` — CSI_TL, **80% selection**, window 511±2σ_E (±30.4 keV);
+`crysp_r40_35cm_bgo_2x0/bgo_77k` — BGO_77K, **no selection**, window ±43.4 keV (both:
+`reco_emin_keV = 0`, the symmetric window is the whole energy selection — first production use of
+`window_fwhm`; = 0.84933 = 2σ in FWHM units). Shard-0 numbers (del120): CsI(Tl) acc 1.72%/decay,
+purity 89.7%, trues-DCA q50/q68/q95 = 1.74/2.34/4.58 mm; BGO_77K acc 5.35%, purity 86.6%
+(vs 76.9% for the lower-cut-only BGO_195K master — the symmetric window), DCA 1.44/1.88/3.29 mm.
+Cross-shard acceptance spread ≤0.1% rel. Configs `runs/uniform_headep_r35_35cm_csitl_m2s80.toml`,
+`runs/uniform_headep_r40_35cm_bgo77k_m2.toml`. Findings (scratch study + shard 0): model 2 ≈
+model 1 for BGO; for CsI the 4.2 mm tail is a real degradation (q95 3.1→5.5 mm no-selection) that
+the 80% tier largely buys back at ×0.64 pairs; BGO beats CsI(Tl) on both acceptance and DCA at
+matched geometry. **Planned before merging: flip the default to model 2** (JJ 2026-07-17), then
+update CLAUDE.md/notes accordingly.
 
 ## Documentation
 
