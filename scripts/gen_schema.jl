@@ -90,6 +90,7 @@ function schema_markdown()::String
     println(io, "| `mode`, `has_randoms` | LORs | `truth`/`det`/`randoms`; whether randoms are merged |")
     println(io, "| `tau_ns` | lors_det, randoms | coincidence window |")
     println(io, "| `sigma_xyz_mm`, `eres`, `emin_keV`, `window_fwhm` | lors_det | detector response + energy cut |")
+    println(io, "| `pos_model` (2 adds `pos2_sigma1_mm`, `pos2_sigma2_mm`, `pos2_f_core`, `selection`, `sel_eff`) | lors_det | position model: 1 = single Gaussian σ_xyz, 2 = core/tail mixture at the given selection tier |")
     println(io, "| `t_relative_to_decay`, `t0_s`, `t1_s`, `half_life_s`, `time_seed` | LORs | the activity clock for absolute time |")
     println(io, "| `t_decay_zero` | LORs | zero point of `t_decay_s` (`acquisition_start`, or `irradiation_end` in v2) |")
     println(io)

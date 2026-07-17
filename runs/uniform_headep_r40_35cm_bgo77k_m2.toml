@@ -1,0 +1,44 @@
+# API production v2 — r40_35cm BGO_77K, POSITION MODEL 2, no selection (position-resolution branch).
+# Scanner crysp_r40_35cm_bgo_2x0 (r 40 cm = CsI R35 + 5 cm cryostat, AFOV ~36 cm), crystal BGO_77K
+# (LN2: 29k ph/MeV, 1400/8700 ns, 10% FWHM — the 10% resolution IS BGO_77K, so no eres override).
+# Position smearing = model 2, the two-Gaussian core/tail mixture from
+# data/pet_resolution_recipe.json (CryspLight BGO fits averaged over x/y/z: σ1 0.857 / σ2 2.560 mm),
+# no selection tier (per-gamma eff 1.0, core fraction 0.758). Energy selection is the symmetric
+# window 511 ± 2σ_E (window_fwhm = 2/2.3548; ±43.4 keV at 10%) — no separate lower cut.
+# Generation-2 timing convention unchanged (tumour-centred; t_del in {120,180,300} s, t_ac 300 s).
+# Products: <scenario>/crysp_r40_35cm_bgo_2x0/bgo_77k/del<..>s_ac300s_1Gy/.
+
+[source]
+center_on     = "tumour"        # fixed anatomical reference: the SOBP dose-target centre (z≈−26 mm)
+mode          = "api"
+scenario_dir  = "../ptcrysp-scenarios/scenarios/uniform_headep_sobp_1e8"
+budget        = "fast"          # N_j⁰ source (window-independent); NOT the acquisition window
+dose_Gy       = 1.0
+master_seed   = 1
+realization   = 0
+time_seed     = 1234
+keep_escaped  = false
+
+[geometry]
+file = "geometry/geometry_r40_35cm_bgo_2x0.json"   # scanner crysp_r40_35cm_bgo_2x0 (r 40 cm, BGO 2X0)
+
+[transport]
+crystal_material = "BGO_77K"
+seed             = 1234
+nchunks          = 144
+
+[timing]
+tau_ns     = 5.0                       # 3σ of the raw t1−t2 for BGO (CTR study; σ_t-dominated, both temps)
+t_ac_s     = 300.0                     # fixed acquisition length (5 min — realistic in-room PET)
+t_del_list = [120.0, 180.0, 300.0]     # patient-arrival delays (irradiation-end clock)
+
+[detector]
+emin_keV      = 300.0                  # spectrum-study lower cut (dev chain only)
+reco_emin_keV = 0.0                    # reco selection is the symmetric window alone
+window_fwhm   = 0.84933                # ±2σ_E about 511 keV (= 2/2.3548 in FWHM units → ±43.4 keV at 10%)
+pos_model     = 2                      # two-Gaussian core/tail mixture (pos2 constants on BGO_77K)
+selection     = "none"                 # no tier: per-gamma eff 1.0, core fraction 0.758
+
+[output]
+format   = "hdf5"
+prod_dir = "prod"

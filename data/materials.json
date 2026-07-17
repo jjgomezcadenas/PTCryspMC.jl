@@ -1,5 +1,5 @@
 {
-    "_doc": "Materials for PTCryspMC. density [g/cm^3]; components = element mass fractions (informational); xcom = NIST XCOM mass-attenuation table [cm^2/g], path relative to data/. Transport uses incoherent + photoelectric + pair channels: Sigma = (mu/rho) * density. Scintillators also carry, keyed to the crystal name: light_yield_per_MeV [photons/MeV], scint_decay_ns + scint_decay_w (decay-component lifetimes [ns] and weights summing to 1), eres_a (fractional energy-resolution FWHM at 511 keV), pde (effective photon-detection efficiency for the crystal emission spectrum), sigma_xyz_mm (position/DOI resolution, Gaussian sigma per axis; CRYSP measures 3.5 mm FWHM = 1.486 mm sigma with the SiPM readout on 2X0 crystals), sigma_t_ns (per-gamma Gaussian readout timing floor: trigger/threshold + SPTR + optics, calibrated so the simulated CTR matches measurement — CsI anchored to Soleti et al. 2024 scaled to this PDE; BGO to the ~5 ns window of commercial BGO systems).",
+    "_doc": "Materials for PTCryspMC. density [g/cm^3]; components = element mass fractions (informational); xcom = NIST XCOM mass-attenuation table [cm^2/g], path relative to data/. Transport uses incoherent + photoelectric + pair channels: Sigma = (mu/rho) * density. Scintillators also carry, keyed to the crystal name: light_yield_per_MeV [photons/MeV], scint_decay_ns + scint_decay_w (decay-component lifetimes [ns] and weights summing to 1), eres_a (fractional energy-resolution FWHM at 511 keV), pde (effective photon-detection efficiency for the crystal emission spectrum), sigma_xyz_mm (position/DOI resolution, Gaussian sigma per axis; CRYSP measures 3.5 mm FWHM = 1.486 mm sigma with the SiPM readout on 2X0 crystals), sigma_t_ns (per-gamma Gaussian readout timing floor: trigger/threshold + SPTR + optics, calibrated so the simulated CTR matches measurement — CsI anchored to Soleti et al. 2024 scaled to this PDE; BGO to the ~5 ns window of commercial BGO systems). Position model 2 (two-Gaussian core/tail mixture per coordinate, from data/pet_resolution_recipe.json averaged over x/y/z): pos2_sigma1_mm + pos2_sigma2_mm (core/tail Gaussian sigmas) and pos2_f_core (core fraction per selection tier: none/80/60 = the per-photon selection efficiency 1.0/0.8/0.6). Model 1 (single Gaussian sigma_xyz_mm) stays the default.",
 
     "Vacuum": {
         "density": 0.0,
@@ -30,7 +30,27 @@
         "eres_a": 0.06,
         "pde": 0.40,
         "sigma_t_ns": 0.35,
-        "sigma_xyz_mm": 1.486
+        "sigma_xyz_mm": 1.486,
+        "pos2_sigma1_mm": 1.152,
+        "pos2_sigma2_mm": 4.2257,
+        "pos2_f_core": {"none": 0.6162, "80": 0.7886, "60": 0.8654}
+    },
+
+    "CSI_TL": {
+        "_note": "CsI(Tl), room temperature. Same composition/attenuation as CsI; the pos2 shapes are the CryspLight CsI(Tl) fits.",
+        "density": 4.51,
+        "components": {"Cs": 0.511549, "I": 0.488451},
+        "xcom": "xcom_CSI.csv",
+        "light_yield_per_MeV": 5.0e4,
+        "scint_decay_ns": [680.0, 3340.0],
+        "scint_decay_w": [0.64, 0.36],
+        "eres_a": 0.07,
+        "pde": 0.40,
+        "sigma_t_ns": 0.35,
+        "sigma_xyz_mm": 1.486,
+        "pos2_sigma1_mm": 1.152,
+        "pos2_sigma2_mm": 4.2257,
+        "pos2_f_core": {"none": 0.6162, "80": 0.7886, "60": 0.8654}
     },
 
     "BGO_195K": {
@@ -44,7 +64,10 @@
         "eres_a": 0.15,
         "pde": 0.40,
         "sigma_t_ns": 1.1,
-        "sigma_xyz_mm": 1.486
+        "sigma_xyz_mm": 1.486,
+        "pos2_sigma1_mm": 0.857,
+        "pos2_sigma2_mm": 2.5597,
+        "pos2_f_core": {"none": 0.7577, "80": 0.8641, "60": 0.8914}
     },
 
     "BGO_77K": {
@@ -58,7 +81,10 @@
         "eres_a": 0.10,
         "pde": 0.40,
         "sigma_t_ns": 1.1,
-        "sigma_xyz_mm": 1.486
+        "sigma_xyz_mm": 1.486,
+        "pos2_sigma1_mm": 0.857,
+        "pos2_sigma2_mm": 2.5597,
+        "pos2_f_core": {"none": 0.7577, "80": 0.8641, "60": 0.8914}
     },
 
     "Air": {

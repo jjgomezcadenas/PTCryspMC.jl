@@ -1462,6 +1462,66 @@ end
         end
         @test isapprox(sx / N, 10.0; atol=0.05)
         @test isapprox(sqrt(sx2 / N), 1.7; rtol=0.03)
+
+        # Position model 2: the core/tail mixture. σ1 = 0 is exact; otherwise unbiased per axis
+        # with variance f·σ1² + (1−f)·σ2² (the mixture second moment).
+        @test smear_position_mix((1.0, 2.0, 3.0), 0.0, 4.0, 0.6, rng) === (1.0, 2.0, 3.0)
+        s1m, s2m, fm = 1.152, 4.2257, 0.6162
+        vmix = fm * s1m^2 + (1 - fm) * s2m^2
+        sx = 0.0; sx2 = 0.0
+        for _ in 1:N
+            p = smear_position_mix((10.0, 0.0, -5.0), s1m, s2m, fm, rng)
+            sx += p[1]; sx2 += (p[1] - 10.0)^2
+        end
+        @test isapprox(sx / N, 10.0; atol=0.1)
+        @test isapprox(sx2 / N, vmix; rtol=0.05)
+        # Core fraction: |Δ| < 2σ1 picks out (mostly) core draws — the observed rate must sit
+        # between the pure-core and pure-tail rates and near the mixture prediction.
+        p_core = 0.95450                                       # P(|N(0,1)| < 2)
+        p_tail = 0.41430                                       # P(|N(0,1)| < 2σ1/σ2 = 0.5453)
+        p_pred = fm * p_core + (1 - fm) * p_tail
+        nin = count(_ -> abs(smear_position_mix((0.0, 0.0, 0.0), s1m, s2m, fm, rng)[1]) < 2 * s1m, 1:N)
+        @test isapprox(nin / N, p_pred; rtol=0.03)
+
+        # Response: the 5-arg form is back-compat model 1, no selection.
+        r1 = Response(1.486, 0.06, 0.0, false, 0.0)
+        @test r1.pos_model == 1 && r1.sel_eff == 1.0
+        # smear_hit dispatches on the model: model 1 = single Gaussian σ_xyz (exact at σ = 0),
+        # model 2 = the mixture (exact at σ1 = 0).
+        r2 = Response(0.0, 0.06, 0.0, false, 0.0, 2, 0.0, 0.0, 0.5, 1.0)
+        @test smear_hit((1.0, 2.0, 3.0), Response(0.0, 0.06, 0.0, false, 0.0), rng) === (1.0, 2.0, 3.0)
+        @test smear_hit((1.0, 2.0, 3.0), r2, rng) === (1.0, 2.0, 3.0)
+        # model-2 smear_hit has the mixture variance
+        rmix = Response(0.0, 0.06, 0.0, false, 0.0, 2, s1m, s2m, fm, 1.0)
+        sx2 = 0.0
+        for _ in 1:N
+            sx2 += smear_hit((0.0, 0.0, 0.0), rmix, rng)[1]^2
+        end
+        @test isapprox(sx2 / N, vmix; rtol=0.05)
+
+        # pos2 constants parse from materials.json; CSI_TL is the CsI(Tl) system (same
+        # attenuation table as CsI, its own scintillation + the CryspLight pos2 shapes).
+        csitl = load_material(DATA_DIR, "CSI_TL")
+        @test csitl.light_yield == 5.0e4 && csitl.eres_a == 0.07
+        @test csitl.pos2_sigma1_mm == 1.152 && csitl.pos2_sigma2_mm == 4.2257
+        @test csitl.pos2_f_none == 0.6162 && csitl.pos2_f80 == 0.7886 && csitl.pos2_f60 == 0.8654
+        bgo77 = load_material(DATA_DIR, "BGO_77K")
+        @test bgo77.pos2_sigma1_mm == 0.857 && bgo77.pos2_f_none == 0.7577 && bgo77.pos2_f80 == 0.8641
+        @test load_material(DATA_DIR, "Water").pos2_sigma1_mm == 0.0       # unset on non-crystals
+
+        # Selection tier: finish_event! drops each gamma with prob 1 − sel_eff (0.8² per LOR),
+        # and sel_eff = 1 draws nothing (bit-identical legacy streams).
+        g1 = GammaAcc(); g2 = GammaAcc()
+        fill_singles!(g1, 0.0, 0.0, 10.0, 0.511, 1, 1, 1)
+        fill_singles!(g2, 0.0, 0.0, -10.0, 0.511, 1, 7, 1)
+        rsel = Response(0.0, 0.0, 0.0, false, 0.0, 2, s1m, s2m, fm, 0.8)
+        nkept = 0
+        for _ in 1:N
+            ok, _ = finish_event!((args...) -> nothing, 1, g1, g2, 0.0, 0.0, 0, 0,
+                                  0.0, 0.0, 0.0, rsel, rng)
+            nkept += ok
+        end
+        @test isapprox(nkept / N, 0.64; rtol=0.03)
     end
 
     @testset "run config (TOML)" begin

@@ -11,12 +11,26 @@
 
 # Detector response. All-off = truth mode (no smearing, no energy cut).
 struct Response
-    sigma_xyz::Float64       # mm
+    sigma_xyz::Float64       # mm (position model 1: single Gaussian σ per axis)
     eres::Float64            # fractional FWHM at 511 keV
     emin::Float64            # minimum gamma energy [keV] (0 = off)
     apply_window::Bool
     win_half::Float64        # symmetric window half-width about 511 keV [keV]
+    pos_model::Int           # 1 = single Gaussian (σ_xyz), 2 = core/tail mixture (pos2)
+    mix_s1::Float64          # model 2: core Gaussian σ [mm]
+    mix_s2::Float64          # model 2: tail Gaussian σ [mm]
+    mix_f::Float64           # model 2: core fraction (tier-resolved)
+    sel_eff::Float64         # per-gamma selection efficiency (1 = keep all; the model-2 tier)
 end
+
+# Back-compat: the 5-arg form is position model 1, no selection (all existing call sites).
+Response(sigma_xyz, eres, emin, apply_window, win_half) =
+    Response(sigma_xyz, eres, emin, apply_window, win_half, 1, 0.0, 0.0, 0.0, 1.0)
+
+"Smear a hit position by the response's position model (1: single Gaussian; 2: core/tail mixture)."
+@inline smear_hit(p, r::Response, rng) =
+    r.pos_model == 2 ? smear_position_mix(p, r.mix_s1, r.mix_s2, r.mix_f, rng) :
+                       smear_position(p, r.sigma_xyz, rng)
 
 # A (smeared) gamma energy passes the energy selection: above the minimum AND, if a symmetric
 # window is set, within it.
@@ -106,11 +120,16 @@ function finish_event!(emit, ev::Int, g1::GammaAcc, g2::GammaAcc,
                        t1::Float64, t2::Float64, nscat1::Int, nscat2::Int,
                        x0::Float64, y0::Float64, z0::Float64, resp::Response, rng)
     (contained_one(g1) && contained_one(g2)) || return (false, false)
+    if resp.sel_eff < 1.0        # model-2 selection tier: per-gamma Bernoulli (guarded so
+        k1 = rand(rng) < resp.sel_eff   # sel_eff = 1 draws nothing — legacy streams unchanged)
+        k2 = rand(rng) < resp.sel_eff
+        (k1 && k2) || return (false, false)
+    end
     e1 = smear_energy(g1.e, resp.eres, rng)
     e2 = smear_energy(g2.e, resp.eres, rng)
     (pass_energy(e1, resp) && pass_energy(e2, resp)) || return (false, false)
-    x1, y1, z1 = smear_position((g1.x, g1.y, g1.z), resp.sigma_xyz, rng)
-    x2, y2, z2 = smear_position((g2.x, g2.y, g2.z), resp.sigma_xyz, rng)
+    x1, y1, z1 = smear_hit((g1.x, g1.y, g1.z), resp, rng)
+    x2, y2, z2 = smear_hit((g2.x, g2.y, g2.z), resp, rng)
     is_true = (nscat1 == 0 && nscat2 == 0)         # true iff neither gamma scattered in the phantom
     truth = is_true ? TRUTH_TRUE : TRUTH_SCATTER   # nscat1+nscat2: 1 = single, ≥2 = multiple scatter
 

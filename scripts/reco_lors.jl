@@ -53,11 +53,16 @@ function reco_file!(sinks::Vector{RecoSink}, path, resp, tau::Float64, rng)::Int
             nread += 1
             t1 = Float64(b.t1[i]); t2 = Float64(b.t2[i])
             tau > 0.0 && abs(t1 - t2) > tau && continue                      # DT cut
+            if resp.sel_eff < 1.0        # model-2 selection tier: per-gamma Bernoulli (guarded
+                k1 = rand(rng) < resp.sel_eff       # so sel_eff = 1 draws nothing — legacy
+                k2 = rand(rng) < resp.sel_eff       # streams stay bit-identical)
+                (k1 && k2) || continue
+            end
             e1 = smear_energy(decode_e(b.e1[i]), resp.eres, rng)
             e2 = smear_energy(decode_e(b.e2[i]), resp.eres, rng)
             (pass_energy(e1, resp) && pass_energy(e2, resp)) || continue     # energy selection
-            p1 = smear_position((decode_xyz(b.x1[i]), decode_xyz(b.y1[i]), decode_xyz(b.z1[i])), resp.sigma_xyz, rng)
-            p2 = smear_position((decode_xyz(b.x2[i]), decode_xyz(b.y2[i]), decode_xyz(b.z2[i])), resp.sigma_xyz, rng)
+            p1 = smear_hit((decode_xyz(b.x1[i]), decode_xyz(b.y1[i]), decode_xyz(b.z1[i])), resp, rng)
+            p2 = smear_hit((decode_xyz(b.x2[i]), decode_xyz(b.y2[i]), decode_xyz(b.z2[i])), resp, rng)
             tr = Int(b.truth[i]); iso = Int(b.isotope[i]); td = Float64(b.t_decay[i])
             ev = Int(b.event[i]); tdc = b.t_decay[i]
             for s in sinks
@@ -93,7 +98,22 @@ function main()
     eres      = isnan(eres_cfg) ? mat.eres_a : eres_cfg
     window > 0.0 && eres <= 0.0 &&
         error("[detector].window_fwhm requires eres > 0 (window width scales with the resolution)")
-    resp = Response(sigma_xyz, eres, emin, window > 0.0, window * energy_fwhm(511.0, eres))
+
+    # Position model: 1 = single Gaussian σ_xyz (default), 2 = core/tail mixture (the crystal's
+    # pos2 constants), with an optional selection tier ("none"/"80"/"60" — the per-gamma keep
+    # efficiency 1.0/0.8/0.6, each with its own core fraction). Tiers are a model-2 concept.
+    pos_model = Int(cfg_get(cfg, "detector", "pos_model", 1))
+    seltier   = String(cfg_get(cfg, "detector", "selection", "none"))
+    pos_model in (1, 2) || error("[detector].pos_model must be 1 or 2 (got $pos_model)")
+    seltier in ("none", "80", "60") || error("[detector].selection must be \"none\", \"80\" or \"60\"")
+    seltier != "none" && pos_model != 2 &&
+        error("[detector].selection = \"$seltier\" requires pos_model = 2 (the tier sets the model-2 core fraction)")
+    sel_eff, f_core = seltier == "none" ? (1.0, mat.pos2_f_none) :
+                      seltier == "80"   ? (0.8, mat.pos2_f80)    : (0.6, mat.pos2_f60)
+    pos_model == 2 && (mat.pos2_sigma1_mm <= 0.0 || f_core <= 0.0) &&
+        error("pos_model = 2 needs pos2_sigma{1,2}_mm + pos2_f_core[\"$seltier\"] on crystal '$crystal' in materials.json")
+    resp = Response(sigma_xyz, eres, emin, window > 0.0, window * energy_fwhm(511.0, eres),
+                    pos_model, mat.pos2_sigma1_mm, mat.pos2_sigma2_mm, f_core, sel_eff)
     tau  = Float64(cfg_get(cfg, "timing", "tau_ns", 0.0))
 
     truth   = isempty(a["truth"])   ? joinpath(outdir, "lors_truth.h5") : rp(a["truth"])
@@ -117,11 +137,20 @@ function main()
     base = Dict{String,Any}("scenario_tag" => tag, "mode" => "det", "has_randoms" => true,
         "crystal" => crystal, "seed" => seed, "t_relative_to_decay" => true,
         "sigma_xyz_mm" => sigma_xyz, "eres" => eres, "emin_keV" => emin, "window_fwhm" => window,
-        "tau_ns" => tau)
+        "tau_ns" => tau, "pos_model" => pos_model)
+    if pos_model == 2
+        merge!(base, Dict{String,Any}("pos2_sigma1_mm" => mat.pos2_sigma1_mm,
+            "pos2_sigma2_mm" => mat.pos2_sigma2_mm, "pos2_f_core" => f_core,
+            "selection" => seltier, "sel_eff" => sel_eff))
+    end
 
     ecut = window > 0.0 ? "window ±$(round(resp.win_half,digits=1)) keV" :
            (emin > 0.0 ? "Emin $(round(emin,digits=0)) keV" : "no energy cut")
-    println("run '$tag' reco: σ_xyz=$sigma_xyz mm, eres=$(round(100*eres,digits=1))%, $ecut, " *
+    pos  = pos_model == 2 ?
+        "pos2 σ1/σ2/f=$(mat.pos2_sigma1_mm)/$(mat.pos2_sigma2_mm)/$(round(f_core,digits=3)) mm" *
+        (sel_eff < 1.0 ? " sel $(seltier)% (eff $sel_eff)" : "") :
+        "σ_xyz=$sigma_xyz mm"
+    println("run '$tag' reco: $pos, eres=$(round(100*eres,digits=1))%, $ecut, " *
             (tau > 0 ? "τ=$tau ns" : "no DT cut") * (v2 ? "  [v2: $(length(t_dels)) scenarios]" : ""))
 
     sinks = RecoSink[]

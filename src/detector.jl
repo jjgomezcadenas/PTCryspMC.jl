@@ -36,3 +36,18 @@ Blur a 3-D position by an isotropic Gaussian of width `σ` (each coordinate inde
     σ > 0.0 || return (Float64(p[1]), Float64(p[2]), Float64(p[3]))
     (p[1] + σ * randn(rng), p[2] + σ * randn(rng), p[3] + σ * randn(rng))
 end
+
+"""
+    smear_position_mix(p, σ1, σ2, f, rng) -> NTuple{3,Float64}
+
+Position model 2: blur each coordinate independently by a two-Gaussian core/tail mixture —
+with probability `f` (the core fraction) a Gaussian of width `σ1`, else the tail `σ2`. The
+core/tail draw is per coordinate (the model is defined by the per-coordinate marginal fits;
+`data/pet_resolution_recipe.json`, averaged over x/y/z). `σ1 ≤ 0` returns `p` unchanged.
+"""
+@inline function smear_position_mix(p, σ1::Float64, σ2::Float64, f::Float64,
+                                    rng::AbstractRNG)::NTuple{3,Float64}
+    σ1 > 0.0 || return (Float64(p[1]), Float64(p[2]), Float64(p[3]))
+    s(x) = x + (rand(rng) < f ? σ1 : σ2) * randn(rng)
+    (s(p[1]), s(p[2]), s(p[3]))
+end

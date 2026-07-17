@@ -25,6 +25,13 @@ struct Material
                                       # threshold + SPTR + optics), calibrated to measured CTR
     sigma_xyz_mm::Float64             # position/DOI resolution [mm], Gaussian σ per axis
                                       # (CRYSP: 3.5 mm FWHM = 1.486 mm σ, measured on 2X0 crystals)
+    # Position model 2: two-Gaussian core/tail mixture per coordinate (CryspLight fits,
+    # data/pet_resolution_recipe.json averaged over x/y/z). 0 = unset (crystal has no model 2).
+    pos2_sigma1_mm::Float64           # core Gaussian σ [mm]
+    pos2_sigma2_mm::Float64           # tail Gaussian σ [mm]
+    pos2_f_none::Float64              # core fraction, no selection (per-photon efficiency 1.0)
+    pos2_f80::Float64                 # core fraction at the 80% selection tier
+    pos2_f60::Float64                 # core fraction at the 60% selection tier
     E::Vector{Float64}                # nudged energy grid [MeV]
     log_E::Vector{Float64}
     incoherent::Vector{Float64}       # mu/rho [cm^2/g]
@@ -54,6 +61,12 @@ function _build_material(data_dir::AbstractString, name::AbstractString, d)::Mat
     pde     = Float64(get(d, "pde", 0.0))
     sigma_t = Float64(get(d, "sigma_t_ns", 0.0))
     sigma_xyz = Float64(get(d, "sigma_xyz_mm", 0.0))
+    p2s1  = Float64(get(d, "pos2_sigma1_mm", 0.0))
+    p2s2  = Float64(get(d, "pos2_sigma2_mm", 0.0))
+    p2f   = get(d, "pos2_f_core", Dict{String,Any}())
+    p2f_n = Float64(get(p2f, "none", 0.0))
+    p2f80 = Float64(get(p2f, "80", 0.0))
+    p2f60 = Float64(get(p2f, "60", 0.0))
     length(decay) == length(w) ||
         error("material '$name': scint_decay_ns and scint_decay_w must have equal length")
     (isempty(w) || isapprox(sum(w), 1.0; atol=1e-6)) ||
@@ -62,6 +75,7 @@ function _build_material(data_dir::AbstractString, name::AbstractString, d)::Mat
     xf = get(d, "xcom", nothing)
     if xf === nothing
         return Material(name, density, yield, decay, w, eres_a, pde, sigma_t, sigma_xyz,
+                        p2s1, p2s2, p2f_n, p2f80, p2f60,
                         Float64[], Float64[],
                         Float64[], Float64[], Float64[], Float64[], Float64[], Float64[])
     end
@@ -69,6 +83,7 @@ function _build_material(data_dir::AbstractString, name::AbstractString, d)::Mat
     E = _prepare_xcom_energy(xc)
     pair = xc.pair_nuclear .+ xc.pair_electron
     Material(name, density, yield, decay, w, eres_a, pde, sigma_t, sigma_xyz,
+             p2s1, p2s2, p2f_n, p2f80, p2f60,
              E, log.(E), xc.incoherent, xc.photoelectric, pair,
              prelog_data(xc.incoherent), prelog_data(xc.photoelectric), prelog_data(pair))
 end
