@@ -1,6 +1,7 @@
 # CLAUDE.md — PTCryspMC.jl: PET detector simulation
 
-Orientation for any Claude Code session on this repo.
+Orientation for any Claude Code session on this repo. Read `AGENTS.md` first:
+it holds the working rules and the record of the active feature branch.
 
 ## Working style
 
