@@ -184,6 +184,24 @@ the 80% tier largely buys back at ×0.64 pairs; BGO beats CsI(Tl) on both accept
 matched geometry. **Planned before merging: flip the default to model 2** (JJ 2026-07-17), then
 update CLAUDE.md/notes accordingly.
 
+## dd reruns — data-driven source (branch `dd-reruns`, 2026-07-26)
+
+σ_R reruns on the scenario `uniform_headep_sobp_1e8_dd`, whose emitters are sampled from the
+**nominal fitted cross sections** (ptcryspg4 phase 3d; record: ptcryspg4
+`workshop/xsections_phases.md`). Configs are the v2 files with two keys changed —
+`scenario_dir → …_1e8_dd`, `budget → "d120s300"` (a CBS budget; any budget backs out the same
+N_j⁰) — so σ_R and fitted-edge differences from the native masters measure the source alone.
+Tumour centring is dose-based and gives the same z offset as native (+25.59 mm): the productions
+are registered in z by construction. Scenario pools 1.27M/772k/142k (O15/C11/N13 — the ×1.32 ¹¹C,
+×1.49 ¹³N data-driven enrichment); publish under `PtCryspProds/uniform_headep_sobp_1e8_dd/`.
+
+**Timing (this machine, 18 threads, nchunks 144):** one `run_shards.sh` shard of the reference
+BGO ring (`uniform_headep_ring1m_bgo_dd`, M = 5.08e7 union-window decays) takes **1 min 53 s**
+for the full chain (simulate → coincidences → randoms → reco → publish → gates → prune);
+a 10-shard master ≈ **20 min**.
+
+**Produced:** `crysp_ring_1m_bgo_2x0/bgo_195k` shard 000 (gates green, randoms ratio 1.00).
+
 ## Documentation
 
 - `docs/PTCryspMC_phys.tex` — the engine (physics, geometry, transport, detector response).
