@@ -200,7 +200,9 @@ BGO ring (`uniform_headep_ring1m_bgo_dd`, M = 5.08e7 union-window decays) takes 
 for the full chain (simulate → coincidences → randoms → reco → publish → gates → prune);
 a 10-shard master ≈ **20 min**.
 
-**Produced:** `crysp_ring_1m_bgo_2x0/bgo_195k` shard 000 (gates green, randoms ratio 1.00).
+**Produced:** `crysp_ring_1m_bgo_2x0/bgo_195k` — full master, 10 shards (realizations 0–9,
+ΣM = 5.08e8 per leaf, gates green, randoms ratios 0.99–1.01), three delay leaves. 9 shards in
+22 min 48 s.
 
 ## Documentation
 
