@@ -4,7 +4,7 @@ A one-page snapshot of where the simulation stands, plus the **deferred-work reg
 Companion docs: the *method* is in `docs/PTCryspMC_phys.tex` (engine) and `docs/PTCryspMC_app.tex` (modes); the
 decisions + code layout in `CLAUDE.md`.
 
-_Last updated: 2026-07-17._
+_Last updated: 2026-07-31._
 
 ## What it does
 
@@ -188,7 +188,8 @@ update CLAUDE.md/notes accordingly.
 
 σ_R reruns on the scenario `uniform_headep_sobp_1e8_dd`, whose emitters are sampled from the
 **nominal fitted cross sections** (ptcryspg4 phase 3d; record: ptcryspg4
-`workshop/xsections_phases.md`). Configs are the v2 files with two keys changed —
+`workshop/xsections_phases.md`). Two configs — `uniform_headep_ring1m_bgo_dd` (TBP reference) and
+`uniform_headep_r40_35cm_bgo_dd` (CAFOV) — are the v2 files with two keys changed —
 `scenario_dir → …_1e8_dd`, `budget → "d120s300"` (a CBS budget; any budget backs out the same
 N_j⁰) — so σ_R and fitted-edge differences from the native masters measure the source alone.
 Tumour centring is dose-based and gives the same z offset as native (+25.59 mm): the productions
@@ -200,9 +201,16 @@ BGO ring (`uniform_headep_ring1m_bgo_dd`, M = 5.08e7 union-window decays) takes 
 for the full chain (simulate → coincidences → randoms → reco → publish → gates → prune);
 a 10-shard master ≈ **20 min**.
 
-**Produced:** `crysp_ring_1m_bgo_2x0/bgo_195k` — full master, 10 shards (realizations 0–9,
-ΣM = 5.08e8 per leaf, gates green, randoms ratios 0.99–1.01), three delay leaves. 9 shards in
-22 min 48 s.
+**Produced:** two full masters under `PtCryspProds/uniform_headep_sobp_1e8_dd/`, each 10 shards
+(realizations 0–9) × three delay leaves (`del{120,180,300}s_ac300s_1Gy`), gates green, randoms
+ratios 0.99–1.01:
+
+- `crysp_ring_1m_bgo_2x0/bgo_195k` — TBP reference (R43.7), ΣM = 5.08e8 per leaf; 9 shards in
+  22 min 48 s.
+- `crysp_r40_35cm_bgo_2x0/bgo_195k` — CAFOV counterpart (compact BGO, ~35 cm AFOV).
+
+Both feed the downstream data-driven σ_R study (CryspBrainSim `md/results.md`: TBP + CAFOV,
+five acquisition protocols).
 
 ## Documentation
 
